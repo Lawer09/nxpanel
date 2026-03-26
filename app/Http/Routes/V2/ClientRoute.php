@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Routes\V2;
 
-use App\Http\Controllers\V2\Client\AppController;
+use App\Http\Controllers\V1\Client\AppController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class ClientRoute
