@@ -267,6 +267,19 @@ class AdminRoute
                 $router->get('user/{userId}/history', [TrafficResetController::class, 'userHistory']);
                 $router->post('reset-user', [TrafficResetController::class, 'resetUser']);
             });
+
+            // Machine
+            $router->group([
+                'prefix' => 'machine'
+            ], function ($router) {
+                $router->any('/fetch', [\App\Http\Controllers\V2\Admin\MachineController::class, 'fetch']);
+                $router->post('/save', [\App\Http\Controllers\V2\Admin\MachineController::class, 'save']);
+                $router->post('/update', [\App\Http\Controllers\V2\Admin\MachineController::class, 'update']);
+                $router->post('/drop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'drop']);
+                $router->post('/detail', [\App\Http\Controllers\V2\Admin\MachineController::class, 'detail']);
+                $router->post('/testConnection', [\App\Http\Controllers\V2\Admin\MachineController::class, 'testConnection']);
+                $router->post('/batchDrop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDrop']);
+            });
         });
 
     }

@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\NoticeSave;
 use App\Models\Notice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class NoticeController extends Controller
 {
@@ -94,7 +95,7 @@ class NoticeController extends Controller
             return $this->success(true);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error($e);
+            Log::error($e);
             return $this->fail([500, '排序保存失败']);
         }
     }
