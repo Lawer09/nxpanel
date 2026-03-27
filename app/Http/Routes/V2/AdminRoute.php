@@ -18,7 +18,9 @@ use App\Http\Controllers\V2\Admin\PaymentController;
 use App\Http\Controllers\V2\Admin\SystemController;
 use App\Http\Controllers\V2\Admin\ThemeController;
 use App\Http\Controllers\V2\Admin\TrafficResetController;
+use App\Http\Controllers\V2\Admin\IpPoolController;
 use Illuminate\Contracts\Routing\Registrar;
+;
 
 class AdminRoute
 {
@@ -279,6 +281,21 @@ class AdminRoute
                 $router->post('/detail', [\App\Http\Controllers\V2\Admin\MachineController::class, 'detail']);
                 $router->post('/testConnection', [\App\Http\Controllers\V2\Admin\MachineController::class, 'testConnection']);
                 $router->post('/batchDrop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDrop']);
+            });
+
+            // IP Pool Management
+            $router->group([
+                'prefix' => 'ip-pool'
+            ], function ($router) {
+                $router->any('/fetch', [IpPoolController::class, 'fetch']);
+                $router->post('/save', [IpPoolController::class, 'save']);
+                $router->post('/detail', [IpPoolController::class, 'detail']);
+                $router->post('/delete', [IpPoolController::class, 'delete']);
+                $router->post('/enable', [IpPoolController::class, 'enable']);
+                $router->post('/disable', [IpPoolController::class, 'disable']);
+                $router->post('/reset-score', [IpPoolController::class, 'resetScore']);
+                $router->get('/stats', [IpPoolController::class, 'stats']);
+                $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
             });
         });
 

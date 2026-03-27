@@ -10,6 +10,30 @@ use Illuminate\Support\Collection;
 
 trait ApiResponse
 {
+
+    /**
+     * 成功
+     * @param mixed $data
+     * @param array $codeResponse
+     * @return JsonResponse
+     */
+    public function ok($data = null, $codeResponse = ResponseEnum::OK): JsonResponse
+    {
+        return $this->jResponse($codeResponse, $data);
+    }
+
+    /**
+     * 失败
+     * @param array $codeResponse
+     * @param mixed $data
+     * @param mixed $error
+     * @return JsonResponse
+     */
+    public function error($codeResponse = ResponseEnum::ERROR, $data = null, $error = null): JsonResponse
+    {
+        return $this->jResponse($codeResponse, $data, $error);
+    }
+
     /**
      * 成功
      * @param mixed $data
@@ -31,6 +55,25 @@ trait ApiResponse
     public function fail($codeResponse = ResponseEnum::HTTP_ERROR, $data = null, $error = null): JsonResponse
     {
         return $this->jsonResponse('fail', $codeResponse, $data, $error);
+    }
+
+    /**
+     * json响应
+     * @param $status
+     * @param $codeResponse
+     * @param $data
+     * @param $error
+     * @return JsonResponse
+     */
+    private function jResponse($codeResponse, $data): JsonResponse
+    {
+        list($code, $message) = $codeResponse;
+        return response()
+            ->json([
+                'code'  => $code,
+                'msg'   => $message,
+                'data'  => $data ?? null,
+            ]);
     }
 
     /**
