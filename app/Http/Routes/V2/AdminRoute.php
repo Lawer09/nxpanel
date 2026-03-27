@@ -19,8 +19,9 @@ use App\Http\Controllers\V2\Admin\SystemController;
 use App\Http\Controllers\V2\Admin\ThemeController;
 use App\Http\Controllers\V2\Admin\TrafficResetController;
 use App\Http\Controllers\V2\Admin\IpPoolController;
+use App\Http\Controllers\V2\Admin\AsnController;
+use App\Http\Controllers\V2\Admin\ProviderController;
 use Illuminate\Contracts\Routing\Registrar;
-;
 
 class AdminRoute
 {
@@ -299,5 +300,28 @@ class AdminRoute
             });
         });
 
+
+            // ASN Management
+            $router->group([
+                'prefix' => 'asn'
+            ], function ($router) {
+                $router->any('/fetch', [AsnController::class, 'fetch']);
+                $router->post('/save', [AsnController::class, 'save']);
+                $router->post('/detail', [AsnController::class, 'detail']);
+                $router->post('/delete', [AsnController::class, 'delete']);
+                $router->get('/stats', [AsnController::class, 'stats']);
+            });
+
+            // Provider Management
+            $router->group([
+                'prefix' => 'provider'
+            ], function ($router) {
+                $router->any('/fetch', [ProviderController::class, 'fetch']);
+                $router->post('/save', [ProviderController::class, 'save']);
+                $router->post('/detail', [ProviderController::class, 'detail']);
+                $router->post('/delete', [ProviderController::class, 'delete']);
+                $router->post('/updateStatus', [ProviderController::class, 'updateStatus']);
+                $router->get('/stats', [ProviderController::class, 'stats']);
+            });
     }
 }

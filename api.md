@@ -368,7 +368,7 @@ POST /api/v2/{secure_path}/server/route/drop
 
 ## 📌 基础信息
 
-- **基础路径**: `/api/admin/ip-pool`
+- **基础路径**: `/api/v2/{secure_path}/ip-pool`
 - **认证方式**: Bearer Token (Admin 权限)
 - **请求头**: `Content-Type: application/json`
 - **响应格式**: JSON
@@ -404,7 +404,7 @@ POST /api/v2/{secure_path}/server/route/drop
 ---
 
 ### 1️⃣ **获取 IP 池列表** 
-**POST/GET** `/api/admin/ip-pool/fetch`
+**POST/GET** `/api/v2/{secure_path}/ip-pool/fetch`
 
 获取 IP 池列表，支持分页、过滤和排序。
 
@@ -425,7 +425,7 @@ POST /api/v2/{secure_path}/server/route/drop
 #### 请求示例
 
 ```bash
-curl -X GET "http://api.example.com/api/admin/ip-pool/fetch?current=1&pageSize=10&country=DE&status=active" \
+curl -X GET "http://api.example.com/api/v2/{secure_path}/ip-pool/fetch?current=1&pageSize=10&country=DE&status=active" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json"
 ```
@@ -483,7 +483,7 @@ curl -X GET "http://api.example.com/api/admin/ip-pool/fetch?current=1&pageSize=1
 ---
 
 ### 2️⃣ **获取 IP 详情**
-**POST** `/api/admin/ip-pool/detail`
+**POST** `/api/v2/{secure_path}/ip-pool/detail`
 
 获取单个 IP 的详细信息。
 
@@ -496,7 +496,7 @@ curl -X GET "http://api.example.com/api/admin/ip-pool/fetch?current=1&pageSize=1
 #### 请求示例
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/detail" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/detail" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -550,7 +550,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/detail" \
 ---
 
 ### 3️⃣ **添加/编辑 IP**
-**POST** `/api/admin/ip-pool/save`
+**POST** `/api/v2/{secure_path}/ip-pool/save`
 
 新增或编辑 IP 到池中。
 
@@ -577,7 +577,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/detail" \
 #### 请求示例 - 新增
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/save" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/save" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -601,7 +601,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/save" \
 #### 请求示例 - 编辑
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/save" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/save" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -655,7 +655,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/save" \
 ---
 
 ### 4️⃣ **删除 IP**
-**POST** `/api/admin/ip-pool/delete`
+**POST** `/api/v2/{secure_path}/ip-pool/delete`
 
 删除一个或多个 IP。
 
@@ -668,7 +668,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/save" \
 #### 请求示例
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/delete" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/delete" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -699,7 +699,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/delete" \
 ---
 
 ### 5️⃣ **启用 IP**
-**POST** `/api/admin/ip-pool/enable`
+**POST** `/api/v2/{secure_path}/ip-pool/enable`
 
 将 IP 状态改为 `active`（活跃）。
 
@@ -712,7 +712,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/delete" \
 #### 请求示例
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/enable" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/enable" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -743,7 +743,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/enable" \
 ---
 
 ### 6️⃣ **禁用 IP**
-**POST** `/api/admin/ip-pool/disable`
+**POST** `/api/v2/{secure_path}/ip-pool/disable`
 
 将 IP 状态改为 `cooldown`（冷却/禁用）。
 
@@ -756,7 +756,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/enable" \
 #### 请求示例
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/disable" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/disable" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -777,7 +777,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/disable" \
 ---
 
 ### 7️⃣ **重置 IP 评分**
-**POST** `/api/admin/ip-pool/reset-score`
+**POST** `/api/v2/{secure_path}/ip-pool/reset-score`
 
 手动更新 IP 的评分。
 
@@ -791,7 +791,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/disable" \
 #### 请求示例
 
 ```bash
-curl -X POST "http://api.example.com/api/admin/ip-pool/reset-score" \
+curl -X POST "http://api.example.com/api/v2/{secure_path}/ip-pool/reset-score" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -823,7 +823,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/reset-score" \
 ---
 
 ### 8️⃣ **获取统计数据**
-**GET** `/api/admin/ip-pool/stats`
+**GET** `/api/v2/{secure_path}/ip-pool/stats`
 
 获取 IP 池的统计数据。
 
@@ -834,7 +834,7 @@ curl -X POST "http://api.example.com/api/admin/ip-pool/reset-score" \
 #### 请求示例
 
 ```bash
-curl -X GET "http://api.example.com/api/admin/ip-pool/stats" \
+curl -X GET "http://api.example.com/api/v2/{secure_path}/ip-pool/stats" \
   -H "Authorization: Bearer your_token"
 ```
 
@@ -946,7 +946,7 @@ Authorization: Bearer {access_token}
 
 ```bash
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-     http://api.example.com/api/admin/ip-pool/fetch
+     http://api.example.com/api/v2/{secure_path}/ip-pool/fetch
 ```
 
 ---
@@ -993,3 +993,257 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     "readme": "https://ipinfo.io/missingauth"
   }
 }
+```
+
+## 📖 API 接口说明
+
+**地址**: `/api/client/performance/report`  
+**方法**: `POST`  
+**认证**: User Token
+
+**参数**:
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| node_id | int | ✅ | 节点 ID |
+| delay | int | ✅ | 延迟(ms)，0-60000 |
+| success_rate | int | ✅ | 连接成功率(%)，0-100 |
+| app_version | string | ❌ | APP 版本 |
+| metadata | json | ❌ | 其他数据 |
+
+**返回值**:
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 1,
+    "message": "上报成功"
+  }
+}
+```
+
+**地址**: `/api/client/performance/batchReport`  
+**方法**: `POST`  
+**认证**: User Token
+
+**参数**:
+
+```json
+{
+  "reports": [
+    {
+      "node_id": 1,
+      "delay": 45,
+      "success_rate": 98,
+      "app_version": "1.0.0"
+    },
+    {
+      "node_id": 2,
+      "delay": 52,
+      "success_rate": 95
+    }
+  ]
+}
+```
+
+**返回值**:
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "count": 2,
+    "message": "批量上报成功"
+  }
+}
+```
+
+**地址**: `/api/client/performance/history`  
+**方法**: `GET`  
+**认证**: User Token
+
+**参数**:
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| limit | int | 限制数量(默认100) |
+| node_id | int | 节点 ID(可选) |
+
+**返回值**: 返回数组列表
+
+---
+
+**地址**: `/api/client/performance/nodeStats`  
+**方法**: `GET`  
+**认证**: User Token
+
+**参数**:
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| node_id | int | ✅ | 节点 ID |
+| days | int | ❌ | 统计天数(1-90，默认7) |
+
+**返回值**:
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "node_id": 1,
+    "period_days": 7,
+    "avg_delay": 48.5,
+    "min_delay": 35,
+    "max_delay": 120,
+    "avg_success_rate": 96.5,
+    "report_count": 156
+  }
+}
+```
+
+### ASN 接口
+
+#### 获取ASN列表
+**地址**: `GET/POST /api/v2/{secure_path}/asn/fetch`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| current | int | 页码 |
+| pageSize | int | 每页数量 |
+| search | string | 搜索ASN或名称 |
+| country | string | 国家代码 |
+| type | string | 类型(ISP/CDN/企业) |
+| is_datacenter | boolean | 是否数据中心 |
+| min_reliability | int | 最小可靠性 |
+
+**返回**: 分页数据列表
+
+---
+
+#### 获取ASN详情
+**地址**: `POST /api/v2/{secure_path}/asn/detail`
+
+| 参数 | 类型 | 必需 |
+|------|------|------|
+| id | int | ✅ |
+
+---
+
+#### 添加/编辑ASN
+**地址**: `POST /api/v2/{secure_path}/asn/save`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| id | int | ❌ | 编辑时必需 |
+| asn | string | ✅ | ASN号 (新增必需) |
+| name | string | ✅ | ASN名称 |
+| description | string | ❌ | 描述 |
+| country | string | ❌ | 国家代码 |
+| type | string | ❌ | 类型 |
+| is_datacenter | boolean | ❌ | 是否数据中心 |
+| reliability | int | ❌ | 可靠性(0-100) |
+| reputation | int | ❌ | 声誉(0-100) |
+| metadata | json | ❌ | 其他信息 |
+
+---
+
+#### 删除ASN
+**地址**: `POST /api/v2/{secure_path}/asn/delete`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| ids | array | ASN ID数组 |
+
+---
+
+#### 获取ASN统计
+**地址**: `GET /api/v2/{secure_path}/asn/stats`
+
+**返回**: 统计数据
+
+---
+
+### Provider 接口
+
+#### 获取Provider列表
+**地址**: `GET/POST /api/v2/{secure_path}/provider/fetch`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| current | int | 页码 |
+| pageSize | int | 每页数量 |
+| search | string | 搜索名称或ASN |
+| country | string | 国家代码 |
+| type | string | 类型 |
+| is_active | boolean | 是否活跃 |
+| min_reliability | int | 最小可靠性 |
+| asn_id | int | ASN ID |
+
+**返回**: 分页数据列表
+
+---
+
+#### 获取Provider详情
+**地址**: `POST /api/v2/{secure_path}/provider/detail`
+
+| 参数 | 类型 | 必需 |
+|------|------|------|
+| id | int | ✅ |
+
+---
+
+#### 添加/编辑Provider
+**地址**: `POST /api/v2/{secure_path}/provider/save`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| id | int | ❌ | 编辑时必需 |
+| name | string | ✅ | 提供商名称(新增必需) |
+| description | string | ❌ | 描述 |
+| website | string | ❌ | 官网 |
+| email | string | ❌ | 邮箱 |
+| phone | string | ❌ | 电话 |
+| country | string | ❌ | 国家代码 |
+| type | string | ❌ | 类型 |
+| asn_id | int | ❌ | ASN ID |
+| asn | string | ❌ | ASN号 |
+| reliability | int | ❌ | 可靠性(0-100) |
+| reputation | int | ❌ | 声誉(0-100) |
+| speed_level | int | ❌ | 速度等级(0-100) |
+| stability | int | ❌ | 稳定性(0-100) |
+| is_active | boolean | ❌ | 是否活跃 |
+| regions | json | ❌ | 覆盖地区 |
+| services | json | ❌ | 提供的服务 |
+| metadata | json | ❌ | 其他信息 |
+
+---
+
+#### 删除Provider
+**地址**: `POST /api/v2/{secure_path}/provider/delete`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| ids | array | Provider ID数组 |
+
+---
+
+#### 批量更新Provider状态
+**地址**: `POST /api/v2/{secure_path}/provider/updateStatus`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| ids | array | ✅ | Provider ID数组 |
+| is_active | boolean | ✅ | 是否活跃 |
+
+---
+
+#### 获取Provider统计
+**地址**: `GET /api/v2/{secure_path}/provider/stats`
+
+**返回**: 统计数据
+
+---

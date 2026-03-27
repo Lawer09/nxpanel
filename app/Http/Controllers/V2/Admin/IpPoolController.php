@@ -268,12 +268,12 @@ class IpPoolController extends Controller
         $ip = $request->input('ip');
         
         if (!$ip) {
-            return $this->fail([422, 'IP不能为空']);
+            return $this->error([422, 'IP不能为空']);
         }
 
         // 验证IP格式
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $this->fail([422, 'IP地址格式错误']);
+            return $this->error([422, 'IP地址格式错误']);
         }
 
         try {
@@ -281,14 +281,14 @@ class IpPoolController extends Controller
             $response = Http::timeout(10)->get("https://ipinfo.io/{$ip}/json");
             
             if (!$response->successful()) {
-                return $this->fail([500, '获取IP信息失败，请稍后重试']);
+                return $this->error([500, '获取IP信息失败，请稍后重试']);
             }
 
             $data = $response->json();
 
             // 验证返回数据是否包含必要字段
             if (!isset($data['ip'])) {
-                return $this->fail([400, 'IP信息不存在']);
+                return $this->error([400, 'IP信息不存在']);
             }
 
             // 规范化返回数据
@@ -305,7 +305,7 @@ class IpPoolController extends Controller
                 'readme' => $data['readme'] ?? 'https://ipinfo.io/missingauth'
             ];
 
-            return $this->success($normalizedData);
+            return $this->ok($normalizedData);
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             Log::error('IP Info Connection Failed', [
