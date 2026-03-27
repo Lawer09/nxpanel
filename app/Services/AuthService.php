@@ -28,11 +28,17 @@ class AuthService
         $tokenParts = explode('|', $token->plainTextToken);
         $formattedToken = 'Bearer ' . ($tokenParts[1] ?? $tokenParts[0]);
 
-        return [
-            'token' => $this->user->token,
-            'auth_data' => $formattedToken,
-            'is_admin' => $this->user->is_admin,
+        $data = [  
+            'token' => $this->user->token,  
+            'auth_data' => $formattedToken,  
+            'is_admin' => $this->user->is_admin,  
         ];
+
+        if ($this->user->is_admin) {  
+            $data['secure_path'] = admin_setting('secure_path', admin_setting('frontend_admin_path', hash('crc32b', config('app.key'))));  
+        }  
+
+        return $data;
     }
 
     public function getSessions(): array

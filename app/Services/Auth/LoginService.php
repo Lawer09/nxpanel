@@ -22,7 +22,7 @@ class LoginService
         // 检查密码错误限制
         if ((int) admin_setting('password_limit_enable', true)) {
             $passwordErrorCount = (int) Cache::get(CacheKey::get('PASSWORD_ERROR_LIMIT', $email), 0);
-            if ($passwordErrorCount >= (int) admin_setting('password_limit_count', 5)) {
+            if ($passwordErrorCount >= (int) admin_setting('password_limit_count', 10)) {
                 return [
                     false,
                     [
