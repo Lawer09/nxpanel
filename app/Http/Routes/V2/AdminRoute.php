@@ -298,7 +298,6 @@ class AdminRoute
                 $router->get('/stats', [IpPoolController::class, 'stats']);
                 $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
             });
-        });
 
 
             // ASN Management
@@ -310,6 +309,9 @@ class AdminRoute
                 $router->post('/detail', [AsnController::class, 'detail']);
                 $router->post('/delete', [AsnController::class, 'delete']);
                 $router->get('/stats', [AsnController::class, 'stats']);
+                $router->get('/getProviders', [AsnController::class, 'getProviders']);
+                $router->post('/bindProviders', [AsnController::class, 'bindProviders']);
+                $router->post('/unbindProviders', [AsnController::class, 'unbindProviders']);
             });
 
             // Provider Management
@@ -321,7 +323,13 @@ class AdminRoute
                 $router->post('/detail', [ProviderController::class, 'detail']);
                 $router->post('/delete', [ProviderController::class, 'delete']);
                 $router->post('/updateStatus', [ProviderController::class, 'updateStatus']);
+                $router->post('/updateAsn', [ProviderController::class, 'updateAsn']);
                 $router->get('/stats', [ProviderController::class, 'stats']);
+                $router->get('/getUnboundProviders', [ProviderController::class, 'getUnboundProviders']);
+                $router->get('/getByAsn', [ProviderController::class, 'getByAsn']);
             });
+
+
+        });
     }
 }

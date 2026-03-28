@@ -29,27 +29,12 @@ class AsnController extends Controller
             ->limit($pageSize)
             ->get();
 
-        return $this->success([
+        return $this->ok([
             'data' => $items,
             'total' => $total,
             'pageSize' => $pageSize,
             'page' => $current
         ]);
-    }
-
-    /**
-     * 获取ASN详情
-     */
-    public function detail(Request $request)
-    {
-        $id = $request->input('id');
-        $asn = Asn::with('providers')->find($id);
-
-        if (!$asn) {
-            return $this->fail([400202, 'ASN不存在']);
-        }
-
-        return $this->success($asn);
     }
 
     /**
@@ -74,20 +59,20 @@ class AsnController extends Controller
                 // 编辑
                 $asn = Asn::find($request->input('id'));
                 if (!$asn) {
-                    return $this->fail([400202, 'ASN不存在']);
+                    return $this->error([400202, 'ASN不存在']);
                 }
                 
                 unset($validated['asn']);
                 $asn->update($validated);
-                return $this->success(true);
+                return $this->ok(true);
             } else {
                 // 新增
                 Asn::create($validated);
-                return $this->success(true);
+                return $this->ok(true);
             }
         } catch (\Exception $e) {
             Log::error('ASN save failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '保存失败']);
+            return $this->error([500, '保存失败']);
         }
     }
 
@@ -98,15 +83,15 @@ class AsnController extends Controller
     {
         $ids = $request->input('ids', []);
         if (empty($ids)) {
-            return $this->fail([422, 'ID不能为空']);
+            return $this->error([422, 'ID不能为空']);
         }
 
         try {
             Asn::whereIn('id', $ids)->delete();
-            return $this->success(true);
+            return $this->ok(true);
         } catch (\Exception $e) {
             Log::error('ASN delete failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '删除失败']);
+            return $this->error([500, '删除失败']);
         }
     }
 
@@ -126,7 +111,7 @@ class AsnController extends Controller
             ->orderByDesc('count')
             ->get();
 
-        return $this->success([
+        return $this->ok([
             'total' => $total,
             'datacenters' => $datacenters,
             'high_reliability' => $highReliability,
@@ -162,6 +147,132 @@ class AsnController extends Controller
 
         if ($request->filled('min_reliability')) {
             $builder->where('reliability', '>=', $request->input('min_reliability'));
+        }
+    }
+
+    /**
+     * 获取ASN详情（包含关联的Provider）
+     */
+    public function detail(Request $request)
+    {
+        $id = $request->input('id');
+        $asn = Asn::with('providers')->find($id);
+
+        if (!$asn) {
+            return $this->fail([400202, 'ASN不存在']);
+        }
+
+        return $this->success([
+            'asn' => $asn,
+            'providers_count' => $asn->providers->count(),
+            'providers' => $asn->providers()->orderByDesc('reliability')->get(),
+        ]);
+    }
+
+    /**
+     * 获取ASN关联的Provider列表
+     */
+    public function getProviders(Request $request)
+    {
+        $asnId = $request->input('asn_id');
+        $current = $request->input('current', 1);
+        $pageSize = $request->input('pageSize', 10);
+
+        if (!$asnId) {
+            return $this->fail([422, 'ASN ID不能为空']);
+        }
+
+        $asn = Asn::find($asnId);
+        if (!$asn) {
+            return $this->fail([400202, 'ASN不存在']);
+        }
+
+        $query = $asn->providers();
+        $total = $query->count();
+        $providers = $query->orderByDesc('reliability')
+            ->offset(($current - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        return $this->success([
+            'asn_id' => $asnId,
+            'asn' => $asn->asn,
+            'data' => $providers,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current
+        ]);
+    }
+
+    /**
+     * 批量关联Provider到ASN
+     */
+    public function bindProviders(Request $request)
+    {
+        $validated = $request->validate([
+            'asn_id' => 'required|integer|exists:v2_asns,id',
+            'provider_ids' => 'required|array|min:1',
+            'provider_ids.*' => 'integer|exists:v2_providers,id',
+        ]);
+
+        try {
+            $asn = Asn::find($validated['asn_id']);
+            
+            $providers = \App\Models\Provider::whereIn('id', $validated['provider_ids'])->get();
+
+            foreach ($providers as $provider) {
+                $provider->update([
+                    'asn_id' => $validated['asn_id'],
+                    'asn' => $asn->asn,
+                ]);
+            }
+
+            Log::info('Providers bound to ASN', [
+                'asn_id' => $validated['asn_id'],
+                'provider_count' => count($validated['provider_ids'])
+            ]);
+
+            return $this->success([
+                'message' => '关联成功',
+                'count' => count($validated['provider_ids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Bind providers failed', ['error' => $e->getMessage()]);
+            return $this->fail([500, '关联失败']);
+        }
+    }
+
+    /**
+     * 批量解除Provider与ASN的关联
+     */
+    public function unbindProviders(Request $request)
+    {
+        $validated = $request->validate([
+            'asn_id' => 'required|integer|exists:v2_asns,id',
+            'provider_ids' => 'required|array|min:1',
+            'provider_ids.*' => 'integer|exists:v2_providers,id',
+        ]);
+
+        try {
+            \App\Models\Provider::whereIn('id', $validated['provider_ids'])
+                ->where('asn_id', $validated['asn_id'])
+                ->update([
+                    'asn_id' => null,
+                    'asn' => null,
+                ]);
+
+            Log::info('Providers unbound from ASN', [
+                'asn_id' => $validated['asn_id'],
+                'provider_count' => count($validated['provider_ids'])
+            ]);
+
+            return $this->success([
+                'message' => '解除关联成功',
+                'count' => count($validated['provider_ids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Unbind providers failed', ['error' => $e->getMessage()]);
+            return $this->fail([500, '解除关联失败']);
         }
     }
 }

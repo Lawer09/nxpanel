@@ -1247,3 +1247,469 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
 **返回**: 统计数据
 
 ---
+
+
+
+你说得很对！根据 Provider 和 ASN 的关系，接口确实需要修改和完善。让我列出需要改进的地方：
+
+## 🔧 接口改进方案
+
+### 1️⃣ **ASN 详情接口需要返回关联的 Provider 列表**
+
+**修改 AsnController**:
+
+```php name="app/Http/Controllers/V2/Admin/AsnController.php"
+    /**
+     * 获取ASN详情（包含关联的Provider）
+     */
+    public function detail(Request $request)
+    {
+        $id = $request->input('id');
+        $asn = Asn::with('providers')->find($id);
+
+        if (!$asn) {
+            return $this->fail([400202, 'ASN不存在']);
+        }
+
+        return $this->success([
+            'asn' => $asn,
+            'providers_count' => $asn->providers->count(),
+            'providers' => $asn->providers()->orderByDesc('reliability')->get(),
+        ]);
+    }
+
+    /**
+     * 获取ASN关联的Provider列表
+     */
+    public function getProviders(Request $request)
+    {
+        $asnId = $request->input('asn_id');
+        $current = $request->input('current', 1);
+        $pageSize = $request->input('pageSize', 10);
+
+        if (!$asnId) {
+            return $this->fail([422, 'ASN ID不能为空']);
+        }
+
+        $asn = Asn::find($asnId);
+        if (!$asn) {
+            return $this->fail([400202, 'ASN不存在']);
+        }
+
+        $query = $asn->providers();
+        $total = $query->count();
+        $providers = $query->orderByDesc('reliability')
+            ->offset(($current - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        return $this->success([
+            'asn_id' => $asnId,
+            'asn' => $asn->asn,
+            'data' => $providers,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current
+        ]);
+    }
+
+    /**
+     * 批量关联Provider到ASN
+     */
+    public function bindProviders(Request $request)
+    {
+        $validated = $request->validate([
+            'asn_id' => 'required|integer|exists:v2_asns,id',
+            'provider_ids' => 'required|array|min:1',
+            'provider_ids.*' => 'integer|exists:v2_providers,id',
+        ]);
+
+        try {
+            $asn = Asn::find($validated['asn_id']);
+            
+            $providers = \App\Models\Provider::whereIn('id', $validated['provider_ids'])->get();
+
+            foreach ($providers as $provider) {
+                $provider->update([
+                    'asn_id' => $validated['asn_id'],
+                    'asn' => $asn->asn,
+                ]);
+            }
+
+            Log::info('Providers bound to ASN', [
+                'asn_id' => $validated['asn_id'],
+                'provider_count' => count($validated['provider_ids'])
+            ]);
+
+            return $this->success([
+                'message' => '关联成功',
+                'count' => count($validated['provider_ids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Bind providers failed', ['error' => $e->getMessage()]);
+            return $this->fail([500, '关联失败']);
+        }
+    }
+
+    /**
+     * 批量解除Provider与ASN的关联
+     */
+    public function unbindProviders(Request $request)
+    {
+        $validated = $request->validate([
+            'asn_id' => 'required|integer|exists:v2_asns,id',
+            'provider_ids' => 'required|array|min:1',
+            'provider_ids.*' => 'integer|exists:v2_providers,id',
+        ]);
+
+        try {
+            \App\Models\Provider::whereIn('id', $validated['provider_ids'])
+                ->where('asn_id', $validated['asn_id'])
+                ->update([
+                    'asn_id' => null,
+                    'asn' => null,
+                ]);
+
+            Log::info('Providers unbound from ASN', [
+                'asn_id' => $validated['asn_id'],
+                'provider_count' => count($validated['provider_ids'])
+            ]);
+
+            return $this->success([
+                'message' => '解除关联成功',
+                'count' => count($validated['provider_ids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Unbind providers failed', ['error' => $e->getMessage()]);
+            return $this->fail([500, '解除关联失败']);
+        }
+    }
+```
+
+---
+
+### 2️⃣ **Provider 详情接口需要返回完整的 ASN 信息**
+
+**修改 ProviderController**:
+
+```php name="app/Http/Controllers/V2/Admin/ProviderController.php"
+    /**
+     * 获取Provider详情（包含完整的ASN信息）
+     */
+    public function detail(Request $request)
+    {
+        $id = $request->input('id');
+        $provider = Provider::with('asn')->find($id);
+
+        if (!$provider) {
+            return $this->fail([400202, 'Provider不存在']);
+        }
+
+        return $this->success($provider);
+    }
+
+    /**
+     * 批量更新Provider的ASN关联
+     */
+    public function updateAsn(Request $request)
+    {
+        $validated = $request->validate([
+            'provider_ids' => 'required|array|min:1',
+            'provider_ids.*' => 'integer|exists:v2_providers,id',
+            'asn_id' => 'required|integer|exists:v2_asns,id',
+        ]);
+
+        try {
+            $asn = Asn::find($validated['asn_id']);
+
+            Provider::whereIn('id', $validated['provider_ids'])
+                ->update([
+                    'asn_id' => $validated['asn_id'],
+                    'asn' => $asn->asn,
+                ]);
+
+            Log::info('Providers ASN updated', [
+                'asn_id' => $validated['asn_id'],
+                'provider_count' => count($validated['provider_ids'])
+            ]);
+
+            return $this->success([
+                'message' => '更新成功',
+                'count' => count($validated['provider_ids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Update providers ASN failed', ['error' => $e->getMessage()]);
+            return $this->fail([500, '更新失败']);
+        }
+    }
+
+    /**
+     * 获取无关联ASN的Provider
+     */
+    public function getUnboundProviders(Request $request)
+    {
+        $current = $request->input('current', 1);
+        $pageSize = $request->input('pageSize', 10);
+
+        $query = Provider::whereNull('asn_id');
+        
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $total = $query->count();
+        $providers = $query->orderByDesc('created_at')
+            ->offset(($current - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        return $this->success([
+            'data' => $providers,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current
+        ]);
+    }
+
+    /**
+     * 获取某个ASN下的所有Provider
+     */
+    public function getByAsn(Request $request)
+    {
+        $asnId = $request->input('asn_id');
+        $current = $request->input('current', 1);
+        $pageSize = $request->input('pageSize', 10);
+
+        if (!$asnId) {
+            return $this->fail([422, 'ASN ID不能为空']);
+        }
+
+        $asn = Asn::find($asnId);
+        if (!$asn) {
+            return $this->fail([400202, 'ASN不存在']);
+        }
+
+        $query = Provider::where('asn_id', $asnId);
+        $total = $query->count();
+        $providers = $query->orderByDesc('reliability')
+            ->offset(($current - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        return $this->success([
+            'asn_id' => $asnId,
+            'asn_name' => $asn->name,
+            'data' => $providers,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current
+        ]);
+    }
+```
+
+---
+
+### 3️⃣ **更新路由配置**
+
+```php name="app/Http/Routes/V2/AdminRoute.php"
+            // ASN Management
+            $router->group([
+                'prefix' => 'asn'
+            ], function ($router) {
+                $router->any('/fetch', [AsnController::class, 'fetch']);
+                $router->post('/save', [AsnController::class, 'save']);
+                $router->post('/detail', [AsnController::class, 'detail']);
+                $router->post('/delete', [AsnController::class, 'delete']);
+                $router->get('/stats', [AsnController::class, 'stats']);
+                $router->get('/getProviders', [AsnController::class, 'getProviders']);
+                $router->post('/bindProviders', [AsnController::class, 'bindProviders']);
+                $router->post('/unbindProviders', [AsnController::class, 'unbindProviders']);
+            });
+
+            // Provider Management
+            $router->group([
+                'prefix' => 'provider'
+            ], function ($router) {
+                $router->any('/fetch', [ProviderController::class, 'fetch']);
+                $router->post('/save', [ProviderController::class, 'save']);
+                $router->post('/detail', [ProviderController::class, 'detail']);
+                $router->post('/delete', [ProviderController::class, 'delete']);
+                $router->post('/updateStatus', [ProviderController::class, 'updateStatus']);
+                $router->post('/updateAsn', [ProviderController::class, 'updateAsn']);
+                $router->get('/stats', [ProviderController::class, 'stats']);
+                $router->get('/getUnboundProviders', [ProviderController::class, 'getUnboundProviders']);
+                $router->get('/getByAsn', [ProviderController::class, 'getByAsn']);
+            });
+```
+
+---
+
+### ASN 接口新增
+
+#### 获取 ASN 关联的 Provider 列表
+**地址**: `GET /api/v2/admin/asn/getProviders`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| asn_id | int | ✅ | ASN ID |
+| current | int | ❌ | 页码 |
+| pageSize | int | ❌ | 每页数量 |
+
+**返回**:
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "asn_id": 1,
+    "asn": "AS210644",
+    "data": [
+      {
+        "id": 1,
+        "name": "Provider 1",
+        "reliability": 95
+      }
+    ],
+    "total": 10,
+    "page": 1
+  }
+}
+```
+
+---
+
+#### 批量关联 Provider 到 ASN
+**地址**: `POST /api/v2/admin/asn/bindProviders`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| asn_id | int | ✅ | ASN ID |
+| provider_ids | array | ✅ | Provider ID 数组 |
+
+**请求**:
+```json
+{
+  "asn_id": 1,
+  "provider_ids": [1, 2, 3]
+}
+```
+
+**返回**:
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "message": "关联成功",
+    "count": 3
+  }
+}
+```
+
+---
+
+#### 批量解除 Provider 与 ASN 的关联
+**地址**: `POST /api/v2/admin/asn/unbindProviders`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| asn_id | int | ✅ | ASN ID |
+| provider_ids | array | ✅ | Provider ID 数组 |
+
+**请求**:
+```json
+{
+  "asn_id": 1,
+  "provider_ids": [1, 2, 3]
+}
+```
+
+**返回**:
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "message": "解除关联成功",
+    "count": 3
+  }
+}
+```
+
+---
+
+### Provider 接口新增
+
+#### 批量更新 Provider 的 ASN 关联
+**地址**: `POST /api/v2/admin/provider/updateAsn`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| provider_ids | array | ✅ | Provider ID 数组 |
+| asn_id | int | ✅ | 要关联的 ASN ID |
+
+**请求**:
+```json
+{
+  "provider_ids": [1, 2, 3],
+  "asn_id": 1
+}
+```
+
+**返回**:
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "message": "更新成功",
+    "count": 3
+  }
+}
+```
+
+---
+
+#### 获取无关联 ASN 的 Provider
+**地址**: `GET /api/v2/admin/provider/getUnboundProviders`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| current | int | ❌ | 页码 |
+| pageSize | int | ❌ | 每页数量 |
+| search | string | ❌ | 搜索名称 |
+
+**返回**: 未绑定 ASN 的 Provider 列表
+
+---
+
+#### 获取某个 ASN 下的所有 Provider
+**地址**: `GET /api/v2/admin/provider/getByAsn`
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| asn_id | int | ✅ | ASN ID |
+| current | int | ❌ | 页码 |
+| pageSize | int | ❌ | 每页数量 |
+
+**返回**:
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "asn_id": 1,
+    "asn_name": "Alibaba CDN",
+    "data": [
+      {
+        "id": 1,
+        "name": "Alibaba Cloud",
+        "reliability": 95
+      }
+    ],
+    "total": 5,
+    "page": 1
+  }
+}
+```
