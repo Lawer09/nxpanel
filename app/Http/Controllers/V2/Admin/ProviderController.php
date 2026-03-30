@@ -167,7 +167,7 @@ class ProviderController extends Controller
             $builder->where('type', $request->input('type'));
         }
 
-        if ($request->filled('is_active') !== null) {
+        if ($request->filled('is_active')) {
             $builder->where('is_active', $request->input('is_active'));
         }
 
@@ -189,10 +189,10 @@ class ProviderController extends Controller
         $provider = Provider::with('asn')->find($id);
 
         if (!$provider) {
-            return $this->fail([400202, 'Provider不存在']);
+            return $this->error([400202, 'Provider不存在']);
         }
 
-        return $this->success($provider);
+        return $this->ok($provider);
     }
 
     /**
@@ -220,13 +220,13 @@ class ProviderController extends Controller
                 'provider_count' => count($validated['provider_ids'])
             ]);
 
-            return $this->success([
+            return $this->ok([
                 'message' => '更新成功',
                 'count' => count($validated['provider_ids'])
             ]);
         } catch (\Exception $e) {
             Log::error('Update providers ASN failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '更新失败']);
+            return $this->error([500, '更新失败']);
         }
     }
 
@@ -251,7 +251,7 @@ class ProviderController extends Controller
             ->limit($pageSize)
             ->get();
 
-        return $this->success([
+        return $this->ok([
             'data' => $providers,
             'total' => $total,
             'pageSize' => $pageSize,
@@ -269,12 +269,12 @@ class ProviderController extends Controller
         $pageSize = $request->input('pageSize', 10);
 
         if (!$asnId) {
-            return $this->fail([422, 'ASN ID不能为空']);
+            return $this->error([422, 'ASN ID不能为空']);
         }
 
         $asn = Asn::find($asnId);
         if (!$asn) {
-            return $this->fail([400202, 'ASN不存在']);
+            return $this->error([400202, 'ASN不存在']);
         }
 
         $query = Provider::where('asn_id', $asnId);
@@ -284,7 +284,7 @@ class ProviderController extends Controller
             ->limit($pageSize)
             ->get();
 
-        return $this->success([
+        return $this->ok([
             'asn_id' => $asnId,
             'asn_name' => $asn->name,
             'data' => $providers,
