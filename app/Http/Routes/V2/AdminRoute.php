@@ -6,6 +6,7 @@ use App\Http\Controllers\V2\Admin\PlanController;
 use App\Http\Controllers\V2\Admin\Server\GroupController;
 use App\Http\Controllers\V2\Admin\Server\RouteController;
 use App\Http\Controllers\V2\Admin\Server\ManageController;
+use App\Http\Controllers\V2\Admin\Server\TemplateController;
 use App\Http\Controllers\V2\Admin\OrderController;
 use App\Http\Controllers\V2\Admin\UserController;
 use App\Http\Controllers\V2\Admin\StatController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\V2\Admin\AsnController;
 use App\Http\Controllers\V2\Admin\ProviderController;
 use App\Http\Controllers\V2\Admin\PerformanceController;
 use App\Http\Controllers\V2\Admin\DeployTemplateController;
+use App\Http\Controllers\V2\Admin\DnsToolController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class AdminRoute
@@ -87,6 +89,37 @@ class AdminRoute
                 $router->post('/drop', [ManageController::class, 'drop']);
                 $router->post('/copy', [ManageController::class, 'copy']);
                 $router->post('/sort', [ManageController::class, 'sort']);
+            });
+
+            // DNS 解析工具
+            $router->group([
+                'prefix' => 'dns'
+            ], function ($router) {
+                // 域名
+                $router->get('/domains/available',        [DnsToolController::class, 'availableDomains']);
+                $router->get('/domains/available/detail', [DnsToolController::class, 'availableDomainsDetail']);
+                $router->get('/domains/unavailable',      [DnsToolController::class, 'unavailableDomains']);
+                $router->post('/domains/disable',         [DnsToolController::class, 'disableDomain']);
+                $router->post('/domains/enable',          [DnsToolController::class, 'enableDomain']);
+                $router->post('/domains/sync',            [DnsToolController::class, 'syncDomains']);
+                // 记录
+                $router->post('/records/resolve',         [DnsToolController::class, 'resolveRecord']);
+                $router->get('/records/by-ip',            [DnsToolController::class, 'recordsByIp']);
+                $router->post('/records/unbind',          [DnsToolController::class, 'unbindRecord']);
+            });
+
+            // 节点模板
+            $router->group([
+                'prefix' => 'server/template'
+            ], function ($router) {
+                $router->get('/fetch',        [TemplateController::class, 'fetch']);
+                $router->get('/detail',       [TemplateController::class, 'detail']);
+                $router->post('/save',        [TemplateController::class, 'save']);
+                $router->post('/update',      [TemplateController::class, 'update']);
+                $router->post('/delete',      [TemplateController::class, 'delete']);
+                $router->post('/setDefault',  [TemplateController::class, 'setDefault']);
+                $router->post('/saveFromNode',[TemplateController::class, 'saveFromNode']);
+                $router->get('/preview',      [TemplateController::class, 'preview']);
             });
 
             // Order

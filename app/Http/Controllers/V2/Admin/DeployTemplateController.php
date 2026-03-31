@@ -30,13 +30,14 @@ class DeployTemplateController extends Controller
         }
 
         $pageSize = $request->integer('page_size', 20);
-        $result   = $query->orderByDesc('is_default')->orderByDesc('id')->paginate($pageSize);
+        $current  = $request->integer('page', 1);
+        $result   = $query->orderByDesc('is_default')->orderByDesc('id')->paginate($pageSize, ['*'], 'page', $current);
 
-        return $this->success([
-            'total'    => $result->total(),
-            'page'     => $result->currentPage(),
-            'pageSize' => $result->perPage(),
+        return $this->ok([
             'data'     => $result->items(),
+            'total'    => $result->total(),
+            'pageSize' => $result->perPage(),
+            'page'     => $result->currentPage(),
         ]);
     }
 
@@ -50,7 +51,7 @@ class DeployTemplateController extends Controller
         $request->validate(['id' => 'required|integer']);
 
         $template = NodeDeployTemplate::findOrFail($request->integer('id'));
-        return $this->success($template);
+        return $this->ok($template);
     }
 
     /**
@@ -103,10 +104,10 @@ class DeployTemplateController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            return $this->fail([500, '创建失败: ' . $e->getMessage()]);
+            return $this->error([500, '创建失败: ' . $e->getMessage()]);
         }
 
-        return $this->success($template);
+        return $this->ok($template);
     }
 
     /**
@@ -164,10 +165,10 @@ class DeployTemplateController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            return $this->fail([500, '更新失败: ' . $e->getMessage()]);
+            return $this->error([500, '更新失败: ' . $e->getMessage()]);
         }
 
-        return $this->success($template->fresh());
+        return $this->ok($template->fresh());
     }
 
     /**
@@ -182,7 +183,7 @@ class DeployTemplateController extends Controller
         $template = NodeDeployTemplate::findOrFail($request->integer('id'));
         $template->delete();
 
-        return $this->success(true);
+        return $this->ok(true);
     }
 
     /**
@@ -199,7 +200,7 @@ class DeployTemplateController extends Controller
             NodeDeployTemplate::where('id', $request->integer('id'))->update(['is_default' => true]);
         });
 
-        return $this->success(true);
+        return $this->ok(true);
     }
 
     /**
@@ -212,6 +213,6 @@ class DeployTemplateController extends Controller
         $request->validate(['id' => 'required|integer']);
 
         $template = NodeDeployTemplate::findOrFail($request->integer('id'));
-        return $this->success($template->toDeployConfig());
+        return $this->ok($template->toDeployConfig());
     }
 }

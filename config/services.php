@@ -30,4 +30,9 @@ return [
         'region' => env('AWS_V2BOARD_REGION', 'us-east-1'),
     ],
 
+    'dns_tool' => [
+        'host'  => env('DNS_TOOL_HOST',  '8.221.113.81:8080'),
+        'token' => env('DNS_TOOL_TOKEN', 'd2d'),
+    ],
+
 ];

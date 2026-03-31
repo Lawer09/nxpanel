@@ -190,6 +190,15 @@ return [
                 'tries' => 3,
                 'timeout' => 30,
             ],
+            'deploy' => [
+                'connection' => 'redis',
+                'queue' => ['deploy'],
+                'balance' => 'simple',
+                'minProcesses' => 1,
+                'maxProcesses' => 3,
+                'tries' => 1,
+                'timeout' => 300,
+            ],
             'notification' => [
                 'connection' => 'redis',
                 'queue' => ['send_email', 'send_telegram', 'send_email_mass', 'node_sync'],
@@ -214,7 +223,8 @@ return [
                     'send_email_mass',
                     'send_telegram',
                     'user_alive_sync',
-                    'node_sync'
+                    'node_sync',
+                    'deploy'
                 ],
                 'balance' => 'auto',
                 'minProcesses' => 1,

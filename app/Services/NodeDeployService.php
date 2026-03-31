@@ -316,10 +316,9 @@ class NodeDeployService
      */
     private function generateX25519KeyPair(): array
     {
-        // phpseclib3 已在 vendor 中
-        $privateKey = \phpseclib3\Crypt\EC::createKey('Curve25519');
-        $priv = base64url_encode($privateKey->toString('MontgomeryPrivate', ['format' => 'Raw']));
-        $pub  = base64url_encode($privateKey->getPublicKey()->toString('MontgomeryPublic', ['format' => 'Raw']));
+        $key  = \phpseclib3\Crypt\EC::createKey('Curve25519');
+        $priv = rtrim(strtr(base64_encode($key->toString('MontgomeryPrivate')), '+/', '-_'), '=');
+        $pub  = rtrim(strtr(base64_encode($key->getPublicKey()->toString('MontgomeryPublic')), '+/', '-_'), '=');
         return [$priv, $pub];
     }
 

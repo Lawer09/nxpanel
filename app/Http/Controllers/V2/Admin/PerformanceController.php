@@ -54,13 +54,14 @@ class PerformanceController extends Controller
         }
 
         $pageSize = $request->integer('page_size', 15);
-        $result   = $query->orderByDesc('created_at')->paginate($pageSize);
+        $current  = $request->integer('page', 1);
+        $result   = $query->orderByDesc('created_at')->paginate($pageSize, ['*'], 'page', $current);
 
-        return $this->success([
-            'total'    => $result->total(),
-            'page'     => $result->currentPage(),
-            'pageSize' => $result->perPage(),
+        return $this->ok([
             'data'     => $result->items(),
+            'total'    => $result->total(),
+            'pageSize' => $result->perPage(),
+            'page'     => $result->currentPage(),
         ]);
     }
 
@@ -98,7 +99,7 @@ class PerformanceController extends Controller
             $query->where('node_id', $request->integer('node_id'));
         }
 
-        return $this->success([
+        return $this->ok([
             'period_days' => $days,
             'data'        => $query->get(),
         ]);
@@ -139,7 +140,7 @@ class PerformanceController extends Controller
             ->orderBy('time_slot')
             ->get();
 
-        return $this->success([
+        return $this->ok([
             'node_id'     => $nodeId,
             'period_days' => $days,
             'granularity' => $granularity,
@@ -178,7 +179,7 @@ class PerformanceController extends Controller
             $query->where('node_id', $request->integer('node_id'));
         }
 
-        return $this->success([
+        return $this->ok([
             'period_days' => $days,
             'data'        => $query->get(),
         ]);
@@ -215,7 +216,7 @@ class PerformanceController extends Controller
             $query->where('node_id', $request->integer('node_id'));
         }
 
-        return $this->success([
+        return $this->ok([
             'period_days' => $days,
             'data'        => $query->get(),
         ]);

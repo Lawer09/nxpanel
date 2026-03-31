@@ -51,21 +51,14 @@ class MachineController extends Controller
                 ->get()
                 ->makeHidden(['password', 'private_key']);
 
-            return response()->json([
-                'code' => 0,
-                'msg' => 'success',
-                'data' => [
-                    'data' => $data,
-                    'total' => $total,
-                    'pageSize' => $pageSize,
-                    'page' => $page
-                ]
+            return $this->ok([
+                'data'     => $data,
+                'total'    => $total,
+                'pageSize' => $pageSize,
+                'page'     => $page,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -99,10 +92,7 @@ class MachineController extends Controller
 
             // 密码和私钥至少需要一个
             if (empty($validated['password']) && empty($validated['private_key'])) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '密码和私钥至少需要一个'
-                ]);
+                return $this->error([422, '密码和私钥至少需要一个']);
             }
 
             $validated['is_active'] = $validated['is_active'] ?? true;
@@ -110,22 +100,11 @@ class MachineController extends Controller
 
             $machine = Machine::create($validated);
 
-            return response()->json([
-                'code' => 0,
-                'msg' => '机器创建成功',
-                'data' => $machine->makeHidden(['password', 'private_key'])
-            ]);
+            return $this->ok($machine->makeHidden(['password', 'private_key']));
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '数据验证失败',
-                'errors' => $e->errors()
-            ]);
+            return $this->error([422, '数据验证失败']);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -138,10 +117,7 @@ class MachineController extends Controller
             $id = $request->input('id');
             
             if (!$id) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '机器ID不能为空'
-                ]);
+                return $this->error([422, '机器ID不能为空']);
             }
 
             $machine = Machine::findOrFail($id);
@@ -171,27 +147,13 @@ class MachineController extends Controller
 
             $machine->update($validated);
 
-            return response()->json([
-                'code' => 0,
-                'msg' => '机器更新成功',
-                'data' => $machine->makeHidden(['password', 'private_key'])
-            ]);
+            return $this->ok($machine->fresh()->makeHidden(['password', 'private_key']));
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '数据验证失败',
-                'errors' => $e->errors()
-            ]);
+            return $this->error([422, '数据验证失败']);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '机器不存在'
-            ]);
+            return $this->error([404, '机器不存在']);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -204,29 +166,17 @@ class MachineController extends Controller
             $id = $request->input('id');
 
             if (!$id) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '机器ID不能为空'
-                ]);
+                return $this->error([422, '机器ID不能为空']);
             }
 
             $machine = Machine::findOrFail($id);
             $machine->delete();
 
-            return response()->json([
-                'code' => 0,
-                'msg' => '机器删除成功'
-            ]);
+            return $this->ok(true);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '机器不存在'
-            ]);
+            return $this->error([404, '机器不存在']);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -239,29 +189,16 @@ class MachineController extends Controller
             $id = $request->input('id');
 
             if (!$id) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '机器ID不能为空'
-                ]);
+                return $this->error([422, '机器ID不能为空']);
             }
 
             $machine = Machine::findOrFail($id);
 
-            return response()->json([
-                'code' => 0,
-                'msg' => 'success',
-                'data' => $machine->makeHidden(['password', 'private_key'])
-            ]);
+            return $this->ok($machine->makeHidden(['password', 'private_key']));
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '机器不存在'
-            ]);
+            return $this->error([404, '机器不存在']);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -273,65 +210,42 @@ class MachineController extends Controller
         try {  
             $id = $request->input('id');  
   
-            if (!$id) {  
-                return response()->json([  
-                    'code' => 1,  
-                    'msg' => '机器ID不能为空'  
-                ]);  
-            }  
-  
-            $machine = Machine::findOrFail($id);  
-  
-            $service = new MachineSSHService();  
-            $ssh = $service->connect($machine);  
-  
-            $osInfo = trim($ssh->exec('uname -a') ?? '');  
-            $ssh->disconnect();  
-  
-            $machine->update([  
-                'status' => 'online',  
-                'last_check_at' => now()  
-            ]);  
-  
-            return response()->json([  
-                'code' => 0,  
-                'msg' => '连接测试成功',  
-                'data' => [  
-                    'status' => 'online',  
-                    'os_info' => $osInfo  
-                ]  
-            ]);  
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => '机器不存在'  
-            ]);  
-        } catch (\Illuminate\Validation\ValidationException $e) {  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => '参数验证失败',  
-                'errors' => $e->errors()  
-            ]);  
-        } 
-        catch (\Illuminate\Contracts\Encryption\DecryptException $e) {  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => '密码或私钥解密失败，请重新编辑该机器并保存密码/私钥'  
-            ]);  
-        }
-        catch (\Exception $e) {  
-            // 连接异常（网络不通、端口不通等）  
-            if (isset($machine) && $machine) {  
+            if (!$id) {
+                return $this->error([422, '机器ID不能为空']);
+            }
+
+            $machine = Machine::findOrFail($id);
+
+            $service = new MachineSSHService();
+            $ssh = $service->connect($machine);
+
+            $osInfo = trim($ssh->exec('uname -a') ?? '');
+            $ssh->disconnect();
+
+            $machine->update([
+                'status' => 'online',
+                'last_check_at' => now()
+            ]);
+
+            return $this->ok([
+                'status'  => 'online',
+                'os_info' => $osInfo,
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->error([404, '机器不存在']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, '参数验证失败']);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            return $this->error([422, '密码或私钥解密失败，请重新编辑该机器并保存密码/私钥']);
+        } catch (\Exception $e) {
+            if (isset($machine) && $machine) {
                 $machine->update([
-                    'status' => 'error',  
-                    'last_check_at' => now()  
-                ]);  
-            }  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => 'SSH连接失败: ' . $e->getMessage()  
-            ]);  
-        }  
+                    'status' => 'error',
+                    'last_check_at' => now()
+                ]);
+            }
+            return $this->error([500, 'SSH连接失败: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -343,23 +257,14 @@ class MachineController extends Controller
             $ids = $request->input('ids', []);
 
             if (empty($ids)) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '请选择要删除的机器'
-                ]);
+                return $this->error([422, '请选择要删除的机器']);
             }
 
             Machine::whereIn('id', $ids)->delete();
 
-            return response()->json([
-                'code' => 0,
-                'msg' => '批量删除成功'
-            ]);
+            return $this->ok(true);
         } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -404,20 +309,16 @@ class MachineController extends Controller
                 'deploy_config' => $cfg,
             ]);
 
-            DeployNodeJob::dispatch($task->id, $machine->id, $cfg);
+            DeployNodeJob::dispatch($task->id, $machine->id, $cfg)->onQueue('deploy');
 
-            return response()->json([
-                'code' => 0,
-                'msg'  => '部署任务已提交',
-                'data' => [
-                    'task_id'     => $task->id,
-                    'template_id' => $templateId,
-                ],
+            return $this->ok([
+                'task_id'     => $task->id,
+                'template_id' => $templateId,
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['code' => 1, 'msg' => '机器不存在']);
+            return $this->error([404, '机器不存在']);
         } catch (\Exception $e) {
-            return response()->json(['code' => 1, 'msg' => $e->getMessage()]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
@@ -459,10 +360,7 @@ class MachineController extends Controller
 
         $missing = array_diff($machineIds, $machines->keys()->toArray());
         if (!empty($missing)) {
-            return response()->json([
-                'code' => 1,
-                'msg'  => '以下机器ID不存在: ' . implode(', ', $missing),
-            ]);
+            return $this->error([404, '以下机器ID不存在: ' . implode(', ', $missing)]);
         }
 
         $batchId = (int) (microtime(true) * 1000); // 毫秒时间戳作为批次ID
@@ -492,7 +390,7 @@ class MachineController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['code' => 1, 'msg' => '任务创建失败: ' . $e->getMessage()]);
+            return $this->error([500, '任务创建失败: ' . $e->getMessage()]);
         }
 
         // 批量派发异步 Job
@@ -501,18 +399,14 @@ class MachineController extends Controller
                          ->onQueue('deploy');
         }
 
-        return response()->json([
-            'code' => 0,
-            'msg'  => '批量部署任务已提交',
-            'data' => [
-                'batch_id'  => $batchId,
-                'task_count' => count($tasks),
-                'tasks'     => collect($tasks)->map(fn($t) => [
-                    'task_id'    => $t->id,
-                    'machine_id' => $t->machine_id,
-                    'status'     => $t->status,
-                ]),
-            ],
+        return $this->ok([
+            'batch_id'   => $batchId,
+            'task_count' => count($tasks),
+            'tasks'      => collect($tasks)->map(fn($t) => [
+                'task_id'    => $t->id,
+                'machine_id' => $t->machine_id,
+                'status'     => $t->status,
+            ]),
         ]);
     }
 
@@ -532,7 +426,7 @@ class MachineController extends Controller
         if ($request->filled('task_id')) {
             $task = NodeDeployTask::with(['machine:id,name,ip_address', 'server:id,name'])
                 ->findOrFail($request->integer('task_id'));
-            return response()->json(['code' => 0, 'data' => $task]);
+            return $this->ok($task);
         }
 
         if ($request->filled('batch_id')) {
@@ -549,13 +443,10 @@ class MachineController extends Controller
                 'failed'  => $tasks->where('status', NodeDeployTask::STATUS_FAILED)->count(),
             ];
 
-            return response()->json([
-                'code' => 0,
-                'data' => ['summary' => $summary, 'tasks' => $tasks],
-            ]);
+            return $this->ok(['summary' => $summary, 'tasks' => $tasks]);
         }
 
-        return response()->json(['code' => 1, 'msg' => '请传入 batch_id 或 task_id']);
+        return $this->error([422, '请传入 batch_id 或 task_id']);
     }  
   
     /**  

@@ -257,9 +257,6 @@ check_ipv6_support() {
     fi
 }
 
-# 删除 generate_node_config 函数（不再需要）
-# 已集成到 generate_config_file 中
-
 # 生成配置文件（集成 initconfig.sh 的完整逻辑）
 generate_config_file() {
     echo -e "${green}正在生成完整配置文件...${plain}"
