@@ -321,4 +321,129 @@ class IpPoolController extends Controller
             return $this->error([500, '获取IP信息失败']);
         }
     }
+
+
+    /**  
+     * 批量导入IP  
+     * 已存在的IP（按ip字段匹配）会更新，不存在的会新增  
+     * 返回所有导入记录的id信息  
+     */  
+    public function batchImport(Request $request)  
+    {  
+        $items = $request->input('items', []);  
+  
+        if (empty($items) || !is_array($items)) {  
+            return $this->error([422, '导入数据不能为空']);  
+        }  
+  
+        // 允许更新的字段（不包含ip，ip仅用于匹配）  
+        $allowedFields = [  
+            'hostname', 'city', 'region', 'country', 'loc',  
+            'org', 'postal', 'timezone', 'readme_url',  
+            'score', 'max_load', 'status', 'risk_level',  
+        ];  
+  
+        $created = [];  
+        $updated = [];  
+        $failed = [];  
+  
+        DB::beginTransaction();  
+        try {  
+            foreach ($items as $index => $item) {  
+                // 验证ip字段必须存在  
+                if (empty($item['ip'])) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'] ?? null,  
+                        'reason' => 'IP地址不能为空',  
+                    ];  
+                    continue;  
+                }  
+  
+                // 验证IP格式  
+                if (!filter_var($item['ip'], FILTER_VALIDATE_IP)) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'],  
+                        'reason' => 'IP地址格式错误',  
+                    ];  
+                    continue;  
+                }  
+  
+                // 验证 country 长度  
+                if (!empty($item['country']) && strlen($item['country']) > 2) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'],  
+                        'reason' => '国家代码最多2个字符',  
+                    ];  
+                    continue;  
+                }  
+  
+                // 验证 status  
+                if (!empty($item['status']) && !in_array($item['status'], ['active', 'cooldown'])) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'],  
+                        'reason' => '状态只能是 active 或 cooldown',  
+                    ];  
+                    continue;  
+                }  
+  
+                // 验证 score 和 risk_level 范围  
+                if (isset($item['score']) && ($item['score'] < 0 || $item['score'] > 100)) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'],  
+                        'reason' => '评分必须在0-100之间',  
+                    ];  
+                    continue;  
+                }  
+  
+                if (isset($item['risk_level']) && ($item['risk_level'] < 0 || $item['risk_level'] > 100)) {  
+                    $failed[] = [  
+                        'index' => $index,  
+                        'ip' => $item['ip'],  
+                        'reason' => '风险值必须在0-100之间',  
+                    ];  
+                    continue;  
+                }  
+  
+                // 提取允许的字段  
+                $data = array_intersect_key($item, array_flip($allowedFields));  
+  
+                // 检查是否已存在  
+                $existing = IpPool::where('ip', $item['ip'])->first();  
+  
+                if ($existing) {  
+                    // 更新已有记录  
+                    $existing->update($data);  
+                    $updated[] = ['id' => $existing->id, 'ip' => $existing->ip];  
+                } else {  
+                    // 新增记录  
+                    $data['ip'] = $item['ip'];  
+                    $newIp = IpPool::create($data);  
+                    $created[] = ['id' => $newIp->id, 'ip' => $newIp->ip];  
+                }  
+            }  
+  
+            DB::commit();  
+  
+            return $this->ok([  
+                'created' => $created,  
+                'updated' => $updated,  
+                'failed' => $failed,  
+                'summary' => [  
+                    'total' => count($items),  
+                    'created_count' => count($created),  
+                    'updated_count' => count($updated),  
+                    'failed_count' => count($failed),  
+                ],  
+            ]);  
+        } catch (\Exception $e) {  
+            DB::rollBack();  
+            Log::error('IP Pool batch import failed', ['error' => $e->getMessage()]);  
+            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);  
+        }  
+    }
 }

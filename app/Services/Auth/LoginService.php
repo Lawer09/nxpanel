@@ -76,6 +76,64 @@ class LoginService
     }
 
     /**
+     * 通过AID快捷登录（自动注册）
+     * 账号为 {aid}@apple.com，密码为 {aid}
+     * 用户不存在时自动创建
+     *
+     * @param string $aid
+     * @return array [成功状态, 用户对象或错误信息]
+     */
+    public function loginByAid(string $aid): array
+    {
+        $email = $aid . '@apple.com';
+        $password = $aid;
+
+        $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            // 用户不存在，自动创建
+            try {
+                $userService = app(\App\Services\UserService::class);
+                $user = $userService->createUser([
+                    'email'    => $email,
+                    'password' => $password,
+                ]);
+
+                if (!$user->save()) {
+                    return [false, [500, '用户创建失败']];
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('loginByAid create user failed', [
+                    'error' => $e->getMessage(),
+                    'aid'   => $aid,
+                ]);
+                return [false, [500, '用户创建失败: ' . $e->getMessage()]];
+            }
+        } else {
+            // 用户已存在，验证密码
+            if (!Helper::multiPasswordVerify(
+                $user->password_algo,
+                $user->password_salt,
+                $password,
+                $user->password
+            )) {
+                return [false, [400, __('Incorrect email or password')]];
+            }
+
+            // 检查账户状态
+            if ($user->banned) {
+                return [false, [400, __('Your account has been suspended')]];
+            }
+        }
+
+        // 更新最后登录时间
+        $user->last_login_at = time();
+        $user->save();
+
+        return [true, $user];
+    }
+
+    /**
      * 处理密码重置
      *
      * @param string $email 用户邮箱

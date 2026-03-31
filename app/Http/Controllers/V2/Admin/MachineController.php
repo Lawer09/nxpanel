@@ -5,7 +5,7 @@ namespace App\Http\Controllers\V2\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Machine;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\Paginator;
+use App\Services\MachineSSHService;
 
 class MachineController extends Controller
 {
@@ -261,50 +261,73 @@ class MachineController extends Controller
         }
     }
 
-    /**
-     * 测试连接
-     */
-    public function testConnection(Request $request)
-    {
-        try {
-            $id = $request->input('id');
-
-            if (!$id) {
-                return response()->json([
-                    'code' => 1,
-                    'msg' => '机器ID不能为空'
-                ]);
-            }
-
-            $machine = Machine::findOrFail($id);
-
-            // 这里你可以实现SSH连接测逻辑
-            // 示例：使用 phpseclib 或其他 SSH 库
-            $status = 'online'; // 根据实际连接结果设置
-
-            $machine->update([
-                'status' => $status,
-                'last_check_at' => now()
-            ]);
-
-            return response()->json([
-                'code' => 0,
-                'msg' => '连接测试成功',
-                'data' => [
-                    'status' => $status
-                ]
-            ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => '机器不存在'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'code' => 1,
-                'msg' => $e->getMessage()
-            ]);
+    /**  
+     * 测试SSH连接  
+     */  
+    public function testConnection(Request $request)  
+    {  
+        try {  
+            $id = $request->input('id');  
+  
+            if (!$id) {  
+                return response()->json([  
+                    'code' => 1,  
+                    'msg' => '机器ID不能为空'  
+                ]);  
+            }  
+  
+            $machine = Machine::findOrFail($id);  
+  
+            $service = new MachineSSHService();  
+            $ssh = $service->connect($machine);  
+  
+            $osInfo = trim($ssh->exec('uname -a') ?? '');  
+            $ssh->disconnect();  
+  
+            $machine->update([  
+                'status' => 'online',  
+                'last_check_at' => now()  
+            ]);  
+  
+            return response()->json([  
+                'code' => 0,  
+                'msg' => '连接测试成功',  
+                'data' => [  
+                    'status' => 'online',  
+                    'os_info' => $osInfo  
+                ]  
+            ]);  
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => '机器不存在'  
+            ]);  
+        } catch (\Illuminate\Validation\ValidationException $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => '参数验证失败',  
+                'errors' => $e->errors()  
+            ]);  
+        } 
+        catch (\Illuminate\Contracts\Encryption\DecryptException $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => '密码或私钥解密失败，请重新编辑该机器并保存密码/私钥'  
+            ]);  
         }
+        catch (\Exception $e) {  
+            // 连接异常（网络不通、端口不通等）  
+            if (isset($machine) && $machine) {  
+                $machine->update([
+                    'status' => 'error',  
+                    'last_check_at' => now()  
+                ]);  
+            }  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => 'SSH连接失败: ' . $e->getMessage()  
+            ]);  
+        }  
     }
 
     /**
@@ -334,5 +357,103 @@ class MachineController extends Controller
                 'msg' => $e->getMessage()
             ]);
         }
+    }
+
+    /**  
+     * 部署节点  
+     */  
+    public function deployNode(Request $request)  
+    {  
+        try {  
+            $id = $request->input('id');  
+  
+            if (!$id) {  
+                return response()->json([  
+                    'code' => 1,  
+                    'msg' => '机器ID不能为空'  
+                ]);  
+            }  
+  
+            $machine = Machine::findOrFail($id);  
+  
+            $service = new MachineSSHService();  
+            $result = $service->executeScript($machine, 'node-install.sh');  
+  
+            // 根据执行结果更新机器状态  
+            if ($result['exit_code'] === 0) {  
+                $machine->update([  
+                    'status' => 'online',  
+                    'last_check_at' => now()  
+                ]);  
+            }  
+  
+            return response()->json([  
+                'code' => $result['exit_code'] === 0 ? 0 : 1,  
+                'msg' => $result['exit_code'] === 0 ? '节点部署完成' : '节点部署失败',  
+                'data' => [  
+                    'output' => $result['output'],  
+                    'exit_code' => $result['exit_code']  
+                ]  
+            ]);  
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => '机器不存在'  
+            ]);  
+        } catch (\Exception $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => $e->getMessage()  
+            ]);  
+        }  
+    }  
+  
+    /**  
+     * 清除节点  
+     */  
+    public function clearNode(Request $request)  
+    {  
+        try {  
+            $id = $request->input('id');  
+  
+            if (!$id) {  
+                return response()->json([  
+                    'code' => 1,  
+                    'msg' => '机器ID不能为空'  
+                ]);  
+            }  
+  
+            $machine = Machine::findOrFail($id);  
+  
+            $service = new MachineSSHService();  
+            $result = $service->executeScript($machine, 'node-clear.sh');  
+  
+            // 清除成功后更新状态为 offline  
+            if ($result['exit_code'] === 0) {  
+                $machine->update([  
+                    'status' => 'offline',  
+                    'last_check_at' => now()  
+                ]);  
+            }  
+  
+            return response()->json([  
+                'code' => $result['exit_code'] === 0 ? 0 : 1,  
+                'msg' => $result['exit_code'] === 0 ? '节点清除完成' : '节点清除失败',  
+                'data' => [  
+                    'output' => $result['output'],  
+                    'exit_code' => $result['exit_code']  
+                ]  
+            ]);  
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => '机器不存在'  
+            ]);  
+        } catch (\Exception $e) {  
+            return response()->json([  
+                'code' => 1,  
+                'msg' => $e->getMessage()  
+            ]);  
+        }  
     }
 }

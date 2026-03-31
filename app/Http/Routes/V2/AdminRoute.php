@@ -282,6 +282,8 @@ class AdminRoute
                 $router->post('/detail', [\App\Http\Controllers\V2\Admin\MachineController::class, 'detail']);
                 $router->post('/testConnection', [\App\Http\Controllers\V2\Admin\MachineController::class, 'testConnection']);
                 $router->post('/batchDrop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDrop']);
+                $router->post('/deployNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'deployNode']);
+                $router->post('/clearNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'clearNode']);
             });
 
             // IP Pool Management
@@ -297,6 +299,7 @@ class AdminRoute
                 $router->post('/reset-score', [IpPoolController::class, 'resetScore']);
                 $router->get('/stats', [IpPoolController::class, 'stats']);
                 $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
+                $router->post('/batchImport', [IpPoolController::class, 'batchImport']);
             });
 
 
@@ -312,6 +315,7 @@ class AdminRoute
                 $router->get('/getProviders', [AsnController::class, 'getProviders']);
                 $router->post('/bindProviders', [AsnController::class, 'bindProviders']);
                 $router->post('/unbindProviders', [AsnController::class, 'unbindProviders']);
+                $router->post('/batchImport', [AsnController::class, 'batchImport']);
             });
 
             // Provider Management
@@ -327,9 +331,8 @@ class AdminRoute
                 $router->get('/stats', [ProviderController::class, 'stats']);
                 $router->get('/getUnboundProviders', [ProviderController::class, 'getUnboundProviders']);
                 $router->get('/getByAsn', [ProviderController::class, 'getByAsn']);
+                $router->post('/batchImport', [ProviderController::class, 'batchImport']);
             });
-
-
         });
     }
 }

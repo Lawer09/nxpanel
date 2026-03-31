@@ -7,6 +7,7 @@ use App\Models\Asn;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class AsnController extends Controller
 {
@@ -43,7 +44,7 @@ class AsnController extends Controller
     public function save(Request $request)
     {
         $validated = $request->validate([
-            'asn' => 'required_without:id|string|unique:v2_asns,asn',
+            'asn' => 'required_without:id|string|unique:v2_asns,asn,' . $request->input('id'),
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'country' => 'nullable|string|max:2',
@@ -274,5 +275,123 @@ class AsnController extends Controller
             Log::error('Unbind providers failed', ['error' => $e->getMessage()]);
             return $this->fail([500, '解除关联失败']);
         }
+    }
+
+    /**  
+     * 批量导入ASN  
+     * 已存在的ASN（按asn字段匹配）会更新，不存在的会新增  
+     * 返回所有导入记录的id信息  
+     */  
+    public function batchImport(Request $request)  
+    {  
+        $items = $request->input('items', []);  
+  
+        if (empty($items) || !is_array($items)) {  
+            return $this->error([422, '导入数据不能为空']);  
+        }  
+  
+        $allowedFields = [  
+            'name', 'description', 'country', 'type',  
+            'is_datacenter', 'reliability', 'reputation', 'metadata',  
+        ];  
+  
+        $created = [];  
+        $updated = [];  
+        $failed = [];  
+  
+        DB::beginTransaction();  
+        try {  
+            foreach ($items as $index => $item) {  
+                // asn 字段必须存在  
+                if (empty($item['asn'])) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'] ?? null, 'reason' => 'ASN号不能为空'];  
+                    continue;  
+                }  
+  
+                // name 字段必须存在  
+                if (empty($item['name'])) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => 'ASN名称不能为空'];  
+                    continue;  
+                }  
+  
+                // 验证 asn 长度  
+                if (strlen($item['asn']) > 50) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => 'ASN号最多50个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 name 长度  
+                if (strlen($item['name']) > 255) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => 'ASN名称最多255个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 country 长度  
+                if (!empty($item['country']) && strlen($item['country']) > 2) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => '国家代码最多2个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 type 长度  
+                if (!empty($item['type']) && strlen($item['type']) > 50) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => '类型最多50个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 reliability 范围  
+                if (isset($item['reliability']) && ($item['reliability'] < 0 || $item['reliability'] > 100)) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => '可靠性必须在0-100之间'];  
+                    continue;  
+                }  
+  
+                // 验证 reputation 范围  
+                if (isset($item['reputation']) && ($item['reputation'] < 0 || $item['reputation'] > 100)) {  
+                    $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => '声誉必须在0-100之间'];  
+                    continue;  
+                }  
+  
+                // 验证 metadata 是否为合法 JSON  
+                if (!empty($item['metadata']) && is_string($item['metadata'])) {  
+                    $decoded = json_decode($item['metadata']);  
+                    if (json_last_error() !== JSON_ERROR_NONE) {  
+                        $failed[] = ['index' => $index, 'asn' => $item['asn'], 'reason' => 'metadata必须是合法的JSON'];  
+                        continue;  
+                    }  
+                }  
+  
+                // 提取允许的字段  
+                $data = array_intersect_key($item, array_flip($allowedFields));  
+  
+                // 检查是否已存在  
+                $existing = Asn::where('asn', $item['asn'])->first();  
+  
+                if ($existing) {  
+                    $existing->update($data);  
+                    $updated[] = ['id' => $existing->id, 'asn' => $existing->asn];  
+                } else {  
+                    $data['asn'] = $item['asn'];  
+                    $newAsn = Asn::create($data);  
+                    $created[] = ['id' => $newAsn->id, 'asn' => $newAsn->asn];  
+                }  
+            }  
+  
+            DB::commit();  
+  
+            return $this->ok([  
+                'created' => $created,  
+                'updated' => $updated,  
+                'failed' => $failed,  
+                'summary' => [  
+                    'total' => count($items),  
+                    'created_count' => count($created),  
+                    'updated_count' => count($updated),  
+                    'failed_count' => count($failed),  
+                ],  
+            ]);  
+        } catch (\Exception $e) {  
+            DB::rollBack();  
+            Log::error('ASN batch import failed', ['error' => $e->getMessage()]);  
+            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);  
+        }  
     }
 }

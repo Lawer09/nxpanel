@@ -172,4 +172,28 @@ class AuthController extends Controller
 
         return $this->success(true);
     }
+
+
+    /**
+     * 通过AID快捷登录（自动注册）
+     * 账号为 {aid}@apple.com，密码为 {aid}
+     * 用户不存在时自动创建
+     */
+    public function loginByAid(Request $request)
+    {
+        $request->validate([
+            'aid' => 'required|string|min:1|max:255',
+        ], [
+            'aid.required' => 'aid参数不能为空',
+        ]);
+
+        [$success, $result] = $this->loginService->loginByAid($request->input('aid'));
+
+        if (!$success) {
+            return $this->fail($result);
+        }
+
+        $authService = new AuthService($result);
+        return $this->success($authService->generateAuthData());
+    }
 }

@@ -475,7 +475,7 @@ curl -X GET "http://api.example.com/api/v2/{secure_path}/ip-pool/fetch?current=1
 ```json
 {
   "code": 1,
-  "msg": "查询失���",
+  "msg": "查询",
   "data": null
 }
 ```
@@ -1248,303 +1248,6 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
 
 ---
 
-
-
-你说得很对！根据 Provider 和 ASN 的关系，接口确实需要修改和完善。让我列出需要改进的地方：
-
-## 🔧 接口改进方案
-
-### 1️⃣ **ASN 详情接口需要返回关联的 Provider 列表**
-
-**修改 AsnController**:
-
-```php name="app/Http/Controllers/V2/Admin/AsnController.php"
-    /**
-     * 获取ASN详情（包含关联的Provider）
-     */
-    public function detail(Request $request)
-    {
-        $id = $request->input('id');
-        $asn = Asn::with('providers')->find($id);
-
-        if (!$asn) {
-            return $this->fail([400202, 'ASN不存在']);
-        }
-
-        return $this->success([
-            'asn' => $asn,
-            'providers_count' => $asn->providers->count(),
-            'providers' => $asn->providers()->orderByDesc('reliability')->get(),
-        ]);
-    }
-
-    /**
-     * 获取ASN关联的Provider列表
-     */
-    public function getProviders(Request $request)
-    {
-        $asnId = $request->input('asn_id');
-        $current = $request->input('current', 1);
-        $pageSize = $request->input('pageSize', 10);
-
-        if (!$asnId) {
-            return $this->fail([422, 'ASN ID不能为空']);
-        }
-
-        $asn = Asn::find($asnId);
-        if (!$asn) {
-            return $this->fail([400202, 'ASN不存在']);
-        }
-
-        $query = $asn->providers();
-        $total = $query->count();
-        $providers = $query->orderByDesc('reliability')
-            ->offset(($current - 1) * $pageSize)
-            ->limit($pageSize)
-            ->get();
-
-        return $this->success([
-            'asn_id' => $asnId,
-            'asn' => $asn->asn,
-            'data' => $providers,
-            'total' => $total,
-            'pageSize' => $pageSize,
-            'page' => $current
-        ]);
-    }
-
-    /**
-     * 批量关联Provider到ASN
-     */
-    public function bindProviders(Request $request)
-    {
-        $validated = $request->validate([
-            'asn_id' => 'required|integer|exists:v2_asns,id',
-            'provider_ids' => 'required|array|min:1',
-            'provider_ids.*' => 'integer|exists:v2_providers,id',
-        ]);
-
-        try {
-            $asn = Asn::find($validated['asn_id']);
-            
-            $providers = \App\Models\Provider::whereIn('id', $validated['provider_ids'])->get();
-
-            foreach ($providers as $provider) {
-                $provider->update([
-                    'asn_id' => $validated['asn_id'],
-                    'asn' => $asn->asn,
-                ]);
-            }
-
-            Log::info('Providers bound to ASN', [
-                'asn_id' => $validated['asn_id'],
-                'provider_count' => count($validated['provider_ids'])
-            ]);
-
-            return $this->success([
-                'message' => '关联成功',
-                'count' => count($validated['provider_ids'])
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Bind providers failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '关联失败']);
-        }
-    }
-
-    /**
-     * 批量解除Provider与ASN的关联
-     */
-    public function unbindProviders(Request $request)
-    {
-        $validated = $request->validate([
-            'asn_id' => 'required|integer|exists:v2_asns,id',
-            'provider_ids' => 'required|array|min:1',
-            'provider_ids.*' => 'integer|exists:v2_providers,id',
-        ]);
-
-        try {
-            \App\Models\Provider::whereIn('id', $validated['provider_ids'])
-                ->where('asn_id', $validated['asn_id'])
-                ->update([
-                    'asn_id' => null,
-                    'asn' => null,
-                ]);
-
-            Log::info('Providers unbound from ASN', [
-                'asn_id' => $validated['asn_id'],
-                'provider_count' => count($validated['provider_ids'])
-            ]);
-
-            return $this->success([
-                'message' => '解除关联成功',
-                'count' => count($validated['provider_ids'])
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Unbind providers failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '解除关联失败']);
-        }
-    }
-```
-
----
-
-### 2️⃣ **Provider 详情接口需要返回完整的 ASN 信息**
-
-**修改 ProviderController**:
-
-```php name="app/Http/Controllers/V2/Admin/ProviderController.php"
-    /**
-     * 获取Provider详情（包含完整的ASN信息）
-     */
-    public function detail(Request $request)
-    {
-        $id = $request->input('id');
-        $provider = Provider::with('asn')->find($id);
-
-        if (!$provider) {
-            return $this->fail([400202, 'Provider不存在']);
-        }
-
-        return $this->success($provider);
-    }
-
-    /**
-     * 批量更新Provider的ASN关联
-     */
-    public function updateAsn(Request $request)
-    {
-        $validated = $request->validate([
-            'provider_ids' => 'required|array|min:1',
-            'provider_ids.*' => 'integer|exists:v2_providers,id',
-            'asn_id' => 'required|integer|exists:v2_asns,id',
-        ]);
-
-        try {
-            $asn = Asn::find($validated['asn_id']);
-
-            Provider::whereIn('id', $validated['provider_ids'])
-                ->update([
-                    'asn_id' => $validated['asn_id'],
-                    'asn' => $asn->asn,
-                ]);
-
-            Log::info('Providers ASN updated', [
-                'asn_id' => $validated['asn_id'],
-                'provider_count' => count($validated['provider_ids'])
-            ]);
-
-            return $this->success([
-                'message' => '更新成功',
-                'count' => count($validated['provider_ids'])
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Update providers ASN failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '更新失败']);
-        }
-    }
-
-    /**
-     * 获取无关联ASN的Provider
-     */
-    public function getUnboundProviders(Request $request)
-    {
-        $current = $request->input('current', 1);
-        $pageSize = $request->input('pageSize', 10);
-
-        $query = Provider::whereNull('asn_id');
-        
-        if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where('name', 'like', "%{$search}%");
-        }
-
-        $total = $query->count();
-        $providers = $query->orderByDesc('created_at')
-            ->offset(($current - 1) * $pageSize)
-            ->limit($pageSize)
-            ->get();
-
-        return $this->success([
-            'data' => $providers,
-            'total' => $total,
-            'pageSize' => $pageSize,
-            'page' => $current
-        ]);
-    }
-
-    /**
-     * 获取某个ASN下的所有Provider
-     */
-    public function getByAsn(Request $request)
-    {
-        $asnId = $request->input('asn_id');
-        $current = $request->input('current', 1);
-        $pageSize = $request->input('pageSize', 10);
-
-        if (!$asnId) {
-            return $this->fail([422, 'ASN ID不能为空']);
-        }
-
-        $asn = Asn::find($asnId);
-        if (!$asn) {
-            return $this->fail([400202, 'ASN不存在']);
-        }
-
-        $query = Provider::where('asn_id', $asnId);
-        $total = $query->count();
-        $providers = $query->orderByDesc('reliability')
-            ->offset(($current - 1) * $pageSize)
-            ->limit($pageSize)
-            ->get();
-
-        return $this->success([
-            'asn_id' => $asnId,
-            'asn_name' => $asn->name,
-            'data' => $providers,
-            'total' => $total,
-            'pageSize' => $pageSize,
-            'page' => $current
-        ]);
-    }
-```
-
----
-
-### 3️⃣ **更新路由配置**
-
-```php name="app/Http/Routes/V2/AdminRoute.php"
-            // ASN Management
-            $router->group([
-                'prefix' => 'asn'
-            ], function ($router) {
-                $router->any('/fetch', [AsnController::class, 'fetch']);
-                $router->post('/save', [AsnController::class, 'save']);
-                $router->post('/detail', [AsnController::class, 'detail']);
-                $router->post('/delete', [AsnController::class, 'delete']);
-                $router->get('/stats', [AsnController::class, 'stats']);
-                $router->get('/getProviders', [AsnController::class, 'getProviders']);
-                $router->post('/bindProviders', [AsnController::class, 'bindProviders']);
-                $router->post('/unbindProviders', [AsnController::class, 'unbindProviders']);
-            });
-
-            // Provider Management
-            $router->group([
-                'prefix' => 'provider'
-            ], function ($router) {
-                $router->any('/fetch', [ProviderController::class, 'fetch']);
-                $router->post('/save', [ProviderController::class, 'save']);
-                $router->post('/detail', [ProviderController::class, 'detail']);
-                $router->post('/delete', [ProviderController::class, 'delete']);
-                $router->post('/updateStatus', [ProviderController::class, 'updateStatus']);
-                $router->post('/updateAsn', [ProviderController::class, 'updateAsn']);
-                $router->get('/stats', [ProviderController::class, 'stats']);
-                $router->get('/getUnboundProviders', [ProviderController::class, 'getUnboundProviders']);
-                $router->get('/getByAsn', [ProviderController::class, 'getByAsn']);
-            });
-```
-
----
-
 ### ASN 接口新增
 
 #### 获取 ASN 关联的 Provider 列表
@@ -1712,4 +1415,201 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     "page": 1
   }
 }
+```
+
+
+## 机器管理 API 接口说明
+
+基础路径：`/api/v2/{admin_source}/machine`
+
+---
+
+### 1. 获取机器列表
+
+**`GET/POST /machine/fetch`**
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `page` | int | 否 | 页码，默认 `1` |
+| `pageSize` | int | 否 | 每页条数，默认 `10` |
+| `name` | string | 否 | 机器名称（模糊搜索） |
+| `status` | string | 否 | 状态筛选：`online` / `offline` / `error` |
+| `hostname` | string | 否 | 主机名（模糊搜索） |
+| `tags` | string | 否 | 标签（模糊搜索） |
+
+**成功响应：**
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "data": [{ "id": 1, "name": "...", ... }],
+    "total": 100,
+    "pageSize": 10,
+    "page": 1
+  }
+}
+```
+
+> 注意：响应中 `password` 和 `private_key` 字段会被隐藏。
+
+---
+
+### 2. 创建机器
+
+**`POST /machine/save`**
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | string | **是** | 机器名称，最大255字符 |
+| `hostname` | string | **是** | 主机名，唯一，最大255字符 |
+| `ip_address` | string | **是** | IP地址 |
+| `port` | int | **是** | 端口号，范围 1-65535 |
+| `username` | string | **是** | SSH用户名 |
+| `password` | string | 否* | SSH密码（加密存储） |
+| `private_key` | string | 否* | SSH私钥（加密存储） |
+| `os_type` | string | 否 | 操作系统类型 |
+| `cpu_cores` | string | 否 | CPU核心数 |
+| `memory` | string | 否 | 内存大小 |
+| `disk` | string | 否 | 磁盘大小 |
+| `gpu_info` | string | 否 | GPU信息 |
+| `bandwidth` | int | 否 | 带宽 (Mbps) |
+| `provider` | int | 否 | 供应商ID |
+| `price` | decimal | 否 | 价格 (8,2) |
+| `pay_mode` | int | 否 | 付费模式 |
+| `tags` | string | 否 | 标签 |
+| `description` | string | 否 | 描述 |
+| `is_active` | boolean | 否 | 是否激活，默认 `true` |
+
+> \* `password` 和 `private_key` 至少需要填一个。
+
+**成功响应：**
+```json
+{
+  "code": 0,
+  "msg": "机器创建成功",
+  "data": { "id": 1, "name": "...", "status": "offline", ... }
+}
+```
+
+---
+
+### 3. 更新机器
+
+**`POST /machine/update`**
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | int | **是** | 机器ID |
+| 其余字段 | - | 否 | 同 `save` 接口，所有字段均为可选（`sometimes`） |
+
+**成功响应：**
+```json
+{
+  "code": 0,
+  "msg": "机器更新成功",
+  "data": { "id": 1, "name": "...", ... }
+}
+```
+
+---
+
+### 4. 获取机器详情
+
+**`POST /machine/detail`**
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | int | **是** | 机器ID |
+
+**成功响应：**
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": { "id": 1, "name": "...", ... }
+}
+```
+
+---
+
+### 5. 删除机器
+
+**`POST /machine/drop`**
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | int | **是** | 机器ID |
+
+**成功响应：**
+```json
+{ "code": 0, "msg": "机器删除成功" }
+```
+
+> 使用软删除（SoftDeletes），数据不会真正从数据库移除。
+
+---
+
+### 6. 批量删除
+
+**`POST /machine/batchDrop`** 
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `ids` | array | **是** | 机器ID数组，如 `[1, 2, 3]` |
+
+**成功响应：**
+```json
+{ "code": 0, "msg": "批量删除成功" }
+```
+
+---
+
+### 7. 测试连接
+
+**`POST /machine/testConnection`**
+
+**Body 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | int | **是** | 机器ID |
+
+**成功响应：**
+```json
+{
+  "code": 0,
+  "msg": "连接测试成功",
+  "data": { "status": "online" }
+}
+```
+
+> 当前此接口为**桩实现**，直接返回 `online`，尚未接入真实 SSH 连接逻辑。
+
+---
+
+### 统一错误响应格式
+
+所有接口错误时返回：
+
+```json
+{ "code": 1, "msg": "错误信息" }
+```
+
+验证失败时额外返回 `errors` 字段：
+
+```json
+{ "code": 1, "msg": "数据验证失败", "errors": { "name": ["..."] } }
 ```

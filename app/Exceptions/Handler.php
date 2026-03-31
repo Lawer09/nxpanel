@@ -7,6 +7,7 @@ use App\Services\Plugin\InterceptResponseException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Arr;
 use Illuminate\View\ViewException;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -67,6 +68,13 @@ class Handler extends ExceptionHandler
             $errors = $exception->errors();
             return $this->fail([$code, $message],null,$errors);
         }
+        // 验证异常，返回标准错误格式  
+        if ($exception instanceof ValidationException) {  
+            $errors = $exception->errors();  
+            // 取第一条错误信息作为 msg  
+            $firstMessage = collect($errors)->flatten()->first() ?? '参数验证失败';  
+            return $this->error([422, $firstMessage], $errors);  
+        }  
         return parent::render($request, $exception);
     }
 

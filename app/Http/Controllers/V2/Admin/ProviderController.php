@@ -8,6 +8,7 @@ use App\Models\Asn;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ProviderController extends Controller
 {
@@ -44,7 +45,7 @@ class ProviderController extends Controller
     public function save(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required_without:id|string|unique:v2_providers,name',
+            'name' => 'required_without:id|string|unique:v2_providers,name,' . $request->input('id'),
             'description' => 'nullable|string',
             'website' => 'nullable|url',
             'email' => 'nullable|email',
@@ -292,5 +293,125 @@ class ProviderController extends Controller
             'pageSize' => $pageSize,
             'page' => $current
         ]);
+    }
+
+    /**  
+     * 批量导入Provider  
+     * 已存在的Provider（按name字段匹配）会更新，不存在的会新增  
+     * 返回所有导入记录的id信息  
+     */  
+    public function batchImport(Request $request)  
+    {  
+        $items = $request->input('items', []);  
+  
+        if (empty($items) || !is_array($items)) {  
+            return $this->error([422, '导入数据不能为空']);  
+        }  
+  
+        $allowedFields = [  
+            'description', 'website', 'email', 'phone', 'country', 'type',  
+            'asn_id', 'asn', 'reliability', 'reputation', 'speed_level',  
+            'stability', 'is_active', 'regions', 'services', 'metadata',  
+        ];  
+  
+        $created = [];  
+        $updated = [];  
+        $failed = [];  
+  
+        DB::beginTransaction();  
+        try {  
+            foreach ($items as $index => $item) {  
+                // name 字段必须存在  
+                if (empty($item['name'])) {  
+                    $failed[] = ['index' => $index, 'name' => $item['name'] ?? null, 'reason' => 'Provider名称不能为空'];  
+                    continue;  
+                }  
+  
+                // 验证 country 长度  
+                if (!empty($item['country']) && strlen($item['country']) > 2) {  
+                    $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => '国家代码最多2个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 type 长度  
+                if (!empty($item['type']) && strlen($item['type']) > 50) {  
+                    $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => '类型最多50个字符'];  
+                    continue;  
+                }  
+  
+                // 验证 email 格式  
+                if (!empty($item['email']) && !filter_var($item['email'], FILTER_VALIDATE_EMAIL)) {  
+                    $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => '邮箱格式不正确'];  
+                    continue;  
+                }  
+  
+                // 验证 website 格式  
+                if (!empty($item['website']) && !filter_var($item['website'], FILTER_VALIDATE_URL)) {  
+                    $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => '网站URL格式不正确'];  
+                    continue;  
+                }  
+  
+                // 验证数值范围字段 (0-100)  
+                foreach (['reliability', 'reputation', 'speed_level', 'stability'] as $field) {  
+                    if (isset($item[$field]) && ($item[$field] < 0 || $item[$field] > 100)) {  
+                        $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => "{$field}必须在0-100之间"];  
+                        continue 2;  
+                    }  
+                }  
+  
+                // 验证 asn_id 是否存在  
+                if (!empty($item['asn_id'])) {  
+                    $asnExists = Asn::find($item['asn_id']);  
+                    if (!$asnExists) {  
+                        $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => "关联的ASN ID {$item['asn_id']} 不存在"];  
+                        continue;  
+                    }  
+                }  
+  
+                // 验证 JSON 字段  
+                foreach (['regions', 'services', 'metadata'] as $jsonField) {  
+                    if (!empty($item[$jsonField]) && is_string($item[$jsonField])) {  
+                        $decoded = json_decode($item[$jsonField]);  
+                        if (json_last_error() !== JSON_ERROR_NONE) {  
+                            $failed[] = ['index' => $index, 'name' => $item['name'], 'reason' => "{$jsonField}必须是合法的JSON"];  
+                            continue 2;  
+                        }  
+                    }  
+                }  
+  
+                // 提取允许的字段  
+                $data = array_intersect_key($item, array_flip($allowedFields));  
+  
+                // 检查是否已存在  
+                $existing = Provider::where('name', $item['name'])->first();  
+  
+                if ($existing) {  
+                    $existing->update($data);  
+                    $updated[] = ['id' => $existing->id, 'name' => $existing->name];  
+                } else {  
+                    $data['name'] = $item['name'];  
+                    $newProvider = Provider::create($data);  
+                    $created[] = ['id' => $newProvider->id, 'name' => $newProvider->name];  
+                }  
+            }  
+  
+            DB::commit();  
+  
+            return $this->ok([  
+                'created' => $created,  
+                'updated' => $updated,  
+                'failed' => $failed,  
+                'summary' => [  
+                    'total' => count($items),  
+                    'created_count' => count($created),  
+                    'updated_count' => count($updated),  
+                    'failed_count' => count($failed),  
+                ],  
+            ]);  
+        } catch (\Exception $e) {  
+            DB::rollBack();  
+            Log::error('Provider batch import failed', ['error' => $e->getMessage()]);  
+            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);  
+        }  
     }
 }
