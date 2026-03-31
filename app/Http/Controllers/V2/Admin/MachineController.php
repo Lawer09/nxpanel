@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\V2\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\DeployNodeJob;
 use App\Models\Machine;
-use Illuminate\Http\Request;
+use App\Models\NodeDeployTask;
 use App\Services\MachineSSHService;
+use App\Services\NodeDeployService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MachineController extends Controller
 {
@@ -359,53 +363,199 @@ class MachineController extends Controller
         }
     }
 
-    /**  
-     * 部署节点  
-     */  
-    public function deployNode(Request $request)  
-    {  
-        try {  
-            $id = $request->input('id');  
-  
-            if (!$id) {  
-                return response()->json([  
-                    'code' => 1,  
-                    'msg' => '机器ID不能为空'  
-                ]);  
-            }  
-  
-            $machine = Machine::findOrFail($id);  
-  
-            $service = new MachineSSHService();  
-            $result = $service->executeScript($machine, 'node-install.sh');  
-  
-            // 根据执行结果更新机器状态  
-            if ($result['exit_code'] === 0) {  
-                $machine->update([  
-                    'status' => 'online',  
-                    'last_check_at' => now()  
-                ]);  
-            }  
-  
-            return response()->json([  
-                'code' => $result['exit_code'] === 0 ? 0 : 1,  
-                'msg' => $result['exit_code'] === 0 ? '节点部署完成' : '节点部署失败',  
-                'data' => [  
-                    'output' => $result['output'],  
-                    'exit_code' => $result['exit_code']  
-                ]  
-            ]);  
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => '机器不存在'  
-            ]);  
-        } catch (\Exception $e) {  
-            return response()->json([  
-                'code' => 1,  
-                'msg' => $e->getMessage()  
-            ]);  
-        }  
+    /**
+     * 单机部署节点（异步）
+     *
+     * POST /admin/machine/deployNode
+     * Body:
+     * {
+     *   "id": 1,
+     *   "template_id": 2,           // 可选：配置模板ID（优先级低于 deploy_config）
+     *   "deploy_config": {           // 可选：直接传入配置，会覆盖模板同名字段
+     *     "node_name": "香港01",
+     *     "port": 12345
+     *   }
+     * }
+     */
+    public function deployNode(Request $request)
+    {
+        $request->validate([
+            'id'            => 'required|integer',
+            'template_id'   => 'nullable|integer',
+            'deploy_config' => 'nullable|array',
+        ]);
+
+        try {
+            $machine    = Machine::findOrFail($request->integer('id'));
+            $templateId = $request->integer('template_id') ?: null;
+            $override   = $request->input('deploy_config', []);
+
+            // 模板配置 + 请求配置合并
+            $cfg = NodeDeployService::resolveConfig($override, $templateId);
+
+            // 如未传 node_name，用机器名/IP 作默认
+            if (empty($cfg['node_name'])) {
+                $cfg['node_name'] = $machine->name ?? $machine->ip_address;
+            }
+
+            $task = NodeDeployTask::create([
+                'machine_id'    => $machine->id,
+                'status'        => NodeDeployTask::STATUS_PENDING,
+                'deploy_config' => $cfg,
+            ]);
+
+            DeployNodeJob::dispatch($task->id, $machine->id, $cfg);
+
+            return response()->json([
+                'code' => 0,
+                'msg'  => '部署任务已提交',
+                'data' => [
+                    'task_id'     => $task->id,
+                    'template_id' => $templateId,
+                ],
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['code' => 1, 'msg' => '机器不存在']);
+        } catch (\Exception $e) {
+            return response()->json(['code' => 1, 'msg' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 批量部署节点
+     *
+     * POST /admin/machine/batchDeploy
+     * Body:
+     * {
+     *   "machine_ids": [1, 2, 3],
+     *   "template_id": 2,               // 可选：公共配置模板
+     *   "deploy_config": {              // 可选：覆盖/追加模板字段（公共）
+     *     "node_type": "vless",
+     *     "group_ids": ["2"]
+     *   },
+     *   "machine_configs": {            // 可选：按机器ID单独覆盖（最高优先级）
+     *     "1": { "node_name": "香港01", "port": 12345 },
+     *     "2": { "node_name": "日本01" }
+     *   }
+     * }
+     * 配置优先级（低→高）：模板 < deploy_config < machine_configs[id]
+     */
+    public function batchDeploy(Request $request)
+    {
+        $request->validate([
+            'machine_ids'              => 'required|array|min:1|max:50',
+            'machine_ids.*'            => 'integer',
+            'template_id'              => 'nullable|integer',
+            'deploy_config'            => 'nullable|array',
+            'machine_configs'          => 'nullable|array',
+        ]);
+
+        $machineIds     = $request->input('machine_ids');
+        $templateId     = $request->integer('template_id') ?: null;
+        $baseConfig     = NodeDeployService::resolveConfig($request->input('deploy_config', []), $templateId);
+        $machineConfigs = $request->input('machine_configs', []);
+
+        $machines = Machine::whereIn('id', $machineIds)->get()->keyBy('id');
+
+        $missing = array_diff($machineIds, $machines->keys()->toArray());
+        if (!empty($missing)) {
+            return response()->json([
+                'code' => 1,
+                'msg'  => '以下机器ID不存在: ' . implode(', ', $missing),
+            ]);
+        }
+
+        $batchId = (int) (microtime(true) * 1000); // 毫秒时间戳作为批次ID
+        $tasks   = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($machineIds as $mid) {
+                // 合并公共配置 + 机器专属配置
+                $cfg = array_merge($baseConfig, $machineConfigs[(string) $mid] ?? []);
+
+                // 如果没有传 node_name，默认用机器名/IP
+                if (empty($cfg['node_name'])) {
+                    $m = $machines[$mid];
+                    $cfg['node_name'] = $m->name ?? $m->ip_address;
+                }
+
+                $task = NodeDeployTask::create([
+                    'batch_id'      => $batchId,
+                    'machine_id'    => $mid,
+                    'status'        => NodeDeployTask::STATUS_PENDING,
+                    'deploy_config' => $cfg,
+                ]);
+
+                $tasks[] = $task;
+            }
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['code' => 1, 'msg' => '任务创建失败: ' . $e->getMessage()]);
+        }
+
+        // 批量派发异步 Job
+        foreach ($tasks as $task) {
+            DeployNodeJob::dispatch($task->id, $task->machine_id, $task->deploy_config)
+                         ->onQueue('deploy');
+        }
+
+        return response()->json([
+            'code' => 0,
+            'msg'  => '批量部署任务已提交',
+            'data' => [
+                'batch_id'  => $batchId,
+                'task_count' => count($tasks),
+                'tasks'     => collect($tasks)->map(fn($t) => [
+                    'task_id'    => $t->id,
+                    'machine_id' => $t->machine_id,
+                    'status'     => $t->status,
+                ]),
+            ],
+        ]);
+    }
+
+    /**
+     * 查询部署任务状态
+     *
+     * GET /admin/machine/deployStatus?batch_id=xxx
+     * GET /admin/machine/deployStatus?task_id=xxx
+     */
+    public function deployStatus(Request $request)
+    {
+        $request->validate([
+            'batch_id' => 'nullable|integer',
+            'task_id'  => 'nullable|integer',
+        ]);
+
+        if ($request->filled('task_id')) {
+            $task = NodeDeployTask::with(['machine:id,name,ip_address', 'server:id,name'])
+                ->findOrFail($request->integer('task_id'));
+            return response()->json(['code' => 0, 'data' => $task]);
+        }
+
+        if ($request->filled('batch_id')) {
+            $tasks = NodeDeployTask::with(['machine:id,name,ip_address', 'server:id,name'])
+                ->where('batch_id', $request->integer('batch_id'))
+                ->orderBy('id')
+                ->get();
+
+            $summary = [
+                'total'   => $tasks->count(),
+                'pending' => $tasks->where('status', NodeDeployTask::STATUS_PENDING)->count(),
+                'running' => $tasks->where('status', NodeDeployTask::STATUS_RUNNING)->count(),
+                'success' => $tasks->where('status', NodeDeployTask::STATUS_SUCCESS)->count(),
+                'failed'  => $tasks->where('status', NodeDeployTask::STATUS_FAILED)->count(),
+            ];
+
+            return response()->json([
+                'code' => 0,
+                'data' => ['summary' => $summary, 'tasks' => $tasks],
+            ]);
+        }
+
+        return response()->json(['code' => 1, 'msg' => '请传入 batch_id 或 task_id']);
     }  
   
     /**  

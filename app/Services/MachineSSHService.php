@@ -89,7 +89,7 @@ class MachineSSHService
             $output = preg_replace('/NXPANEL_EXIT_CODE:\d+$/', '', trim($output));  
         }  
   
-        return [  
+        return [
             'output' => trim($output),  
             'exit_code' => $exitCode,  
         ];  

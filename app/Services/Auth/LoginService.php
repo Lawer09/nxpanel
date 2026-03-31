@@ -97,6 +97,7 @@ class LoginService
                 $user = $userService->createUser([
                     'email'    => $email,
                     'password' => $password,
+                    'plan_id'  => 1,
                 ]);
 
                 if (!$user->save()) {

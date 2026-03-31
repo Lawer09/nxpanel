@@ -140,4 +140,20 @@ class NodeSyncService
             ]);
         }
     }
+
+    /**  
+     * Push all users to all online nodes  
+     */  
+    public static function notifyUsersUpdated(): void  
+    {  
+        $servers = Server::all();
+    
+        foreach ($servers as $server) {  
+            if (!self::isNodeOnline($server->id))  
+                continue;  
+    
+            $users = ServerService::getAvailableUsers($server)->toArray();  
+            self::push($server->id, 'sync.users', ['users' => $users]);  
+        }  
+    }
 }

@@ -21,6 +21,8 @@ use App\Http\Controllers\V2\Admin\TrafficResetController;
 use App\Http\Controllers\V2\Admin\IpPoolController;
 use App\Http\Controllers\V2\Admin\AsnController;
 use App\Http\Controllers\V2\Admin\ProviderController;
+use App\Http\Controllers\V2\Admin\PerformanceController;
+use App\Http\Controllers\V2\Admin\DeployTemplateController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class AdminRoute
@@ -283,6 +285,8 @@ class AdminRoute
                 $router->post('/testConnection', [\App\Http\Controllers\V2\Admin\MachineController::class, 'testConnection']);
                 $router->post('/batchDrop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDrop']);
                 $router->post('/deployNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'deployNode']);
+                $router->post('/batchDeploy', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDeploy']);
+                $router->get('/deployStatus', [\App\Http\Controllers\V2\Admin\MachineController::class, 'deployStatus']);
                 $router->post('/clearNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'clearNode']);
             });
 
@@ -332,6 +336,30 @@ class AdminRoute
                 $router->get('/getUnboundProviders', [ProviderController::class, 'getUnboundProviders']);
                 $router->get('/getByAsn', [ProviderController::class, 'getByAsn']);
                 $router->post('/batchImport', [ProviderController::class, 'batchImport']);
+            });
+
+            // Performance Reports
+            $router->group([
+                'prefix' => 'performance'
+            ], function ($router) {
+                $router->get('/fetch',            [PerformanceController::class, 'fetch']);
+                $router->get('/nodeStats',         [PerformanceController::class, 'nodeStats']);
+                $router->get('/trend',             [PerformanceController::class, 'trend']);
+                $router->get('/geoDistribution',   [PerformanceController::class, 'geoDistribution']);
+                $router->get('/platformStats',     [PerformanceController::class, 'platformStats']);
+            });
+
+            // Deploy Templates
+            $router->group([
+                'prefix' => 'deploy-template'
+            ], function ($router) {
+                $router->get('/fetch',      [DeployTemplateController::class, 'fetch']);
+                $router->get('/detail',     [DeployTemplateController::class, 'detail']);
+                $router->post('/save',      [DeployTemplateController::class, 'save']);
+                $router->post('/update',    [DeployTemplateController::class, 'update']);
+                $router->post('/delete',    [DeployTemplateController::class, 'delete']);
+                $router->post('/setDefault',[DeployTemplateController::class, 'setDefault']);
+                $router->get('/preview',    [DeployTemplateController::class, 'preview']);
             });
         });
     }
