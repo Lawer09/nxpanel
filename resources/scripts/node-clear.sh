@@ -1,2 +1,1 @@
-cd /
-ls
+wget -N https://raw.githubusercontent.com/Lawer09/ad2nx-s/master/auto-uninstall.sh && bash auto-uninstall.sh

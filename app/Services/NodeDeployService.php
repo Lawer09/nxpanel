@@ -340,6 +340,47 @@ class NodeDeployService
             default       => 2,
         };
     }
+
+    /**
+     * 将节点类型字符串映射为整数（public static，供 DeployServerJob 调用）
+     */
+    public static function typeToInt(string $type): int
+    {
+        return match (strtolower($type)) {
+            'shadowsocks' => 1,
+            'vless'       => 2,
+            'vmess'       => 3,
+            'hysteria'    => 4,
+            'hysteria2'   => 5,
+            'trojan'      => 6,
+            'tuic'        => 7,
+            'anytls'      => 8,
+            default       => 2,
+        };
+    }
+
+    /**
+     * 根据已有 Server 记录构造 node-install.sh 所需的环境变量
+     *
+     * 适用场景：节点记录已存在，仅需在目标机器重新（或初次）安装节点程序。
+     *
+     * 固定值：
+     *   API_HOST  = https://pupu.apptilaus.com
+     *   API_KEY   = admin_setting('server_token')
+     *   NODE_ID   = server.id
+     *   CORE_TYPE = sing
+     *   NODE_TYPE = 协议字符串（如 vless、vmess、trojan 等）
+     */
+    public static function buildServerEnvVars(Server $server): array
+    {
+        return [
+            'API_HOST'  => 'https://pupu.apptilaus.com',
+            'API_KEY'   => admin_setting('server_token', ''),
+            'NODE_ID'   => (string) $server->id,
+            'CORE_TYPE' => 'sing',
+            'NODE_TYPE' => strtolower($server->type),
+        ];
+    }
 }
 
 // ── 全局辅助：base64url 编码（无填充）────────────────────────────────────────

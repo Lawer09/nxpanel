@@ -7,6 +7,7 @@ use App\Http\Controllers\V2\Admin\Server\GroupController;
 use App\Http\Controllers\V2\Admin\Server\RouteController;
 use App\Http\Controllers\V2\Admin\Server\ManageController;
 use App\Http\Controllers\V2\Admin\Server\TemplateController;
+use App\Http\Controllers\V2\Admin\Server\ServerDeployController;
 use App\Http\Controllers\V2\Admin\OrderController;
 use App\Http\Controllers\V2\Admin\UserController;
 use App\Http\Controllers\V2\Admin\StatController;
@@ -89,6 +90,11 @@ class AdminRoute
                 $router->post('/drop', [ManageController::class, 'drop']);
                 $router->post('/copy', [ManageController::class, 'copy']);
                 $router->post('/sort', [ManageController::class, 'sort']);
+                $router->post('/saveFromMachineTemplate', [ManageController::class, 'saveFromMachineTemplate']);
+                // 节点部署（通过节点ID）
+                $router->post('/deploy',             [ServerDeployController::class, 'deploy']);
+                $router->post('/batchServerDeploy',  [ServerDeployController::class, 'batchDeploy']);
+                $router->get('/deployResult',        [ServerDeployController::class, 'deployResult']);
             });
 
             // DNS 解析工具
@@ -120,6 +126,7 @@ class AdminRoute
                 $router->post('/setDefault',  [TemplateController::class, 'setDefault']);
                 $router->post('/saveFromNode',[TemplateController::class, 'saveFromNode']);
                 $router->get('/preview',      [TemplateController::class, 'preview']);
+                $router->post('/createNode',  [TemplateController::class, 'createNode']);
             });
 
             // Order
