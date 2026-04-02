@@ -95,6 +95,7 @@ class AdminRoute
                 $router->post('/deploy',             [ServerDeployController::class, 'deploy']);
                 $router->post('/batchServerDeploy',  [ServerDeployController::class, 'batchDeploy']);
                 $router->get('/deployResult',        [ServerDeployController::class, 'deployResult']);
+                $router->get('/deployQueueStatus',   [ServerDeployController::class, 'deployQueueStatus']);
             });
 
             // DNS 解析工具

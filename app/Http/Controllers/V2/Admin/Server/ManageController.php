@@ -47,7 +47,6 @@ class ManageController extends Controller
             DB::rollBack();
             Log::error($e);
             return $this->fail([500, '保存失败']);
-
         }
         return $this->success(true);
     }
@@ -55,6 +54,9 @@ class ManageController extends Controller
     public function save(ServerSave $request)
     {
         $params = $request->validated();
+        $params = $this->fillRealityKeysIfNeeded($params);
+        $params = $this->fillPortsIfNeeded($params);
+
         if ($request->input('id')) {
             $server = Server::find($request->input('id'));
             if (!$server) {
@@ -191,6 +193,71 @@ class ManageController extends Controller
             return $this->fail([500, '保存失败']);
         }
         return $this->success(true);
+    }
+
+    /**
+     * 端口自动填充：
+     *   - 两者都为空 → 随机生成同一端口
+     *   - 仅一方有值 → 另一方跟随
+     */
+    private function fillPortsIfNeeded(array $params): array
+    {
+        $port       = $params['port']        ?? null;
+        $serverPort = $params['server_port'] ?? null;
+
+        if (empty($port) && empty($serverPort)) {
+            $random = rand(10000, 60000);
+            $params['port']        = $random;
+            $params['server_port'] = $random;   
+        } elseif (empty($port)) {
+            $params['port'] = $serverPort;
+        } elseif (empty($serverPort)) {
+            $params['server_port'] = $port;
+        }
+
+        return $params;
+    }
+
+    /**
+     * 当节点类型为 vless 且 tls=2（Reality 模式）时，
+     * 自动填充缺失的公私钥和 short_id。
+     */
+    private function fillRealityKeysIfNeeded(array $params): array
+    {
+        // 仅 vless + tls=2 才有 Reality
+        if (($params['type'] ?? '') !== 'vless') {
+            return $params;
+        }
+
+        $ps  = $params['protocol_settings'] ?? [];
+        $tls = (int) ($ps['tls'] ?? 0);
+        if ($tls !== 2) {
+            return $params;
+        }
+
+        $rs      = $ps['reality_settings'] ?? [];
+        $changed = false;
+
+        // 公私钥：任意一个为空则重新生成
+        if (empty($rs['private_key']) || empty($rs['public_key'])) {
+            [$priv, $pub]      = ServerTemplate::generateX25519KeyPair();
+            $rs['private_key'] = $priv;
+            $rs['public_key']  = $pub;
+            $changed = true;
+        }
+
+        // short_id 为空则随机生成 8 字节 hex
+        if (empty($rs['short_id'])) {
+            $rs['short_id'] = bin2hex(random_bytes(8));
+            $changed = true;
+        }
+
+        if ($changed) {
+            $ps['reality_settings']      = $rs;
+            $params['protocol_settings'] = $ps;
+        }
+
+        return $params;
     }
 
     /**

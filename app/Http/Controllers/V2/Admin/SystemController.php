@@ -24,12 +24,12 @@ class SystemController extends Controller
             'horizon' => $this->getHorizonStatus(),
             'schedule_last_runtime' => Cache::get(CacheKey::get('SCHEDULE_LAST_CHECK_AT', null)),
         ];
-        return $this->success($data);
+        return $this->ok($data);
     }
 
     public function getQueueWorkload(WorkloadRepository $workload)
     {
-        return $this->success(collect($workload->get())->sortBy('name')->values()->toArray());
+        return $this->ok(collect($workload->get())->sortBy('name')->values()->toArray());
     }
 
     protected function getScheduleStatus(): bool
@@ -65,7 +65,7 @@ class SystemController extends Controller
             'status' => $this->getHorizonStatus(),
             'wait' => collect(app(WaitTimeCalculator::class)->calculate())->take(1),
         ];
-        return $this->success($data);
+        return $this->ok($data);
     }
 
     /**
@@ -116,14 +116,19 @@ class SystemController extends Controller
 
         $total = $builder->count();
         $res = $builder->forPage($current, $pageSize)->get();
-
-        return response(['data' => $res, 'total' => $total]);
+        
+        return $this->ok([
+            'data' => $res,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current
+        ]);
     }
 
     public function getHorizonFailedJobs(Request $request, JobRepository $jobRepository)
     {
-        $current = max(1, (int) $request->input('current', 1));
-        $pageSize = max(10, (int) $request->input('page_size', 20));
+        $current = max(1, (int) $request->input('page', 1));
+        $pageSize = max(10, (int) $request->input('pageSize', 20));
         $offset = ($current - 1) * $pageSize;
 
         $failedJobs = collect($jobRepository->getFailed())
@@ -133,11 +138,12 @@ class SystemController extends Controller
 
         $total = $jobRepository->countFailed();
 
-        return response()->json([
+        
+        return $this->ok([
             'data' => $failedJobs,
             'total' => $total,
-            'current' => $current,
-            'page_size' => $pageSize,
+            'pageSize' => $pageSize,
+            'page' => $current
         ]);
     }
 

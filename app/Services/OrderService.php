@@ -18,13 +18,18 @@ use App\Services\PlanService;
 class OrderService
 {
     const STR_TO_TIME = [
-        Plan::PERIOD_MONTHLY => 1,
+        Plan::PERIOD_MONTHLY => 1, # month
         Plan::PERIOD_QUARTERLY => 3,
         Plan::PERIOD_HALF_YEARLY => 6,
         Plan::PERIOD_YEARLY => 12,
         Plan::PERIOD_TWO_YEARLY => 24,
         Plan::PERIOD_THREE_YEARLY => 36
     ];
+
+    const STR_TO_DAYS = [  
+        Plan::PERIOD_WEEKLY => 7,  
+    ];
+
     public $order;
     public $user;
 
@@ -243,43 +248,59 @@ class OrderService
                 ->where('status', Order::STATUS_COMPLETED)
                 ->pluck('id')
                 ->all();
-        } else {
-            $orders = Order::query()
-                ->where('user_id', $user->id)
-                ->whereNotIn('period', [Plan::PERIOD_RESET_TRAFFIC, Plan::PERIOD_ONETIME])
-                ->where('status', Order::STATUS_COMPLETED)
-                ->get();
-
-            if ($orders->isEmpty()) {
-                $order->surplus_amount = 0;
-                $order->surplus_order_ids = [];
-                return;
-            }
-
-            $orderAmountSum = $orders->sum(fn($item) => $item->total_amount + $item->balance_amount + $item->surplus_amount - $item->refund_amount);
-            $orderMonthSum = $orders->sum(fn($item) => self::STR_TO_TIME[PlanService::getPeriodKey($item->period)] ?? 0);
-            $firstOrderAt = $orders->min('created_at');
-            $expiredAt = Carbon::createFromTimestamp($firstOrderAt)->addMonths($orderMonthSum);
-
-            $now = now();
-            $totalSeconds = $expiredAt->timestamp - $firstOrderAt;
-            $remainSeconds = max(0, $expiredAt->timestamp - $now->timestamp);
-            $cycleRatio = $totalSeconds > 0 ? $remainSeconds / $totalSeconds : 0;
-
-            $plan = Plan::find($user->plan_id);
-            $totalTraffic = $plan?->transfer_enable * $orderMonthSum;
-            $usedTraffic = Helper::transferToGB($user->u + $user->d);
-            $remainTraffic = max(0, $totalTraffic - $usedTraffic);
-            $trafficRatio = $totalTraffic > 0 ? $remainTraffic / $totalTraffic : 0;
-
-            $ratio = $cycleRatio;
-            if (admin_setting('change_order_event_id', 0) == 1) {
-                $ratio = min($cycleRatio, $trafficRatio);
-            }
-
-
-            $order->surplus_amount = (int) max(0, $orderAmountSum * $ratio);
-            $order->surplus_order_ids = $orders->pluck('id')->all();
+        } else {  
+            $orders = Order::query()  
+                ->where('user_id', $user->id)  
+                ->whereNotIn('period', [Plan::PERIOD_RESET_TRAFFIC, Plan::PERIOD_ONETIME])  
+                ->where('status', Order::STATUS_COMPLETED)  
+                ->get();  
+        
+            if ($orders->isEmpty()) {  
+                $order->surplus_amount = 0;  
+                $order->surplus_order_ids = [];  
+                return;  
+            }  
+        
+            $orderAmountSum = $orders->sum(fn($item) => $item->total_amount + $item->balance_amount + $item->surplus_amount - $item->refund_amount);  
+        
+            // 分别计算月份和额外天数（周付等基于天数的周期单独处理）  
+            $orderMonthSum = 0;  
+            $orderExtraDays = 0;  
+        
+            foreach ($orders as $item) {  
+                $key = PlanService::getPeriodKey($item->period);  
+                if (isset(self::STR_TO_DAYS[$key])) {  
+                    $orderExtraDays += self::STR_TO_DAYS[$key];  
+                } else {  
+                    $orderMonthSum += self::STR_TO_TIME[$key] ?? 0;  
+                }  
+            }  
+        
+            $firstOrderAt = $orders->min('created_at');  
+            $expiredAt = Carbon::createFromTimestamp($firstOrderAt)  
+                ->addMonths($orderMonthSum)  
+                ->addDays($orderExtraDays);  
+        
+            $now = now();  
+            $totalSeconds = $expiredAt->timestamp - $firstOrderAt;  
+            $remainSeconds = max(0, $expiredAt->timestamp - $now->timestamp);  
+            $cycleRatio = $totalSeconds > 0 ? $remainSeconds / $totalSeconds : 0;  
+        
+            $plan = Plan::find($user->plan_id);  
+            // 将额外天数折算为月份用于流量计算（30天 = 1月）  
+            $effectiveMonths = $orderMonthSum + ($orderExtraDays / 30);  
+            $totalTraffic = $plan?->transfer_enable * $effectiveMonths;  
+            $usedTraffic = Helper::transferToGB($user->u + $user->d);  
+            $remainTraffic = max(0, $totalTraffic - $usedTraffic);  
+            $trafficRatio = $totalTraffic > 0 ? $remainTraffic / $totalTraffic : 0;  
+        
+            $ratio = $cycleRatio;  
+            if (admin_setting('change_order_event_id', 0) == 1) {  
+                $ratio = min($cycleRatio, $trafficRatio);  
+            }  
+        
+            $order->surplus_amount = (int) max(0, $orderAmountSum * $ratio);  
+            $order->surplus_order_ids = $orders->pluck('id')->all();  
         }
     }
 
@@ -373,6 +394,11 @@ class OrderService
     {
         $timestamp = $timestamp < time() ? time() : $timestamp;
         $periodKey = PlanService::getPeriodKey($periodKey);
+
+        if (isset(self::STR_TO_DAYS[$periodKey])) {  
+            $days = self::STR_TO_DAYS[$periodKey];  
+            return Carbon::createFromTimestamp($timestamp)->addDays($days)->timestamp;  
+        }
 
         if (isset(self::STR_TO_TIME[$periodKey])) {
             $months = self::STR_TO_TIME[$periodKey];

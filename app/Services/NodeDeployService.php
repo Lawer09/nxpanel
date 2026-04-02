@@ -6,6 +6,7 @@ use App\Models\Machine;
 use App\Models\NodeDeployTemplate;
 use App\Models\Server;
 use Illuminate\Support\Str;
+use phpseclib3\Net\SFTP;
 
 /**
  * 节点部署服务
@@ -272,32 +273,58 @@ class NodeDeployService
 
         $scriptContent = file_get_contents($scriptPath);
 
-        $sshService = new MachineSSHService();
-        $ssh        = $sshService->connect($machine);
-        $ssh->setTimeout(300);
-
-        // 构造 export 前缀
-        $exports = '';
+        // ── 构造 export 前缀 ────────────────────────────────────────────────
+        $exports = "#!/usr/bin/env bash\n";
         foreach ($envVars as $k => $v) {
             if ($v === '' || $v === null) continue;
             $escaped  = str_replace("'", "'\\''", (string) $v);
             $exports .= "export {$k}='{$escaped}'\n";
         }
-
-        // 写脚本到远端临时文件
-        $tmpFile = '/tmp/nxpanel_deploy_' . uniqid() . '.sh';
         $fullScript = $exports . "\n" . $scriptContent;
-        $ssh->exec("cat > {$tmpFile} << 'NXEOF'\n{$fullScript}\nNXEOF");
-        $ssh->exec("chmod +x {$tmpFile}");
+
+        // ── 通过 SFTP 上传脚本，避免 heredoc 在单次 exec channel 中失效 ──────
+        $sshService = new MachineSSHService();
+        $ssh        = $sshService->connect($machine);
+        $ssh->setTimeout(300);
+
+        $tmpFile = '/tmp/nxpanel_deploy_' . uniqid() . '.sh';
+
+        $sftp = new SFTP($machine->ip_address, $machine->port ?? 22);
+        try {
+            $password   = $machine->password;
+            $privateKey = $machine->private_key;
+        } catch (\Throwable $e) {
+            throw new \Exception('密码或私钥解密失败');
+        }
+
+        $sftpAuthed = false;
+        if (!empty($privateKey)) {
+            try {
+                $key = \phpseclib3\Crypt\PublicKeyLoader::load($privateKey);
+                $sftpAuthed = $sftp->login($machine->username, $key);
+            } catch (\Throwable $e) {
+                $sftpAuthed = false;
+            }
+        }
+        if (!$sftpAuthed && !empty($password)) {
+            $sftpAuthed = $sftp->login($machine->username, $password);
+        }
+        if (!$sftpAuthed) {
+            throw new \Exception('SFTP 认证失败');
+        }
+
+        if (!$sftp->put($tmpFile, $fullScript)) {
+            throw new \Exception('SFTP 上传脚本失败');
+        }
 
         $output = $ssh->exec("bash {$tmpFile} 2>&1; echo \"EXIT_CODE:\$?\"");
         $ssh->exec("rm -f {$tmpFile}");
         $ssh->disconnect();
 
         // 解析退出码
-        if (preg_match('/EXIT_CODE:(\d+)$/', trim($output), $m)) {
+        if (preg_match('/EXIT_CODE:(\d+)[\s]*$/', trim($output), $m)) {
             $code   = (int) $m[1];
-            $output = rtrim(preg_replace('/EXIT_CODE:\d+$/', '', trim($output)));
+            $output = rtrim(preg_replace('/EXIT_CODE:\d+[\s]*$/', '', trim($output)));
             if ($code !== 0) {
                 throw new \Exception("安装脚本退出码 {$code}，输出:\n{$output}");
             }
@@ -374,7 +401,7 @@ class NodeDeployService
     public static function buildServerEnvVars(Server $server): array
     {
         return [
-            'API_HOST'  => 'https://pupu.apptilaus.com',
+            'API_HOST'  => rtrim(config('app.url'), '/'),
             'API_KEY'   => admin_setting('server_token', ''),
             'NODE_ID'   => (string) $server->id,
             'CORE_TYPE' => 'sing',

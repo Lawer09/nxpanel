@@ -103,7 +103,7 @@ class ServerTemplate extends Model
      * 生成 X25519 密钥对（base64url 编码）
      * @return array [privateKey, publicKey]
      */
-    private static function generateX25519KeyPair(): array
+    public static function generateX25519KeyPair(): array
     {
         $key  = \phpseclib3\Crypt\EC::createKey('Curve25519');
         $priv = rtrim(strtr(base64_encode($key->toString('MontgomeryPrivate')), '+/', '-_'), '=');

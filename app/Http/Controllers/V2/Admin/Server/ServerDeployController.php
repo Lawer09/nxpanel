@@ -14,14 +14,6 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * 节点管理 - 部署接口
- *
- * 通过节点 ID 向宿主机（按 server.host 匹配 machines.ip_address）执行
- * node-install.sh，固定环境变量：
- *   API_HOST  = https://pupu.apptilaus.com
- *   API_KEY   = 服务器节点密钥（admin_setting server_token）
- *   NODE_ID   = 节点ID
- *   CORE_TYPE = sing
- *   NODE_TYPE = 协议（vless=2 vmess=3 trojan=6 等）
  */
 class ServerDeployController extends Controller
 {

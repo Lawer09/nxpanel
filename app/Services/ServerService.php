@@ -40,7 +40,7 @@ class ServerService
      */
     public static function getAvailableServers(User $user): array
     {
-        $servers = Server::whereJsonContains('group_ids', (string) $user->group_id)
+        $servers = Server::whereJsonContains('group_ids', (int) $user->group_id)
             ->where('show', true)
             ->orderBy('sort', 'ASC')
             ->get()
