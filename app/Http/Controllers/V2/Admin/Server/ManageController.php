@@ -261,6 +261,74 @@ class ManageController extends Controller
     }
 
     /**
+     * 测试节点端口连通性
+     *
+     * POST /admin/server/manage/testPort
+     *
+     * Body params:
+     *   id       integer  optional  节点 ID（与 host+port 二选一）
+     *   host     string   optional  目标主机
+     *   port     integer  optional  目标端口
+     *   timeout  integer  optional  超时秒数，默认 5，最大 30
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function testPort(Request $request)
+    {
+        $request->validate([
+            'id'      => 'nullable|integer',
+            'host'    => 'nullable|string',
+            'port'    => 'nullable|integer|min:1|max:65535',
+            'timeout' => 'nullable|integer|min:1|max:30',
+        ]);
+
+        $timeout = (int) $request->input('timeout', 5);
+
+        // 优先使用 id 查找节点
+        if ($request->filled('id')) {
+            $server = Server::find($request->input('id'));
+            if (!$server) {
+                return $this->fail([400202, '节点不存在']);
+            }
+            $host = $server->host;
+            $port = (int) ($server->server_port ?: $server->port);
+        } else {
+            if (!$request->filled('host') || !$request->filled('port')) {
+                return $this->fail([422, '请提供节点 id 或 host + port']);
+            }
+            $host = $request->input('host');
+            $port = (int) $request->input('port');
+        }
+
+        $startAt = microtime(true);
+        $errno   = 0;
+        $errstr  = '';
+        $fp      = @fsockopen($host, $port, $errno, $errstr, $timeout);
+        $latency = round((microtime(true) - $startAt) * 1000); // ms
+
+        if ($fp) {
+            fclose($fp);
+            return $this->ok([
+                'host'       => $host,
+                'port'       => $port,
+                'reachable'  => true,
+                'latency_ms' => $latency,
+                'message'    => "端口 {$port} 连通正常",
+            ]);
+        }
+
+        return $this->ok([
+            'host'       => $host,
+            'port'       => $port,
+            'reachable'  => false,
+            'latency_ms' => $latency,
+            'message'    => $errstr ?: "端口 {$port} 无法连接",
+            'errno'      => $errno,
+        ]);
+    }
+
+    /**
      * 删除
      * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse

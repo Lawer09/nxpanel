@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Http\Controllers\V2\Admin\StatController as V2StatController;
 use App\Models\Server;
 use App\Models\StatServer;
+use App\Models\StatServerDetail;
 use App\Models\StatUser;
 use App\Models\User;
 use App\Services\StatisticalService;
@@ -234,7 +235,7 @@ class StatController extends V2StatController
     }
 
     /**
-     * 指定节点的每日流量明细（分页）
+     * 指定节点的每日流量
      *
      * GET stat/getStatServer
      *
@@ -321,6 +322,108 @@ class StatController extends V2StatController
             'total'    => $aggregated->total(),
             'page'     => $aggregated->currentPage(),
             'pageSize' => $aggregated->perPage(),
+        ]);
+    }
+
+    /**
+     * 节点分钟级流量明细查询（v2_stat_server_detail）
+     *
+     * GET stat/getStatServerDetail
+     *
+     * Query params:
+     *   server_id    integer  optional  节点 ID，不填返回所有节点
+     *   start_time   integer  optional  起始时间戳（10 位），默认今日 00:00:00
+     *   end_time     integer  optional  结束时间戳（10 位），默认今日 23:59:59
+     *   granularity  string   optional  聚合粒度：minute（默认）/ hour / day
+     *   page         integer  optional  页码，默认 1
+     *   pageSize     integer  optional  每页条数，默认 60，最大 1440
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getStatServerDetail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'server_id'   => 'nullable|integer',
+            'start_time'  => 'nullable|integer|min:1000000000|max:9999999999',
+            'end_time'    => 'nullable|integer|min:1000000000|max:9999999999',
+            'granularity' => 'nullable|in:minute,hour,day',
+            'page'        => 'nullable|integer|min:1',
+            'pageSize'    => 'nullable|integer|min:1|max:1440',
+        ]);
+
+        $startTime   = (int) $request->input('start_time', strtotime('today'));
+        $endTime     = (int) $request->input('end_time',   strtotime('tomorrow') - 1);
+        $granularity = $request->input('granularity', 'minute');
+        $page        = (int) $request->input('page', 1);
+        $pageSize    = (int) $request->input('pageSize', 60);
+
+        $query = StatServerDetail::where('record_at', '>=', $startTime)
+            ->where('record_at', '<=', $endTime);
+
+        if ($request->filled('server_id')) {
+            $query->where('server_id', (int) $request->input('server_id'));
+        }
+
+        switch ($granularity) {
+            case 'day':
+                $query->selectRaw('
+                    server_id, server_type,
+                    year, month, day,
+                    SUM(u) as u, SUM(d) as d, SUM(u + d) as total,
+                    MIN(record_at) as record_at
+                ')->groupBy('server_id', 'server_type', 'year', 'month', 'day')
+                  ->orderBy('record_at', 'DESC');
+                break;
+
+            case 'hour':
+                $query->selectRaw('
+                    server_id, server_type,
+                    year, month, day, hour,
+                    SUM(u) as u, SUM(d) as d, SUM(u + d) as total,
+                    MIN(record_at) as record_at
+                ')->groupBy('server_id', 'server_type', 'year', 'month', 'day', 'hour')
+                  ->orderBy('record_at', 'DESC');
+                break;
+
+            default: // minute — 原始分钟粒度
+                $query->selectRaw('
+                    server_id, server_type,
+                    year, month, day, hour, minute,
+                    u, d, (u + d) as total, record_at
+                ')->orderBy('record_at', 'DESC');
+                break;
+        }
+
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+        $serverIds = collect($paginator->items())->pluck('server_id')->unique();
+        $servers   = Server::whereIn('id', $serverIds)->get()->keyBy('id');
+
+        $items = collect($paginator->items())->map(function ($row) use ($servers) {
+            $server = $servers->get($row->server_id);
+            $item = [
+                'server_id'   => $row->server_id,
+                'server_name' => $server?->name ?? "Server {$row->server_id}",
+                'server_type' => $server?->type ?? $row->server_type,
+                'u'           => (int) $row->u,
+                'd'           => (int) $row->d,
+                'total'       => (int) $row->total,
+                'record_at'   => (int) $row->record_at,
+                'year'        => (int) $row->year,
+                'month'       => (int) $row->month,
+                'day'         => (int) $row->day,
+            ];
+            if (isset($row->hour))   $item['hour']   = (int) $row->hour;
+            if (isset($row->minute)) $item['minute'] = (int) $row->minute;
+            return $item;
+        });
+
+        return $this->ok([
+            'data'        => $items,
+            'total'       => $paginator->total(),
+            'page'        => $paginator->currentPage(),
+            'pageSize'    => $paginator->perPage(),
+            'granularity' => $granularity,
         ]);
     }
 }

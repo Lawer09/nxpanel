@@ -4,6 +4,7 @@
 namespace App\Jobs;
 
 use App\Models\StatServer;
+use App\Models\StatServerDetail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -59,6 +60,7 @@ class StatServerJob implements ShouldQueue
 
         try {
             $this->processServerStat($u, $d, $recordAt);
+            $this->processServerStatDetail($u, $d);
         } catch (\Exception $e) {
             Log::error('StatServerJob failed for server ' . $this->server['id'] . ': ' . $e->getMessage());
             throw $e;
@@ -157,5 +159,102 @@ class StatServerJob implements ShouldQueue
             $now,
             $now,
         ]);
+    }
+
+    /**
+     * 写入分钟级明细表（v2_stat_server_detail），按分钟累加。
+     */
+    protected function processServerStatDetail(int $u, int $d): void
+    {
+        // floor 到分钟整点
+        $now      = time();
+        $minuteTs = $now - ($now % 60);
+
+        $year   = (int) date('Y',  $minuteTs);
+        $month  = (int) date('n',  $minuteTs);
+        $day    = (int) date('j',  $minuteTs);
+        $hour   = (int) date('G',  $minuteTs);
+        $minute = (int) date('i',  $minuteTs);
+
+        $driver = config('database.default');
+
+        if ($driver === 'sqlite') {
+            DB::transaction(function () use ($u, $d, $minuteTs, $year, $month, $day, $hour, $minute) {
+                $row = StatServerDetail::where([
+                    'server_id'   => $this->server['id'],
+                    'server_type' => $this->protocol,
+                    'record_at'   => $minuteTs,
+                ])->first();
+
+                if ($row) {
+                    $row->update([
+                        'u'          => $row->u + $u,
+                        'd'          => $row->d + $d,
+                        'updated_at' => time(),
+                    ]);
+                } else {
+                    StatServerDetail::create([
+                        'server_id'   => $this->server['id'],
+                        'server_type' => $this->protocol,
+                        'u'           => $u,
+                        'd'           => $d,
+                        'year'        => $year,
+                        'month'       => $month,
+                        'day'         => $day,
+                        'hour'        => $hour,
+                        'minute'      => $minute,
+                        'record_at'   => $minuteTs,
+                        'created_at'  => time(),
+                        'updated_at'  => time(),
+                    ]);
+                }
+            }, 3);
+            return;
+        }
+
+        if ($driver === 'pgsql') {
+            $table = (new StatServerDetail())->getTable();
+            $ts    = time();
+            $sql   = "INSERT INTO {$table}
+                        (server_id, server_type, u, d, year, month, day, hour, minute, record_at, created_at, updated_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      ON CONFLICT (server_id, server_type, record_at)
+                      DO UPDATE SET
+                          u          = {$table}.u + EXCLUDED.u,
+                          d          = {$table}.d + EXCLUDED.d,
+                          updated_at = EXCLUDED.updated_at";
+
+            DB::statement($sql, [
+                $this->server['id'], $this->protocol,
+                $u, $d,
+                $year, $month, $day, $hour, $minute,
+                $minuteTs, $ts, $ts,
+            ]);
+            return;
+        }
+
+        // MySQL / MariaDB
+        StatServerDetail::upsert(
+            [
+                'server_id'   => $this->server['id'],
+                'server_type' => $this->protocol,
+                'u'           => $u,
+                'd'           => $d,
+                'year'        => $year,
+                'month'       => $month,
+                'day'         => $day,
+                'hour'        => $hour,
+                'minute'      => $minute,
+                'record_at'   => $minuteTs,
+                'created_at'  => time(),
+                'updated_at'  => time(),
+            ],
+            ['server_id', 'server_type', 'record_at'],
+            [
+                'u'          => DB::raw('u + VALUES(u)'),
+                'd'          => DB::raw('d + VALUES(d)'),
+                'updated_at' => time(),
+            ]
+        );
     }
 }
