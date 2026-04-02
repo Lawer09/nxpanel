@@ -64,6 +64,20 @@ return [
             'url' => env('AWS_URL'),
         ],
 
+        // S3 兼容 OSS（阿里云 OSS / MinIO / Cloudflare R2 等）
+        // 需安装：composer require league/flysystem-aws-s3-v3
+        'oss' => [
+            'driver'                  => 's3',
+            'key'                     => env('OSS_ACCESS_KEY_ID'),
+            'secret'                  => env('OSS_ACCESS_KEY_SECRET'),
+            'region'                  => env('OSS_REGION', 'oss-cn-hangzhou'),
+            'bucket'                  => env('OSS_BUCKET'),
+            'endpoint'                => env('OSS_ENDPOINT'),          // e.g. https://oss-cn-hangzhou.aliyuncs.com
+            'url'                     => env('OSS_URL'),               // 公开访问域名（可选）
+            'use_path_style_endpoint' => env('OSS_PATH_STYLE', false), // MinIO 设为 true
+            'throw'                   => false,
+        ],
+
     ],
 
 ];

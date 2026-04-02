@@ -48,6 +48,11 @@ class Kernel extends ConsoleKernel
         // }
         $schedule->command('cleanup:expired-online-status')->everyMinute()->onOneServer()->withoutOverlapping(4);
 
+        // OSS 流量数据归档（每小时，归档上一小时数据）
+        $schedule->command('stat:archive-to-oss')->hourly()->onOneServer()->withoutOverlapping(10);
+        // 清理两周前的流量明细（每日凌晨 2:00）
+        $schedule->command('stat:prune-detail')->dailyAt('2:00')->onOneServer()->withoutOverlapping(30);
+
         app(PluginManager::class)->registerPluginSchedules($schedule);
 
     }

@@ -8,6 +8,8 @@ use App\Models\Server as ServerModel;
 use App\Services\ServerService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use App\Utils\CacheKey;
 
 class Server
 {
@@ -25,6 +27,13 @@ class Server
         }
 
         $request->attributes->set('node_info', $serverInfo);
+
+        Cache::put(  
+            CacheKey::get('SERVER_' . strtoupper($serverInfo->type) . '_IP', $serverInfo->id),  
+            $request->ip(),  
+            3600  
+        );
+
         return $next($request);
     }
 
