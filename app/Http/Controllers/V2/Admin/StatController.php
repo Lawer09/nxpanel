@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
 
 class StatController extends Controller
 {
-    private $service;
+    protected $service;
     public function __construct(StatisticalService $service)
     {
         $this->service = $service;
@@ -220,6 +220,7 @@ class StatController extends Controller
         $data = $this->service->getServerRank();
         return $this->success(data: $data);
     }
+
     // 获取昨日节点流量排行
     public function getServerYesterdayRank()
     {
@@ -250,6 +251,33 @@ class StatController extends Controller
         return [
             'data' => $this->service->getStatRecord($request->input('type'))
         ];
+    }
+
+    /**
+     * Get ranking data (server traffic or user consumption)
+     *
+     * @param Request $request
+     * @return array
+     */
+    public function getRanking(Request $request)
+    {
+        $request->validate([
+            'type'       => 'required|in:user_consumption_rank,server_traffic_rank,invite_rank',
+            'start_time' => 'nullable|integer|min:1000000000|max:9999999999',
+            'end_time'   => 'nullable|integer|min:1000000000|max:9999999999',
+            'limit'      => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $startTime = (int) $request->input('start_time', strtotime('-30 days'));
+        $endTime   = (int) $request->input('end_time', time());
+        $limit     = (int) $request->input('limit', 20);
+
+        $this->service->setStartAt($startTime);
+        $this->service->setEndAt($endTime);
+
+        $data = $this->service->getRanking($request->input('type'), $limit);
+
+        return ['data' => $data];
     }
 
     /**

@@ -1,0 +1,297 @@
+<?php
+
+namespace App\Http\Controllers\V3\Admin;
+
+use App\Http\Controllers\V2\Admin\StatController as V2StatController;
+use App\Models\Server;
+use App\Models\StatServer;
+use App\Models\StatUser;
+use App\Models\User;
+use App\Services\StatisticalService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class StatController extends V2StatController
+{
+    /**
+     * 指定用户的每日流量明细（分页）
+     *
+     * GET stat/getStatUser
+     *
+     * Query params:
+     *   user_id  integer  required  用户 ID
+     *   pageSize integer  optional  每页条数，默认 10
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getStatUser(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|integer'
+        ]);
+
+        $pageSize = (int) $request->input('pageSize', 10);
+        $page     = (int) $request->input('page', 1);
+        $paginator = StatUser::orderBy('record_at', 'DESC')
+            ->where('user_id', $request->input('user_id'))
+            ->paginate($pageSize, ['*'], 'page', $page);
+
+        return $this->ok([
+            'data'     => $paginator->items(),
+            'total'    => $paginator->total(),
+            'page'     => $paginator->currentPage(),
+            'pageSize' => $paginator->perPage(),
+        ]);
+    }
+
+    /**
+     * 流量 Top10 + 环比（节点 or 用户）
+     *
+     * GET stat/getTrafficRank
+     *
+     * Query params:
+     *   type        string   required  节点 "node" 或用户 "user"
+     *   start_time  integer  optional  起始时间戳（10 位），默认 7 天前
+     *   end_time    integer  optional  结束时间戳（10 位），默认当前时间
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getTrafficRank(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type'       => 'required|in:node,user',
+            'start_time' => 'nullable|integer|min:1000000000|max:9999999999',
+            'end_time'   => 'nullable|integer|min:1000000000|max:9999999999',
+        ]);
+
+        $type              = $request->input('type');
+        $startDate         = (int) $request->input('start_time', strtotime('-7 days'));
+        $endDate           = (int) $request->input('end_time', time());
+        $previousStartDate = $startDate - ($endDate - $startDate);
+        $previousEndDate   = $startDate;
+
+        if ($type === 'node') {
+            $currentData = StatServer::selectRaw('server_id as id, SUM(u + d) as value')
+                ->where('record_at', '>=', $startDate)
+                ->where('record_at', '<=', $endDate)
+                ->groupBy('server_id')
+                ->orderBy('value', 'DESC')
+                ->limit(10)
+                ->get();
+
+            $previousData = StatServer::selectRaw('server_id as id, SUM(u + d) as value')
+                ->where('record_at', '>=', $previousStartDate)
+                ->where('record_at', '<', $previousEndDate)
+                ->whereIn('server_id', $currentData->pluck('id'))
+                ->groupBy('server_id')
+                ->get()
+                ->keyBy('id');
+        } else {
+            $currentData = StatUser::selectRaw('user_id as id, SUM(u + d) as value')
+                ->where('record_at', '>=', $startDate)
+                ->where('record_at', '<=', $endDate)
+                ->groupBy('user_id')
+                ->orderBy('value', 'DESC')
+                ->limit(10)
+                ->get();
+
+            $previousData = StatUser::selectRaw('user_id as id, SUM(u + d) as value')
+                ->where('record_at', '>=', $previousStartDate)
+                ->where('record_at', '<', $previousEndDate)
+                ->whereIn('user_id', $currentData->pluck('id'))
+                ->groupBy('user_id')
+                ->get()
+                ->keyBy('id');
+        }
+
+        $ids   = $currentData->pluck('id');
+        $names = $type === 'node'
+            ? Server::whereIn('id', $ids)->pluck('name', 'id')
+            : User::whereIn('id', $ids)->pluck('email', 'id');
+
+        $result = [];
+        foreach ($currentData as $item) {
+            $previousValue = isset($previousData[$item->id]) ? (int) $previousData[$item->id]->value : 0;
+            $change        = $previousValue > 0
+                ? round(($item->value - $previousValue) / $previousValue * 100, 1)
+                : 0;
+
+            $result[] = [
+                'id'            => (string) $item->id,
+                'name'          => $names[$item->id] ?? ($type === 'node' ? "Node {$item->id}" : "User {$item->id}"),
+                'value'         => (int) $item->value,
+                'previousValue' => $previousValue,
+                'change'        => $change,
+                'timestamp'     => date('c', $endDate),
+            ];
+        }
+
+        return $this->ok([
+            'timestamp' => date('c'),
+            'list'      => $result,
+        ]);
+    }
+
+    /**
+     * 排行榜（用户消耗 Top20 / 节点流量 Top20）
+     *
+     * GET stat/getRanking
+     *
+     * Query params:
+     *   type        string   required  "user_consumption_rank" 或 "server_traffic_rank"
+     *   start_time  integer  optional  起始时间戳（10 位），默认 30 天前
+     *   end_time    integer  optional  结束时间戳（10 位），默认当前时间
+     *   limit       integer  optional  返回条数，默认 20，最大 100
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getRanking(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type'       => 'required|in:user_consumption_rank,server_traffic_rank,invite_rank',
+            'start_time' => 'nullable|integer|min:1000000000|max:9999999999',
+            'end_time'   => 'nullable|integer|min:1000000000|max:9999999999',
+            'limit'      => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $startTime = (int) $request->input('start_time', strtotime('-30 days'));
+        $endTime   = (int) $request->input('end_time', time());
+        $limit     = (int) $request->input('limit', 20);
+
+        /** @var StatisticalService $service */
+        $service = app(StatisticalService::class);
+        $service->setStartAt($startTime);
+        $service->setEndAt($endTime);
+
+        $data = $service->getRanking($request->input('type'), $limit);
+
+        return $this->ok([
+            'list' => $data,
+        ]);
+    }
+
+    /**
+     * 全量节点实时流量排行
+     *
+     * GET stat/getServerLastRank
+     *
+     * 无需参数
+     *
+     * @return JsonResponse
+     */
+    public function getServerLastRank(): JsonResponse
+    {
+        $data = $this->service->getServerRank();
+        return $this->ok(['list' => $data]);
+    }
+
+    /**
+     * 昨日节点流量排行
+     *
+     * GET stat/getServerYesterdayRank
+     *
+     * 无需参数
+     *
+     * @return JsonResponse
+     */
+    public function getServerYesterdayRank(): JsonResponse
+    {
+        $data = $this->service->getServerRank('yesterday');
+        return $this->ok(['list' => $data]);
+    }
+
+    /**
+     * 今日/本月/总流量汇总 + 运营概览
+     *
+     * GET stat/getOverride
+     *
+     * 无需参数
+     *
+     * @return JsonResponse
+     */
+    public function getOverride(Request $request): JsonResponse
+    {
+        $parent = parent::getOverride($request);
+        return $this->ok($parent['data'] ?? $parent);
+    }
+
+    /**
+     * 综合统计数据（含增长率）
+     *
+     * GET stat/getStats
+     *
+     * 无需参数
+     *
+     * @return JsonResponse
+     */
+    public function getStats(): JsonResponse
+    {
+        $parent = parent::getStats();
+        return $this->ok($parent['data'] ?? $parent);
+    }
+
+    /**
+     * 指定节点的每日流量明细（分页）
+     *
+     * GET stat/getStatServer
+     *
+     * Query params:
+     *   server_id   integer  optional  节点 ID，不填返回所有节点
+     *   start_time  integer  optional  起始时间戳（10 位），默认今日 00:00:00
+     *   end_time    integer  optional  结束时间戳（10 位），默认今日 23:59:59
+     *   page        integer  optional  页码，默认 1
+     *   pageSize    integer  optional  每页条数，默认 10
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getStatServer(Request $request): JsonResponse
+    {
+        $request->validate([
+            'server_id'  => 'nullable|integer',
+            'start_time' => 'nullable|integer|min:1000000000|max:9999999999',
+            'end_time'   => 'nullable|integer|min:1000000000|max:9999999999',
+            'page'       => 'nullable|integer|min:1',
+            'pageSize'   => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $startTime = (int) $request->input('start_time', strtotime('today'));
+        $endTime   = (int) $request->input('end_time',   strtotime('tomorrow') - 1);
+        $page      = (int) $request->input('page', 1);
+        $pageSize  = (int) $request->input('pageSize', 10);
+
+        $query = StatServer::with('server:id,name,type')
+            ->where('record_at', '>=', $startTime)
+            ->where('record_at', '<=', $endTime)
+            ->orderBy('record_at', 'DESC');
+
+        if ($request->filled('server_id')) {
+            $query->where('server_id', (int) $request->input('server_id'));
+        }
+
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+
+        $items = collect($paginator->items())->map(function ($row) {
+            return [
+                'id'          => $row->id,
+                'server_id'   => $row->server_id,
+                'server_name' => optional($row->server)->name ?? "Server {$row->server_id}",
+                'server_type' => optional($row->server)->type,
+                'u'           => $row->u,
+                'd'           => $row->d,
+                'total'       => $row->u + $row->d,
+                'record_at'   => $row->record_at,
+            ];
+        });
+
+        return $this->ok([
+            'data'     => $items,
+            'total'    => $paginator->total(),
+            'page'     => $paginator->currentPage(),
+            'pageSize' => $paginator->perPage(),
+        ]);
+    }
+}

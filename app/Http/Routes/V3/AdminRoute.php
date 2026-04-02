@@ -4,6 +4,7 @@ namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\Admin\OrderController;
 use App\Http\Controllers\V3\Admin\PlanController;
+use App\Http\Controllers\V3\Admin\StatController;
 use App\Http\Controllers\V3\Admin\UserController;
 use Illuminate\Contracts\Routing\Registrar;
 
@@ -47,6 +48,18 @@ class AdminRoute
                 $router->post('/resetSecret',       [UserController::class, 'resetSecret']);
                 $router->post('/setInviteUser',     [UserController::class, 'setInviteUser']);
                 $router->post('/destroy',           [UserController::class, 'destroy']);
+            });
+
+            // Stat
+            $router->group(['prefix' => 'stat'], function ($router) {
+                $router->get('/getOverride',            [StatController::class, 'getOverride']);
+                $router->get('/getStats',               [StatController::class, 'getStats']);
+                $router->get('/getServerLastRank',      [StatController::class, 'getServerLastRank']);
+                $router->get('/getServerYesterdayRank', [StatController::class, 'getServerYesterdayRank']);
+                $router->any('/getStatUser',            [StatController::class, 'getStatUser']);
+                $router->any('/getStatServer',          [StatController::class, 'getStatServer']);
+                $router->get('/getRanking',             [StatController::class, 'getRanking']);
+                $router->get('/getTrafficRank',         [StatController::class, 'getTrafficRank']);
             });
         });
     }
