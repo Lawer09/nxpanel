@@ -263,35 +263,64 @@ class StatController extends V2StatController
         $page      = (int) $request->input('page', 1);
         $pageSize  = (int) $request->input('pageSize', 10);
 
-        $query = StatServer::with('server:id,name,type')
-            ->where('record_at', '>=', $startTime)
-            ->where('record_at', '<=', $endTime)
-            ->orderBy('record_at', 'DESC');
-
         if ($request->filled('server_id')) {
-            $query->where('server_id', (int) $request->input('server_id'));
+            // 指定节点：返回每条原始记录（含时间维度）
+            $paginator = StatServer::with('server:id,name,type')
+                ->where('server_id', (int) $request->input('server_id'))
+                ->where('record_at', '>=', $startTime)
+                ->where('record_at', '<=', $endTime)
+                ->orderBy('record_at', 'DESC')
+                ->paginate($pageSize, ['*'], 'page', $page);
+
+            $items = collect($paginator->items())->map(function ($row) {
+                return [
+                    'id'          => $row->id,
+                    'server_id'   => $row->server_id,
+                    'server_name' => optional($row->server)->name ?? "Server {$row->server_id}",
+                    'server_type' => optional($row->server)->type,
+                    'u'           => $row->u,
+                    'd'           => $row->d,
+                    'total'       => $row->u + $row->d,
+                    'record_at'   => $row->record_at,
+                ];
+            });
+
+            return $this->ok([
+                'data'     => $items,
+                'total'    => $paginator->total(),
+                'page'     => $paginator->currentPage(),
+                'pageSize' => $paginator->perPage(),
+            ]);
         }
 
-        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+        // 未指定节点：按 server_id 聚合，分页
+        $aggregated = StatServer::selectRaw('server_id, SUM(u) as u, SUM(d) as d, SUM(u + d) as total')
+            ->where('record_at', '>=', $startTime)
+            ->where('record_at', '<=', $endTime)
+            ->groupBy('server_id')
+            ->orderBy('total', 'DESC')
+            ->paginate($pageSize, ['*'], 'page', $page);
 
-        $items = collect($paginator->items())->map(function ($row) {
+        $serverIds = collect($aggregated->items())->pluck('server_id');
+        $servers   = Server::whereIn('id', $serverIds)->get()->keyBy('id');
+
+        $items = collect($aggregated->items())->map(function ($row) use ($servers) {
+            $server = $servers->get($row->server_id);
             return [
-                'id'          => $row->id,
                 'server_id'   => $row->server_id,
-                'server_name' => optional($row->server)->name ?? "Server {$row->server_id}",
-                'server_type' => optional($row->server)->type,
-                'u'           => $row->u,
-                'd'           => $row->d,
-                'total'       => $row->u + $row->d,
-                'record_at'   => $row->record_at,
+                'server_name' => $server?->name ?? "Server {$row->server_id}",
+                'server_type' => $server?->type,
+                'u'           => (int) $row->u,
+                'd'           => (int) $row->d,
+                'total'       => (int) $row->total,
             ];
         });
 
         return $this->ok([
             'data'     => $items,
-            'total'    => $paginator->total(),
-            'page'     => $paginator->currentPage(),
-            'pageSize' => $paginator->perPage(),
+            'total'    => $aggregated->total(),
+            'page'     => $aggregated->currentPage(),
+            'pageSize' => $aggregated->perPage(),
         ]);
     }
 }
