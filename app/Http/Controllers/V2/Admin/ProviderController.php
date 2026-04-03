@@ -45,23 +45,27 @@ class ProviderController extends Controller
     public function save(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required_without:id|string|unique:v2_providers,name,' . $request->input('id'),
-            'description' => 'nullable|string',
-            'website' => 'nullable|url',
-            'email' => 'nullable|email',
-            'phone' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:2',
-            'type' => 'nullable|string|max:50',
-            'asn_id' => 'nullable|integer|exists:v2_asns,id',
-            'asn' => 'nullable|string|max:50',
-            'reliability' => 'nullable|integer|min:0|max:100',
-            'reputation' => 'nullable|integer|min:0|max:100',
-            'speed_level' => 'nullable|integer|min:0|max:100',
-            'stability' => 'nullable|integer|min:0|max:100',
-            'is_active' => 'nullable|boolean',
-            'regions' => 'nullable|json',
-            'services' => 'nullable|json',
-            'metadata' => 'nullable|json',
+            'name'                 => 'required_without:id|string|unique:v2_providers,name,' . $request->input('id'),
+            'description'          => 'nullable|string',
+            'website'              => 'nullable|url',
+            'email'                => 'nullable|email',
+            'phone'                => 'nullable|string|max:20',
+            'country'              => 'nullable|string|max:2',
+            'type'                 => 'nullable|string|max:50',
+            'asn_id'               => 'nullable|integer|exists:v2_asns,id',
+            'asn'                  => 'nullable|string|max:50',
+            'reliability'          => 'nullable|integer|min:0|max:100',
+            'reputation'           => 'nullable|integer|min:0|max:100',
+            'speed_level'          => 'nullable|integer|min:0|max:100',
+            'stability'            => 'nullable|integer|min:0|max:100',
+            'is_active'            => 'nullable|boolean',
+            'regions'              => 'nullable|json',
+            'services'             => 'nullable|json',
+            'metadata'             => 'nullable|json',
+            // 云驱动字段
+            'driver'               => 'nullable|string|max:50',
+            'api_credentials'      => 'nullable|array',
+            'supported_operations' => 'nullable|array',
         ]);
 
         try {
@@ -178,6 +182,18 @@ class ProviderController extends Controller
 
         if ($request->filled('asn_id')) {
             $builder->where('asn_id', $request->input('asn_id'));
+        }
+
+        if ($request->filled('driver')) {
+            $builder->where('driver', $request->input('driver'));
+        }
+
+        if ($request->filled('has_driver')) {
+            if ($request->boolean('has_driver')) {
+                $builder->whereNotNull('driver');
+            } else {
+                $builder->whereNull('driver');
+            }
         }
     }
 
@@ -311,7 +327,8 @@ class ProviderController extends Controller
         $allowedFields = [  
             'description', 'website', 'email', 'phone', 'country', 'type',  
             'asn_id', 'asn', 'reliability', 'reputation', 'speed_level',  
-            'stability', 'is_active', 'regions', 'services', 'metadata',  
+            'stability', 'is_active', 'regions', 'services', 'metadata',
+            'driver', 'api_credentials', 'supported_operations',
         ];  
   
         $created = [];  

@@ -31,6 +31,7 @@ class Machine extends Model
         'price',
         'pay_mode',
         'tags',
+        'provider_instance_id',
     ];
 
     protected $casts = [

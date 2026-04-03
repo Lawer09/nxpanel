@@ -4,6 +4,7 @@ namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\Admin\OrderController;
 use App\Http\Controllers\V3\Admin\PlanController;
+use App\Http\Controllers\V3\Admin\ProviderController;
 use App\Http\Controllers\V3\Admin\Server\ManageController;
 use App\Http\Controllers\V3\Admin\StatController;
 use App\Http\Controllers\V3\Admin\UserController;
@@ -49,6 +50,11 @@ class AdminRoute
                 $router->post('/resetSecret',       [UserController::class, 'resetSecret']);
                 $router->post('/setInviteUser',     [UserController::class, 'setInviteUser']);
                 $router->post('/destroy',           [UserController::class, 'destroy']);
+            });
+
+            // Provider
+            $router->group(['prefix' => 'provider'], function ($router) {
+                $router->get('/instances', [ProviderController::class, 'getInstances']);
             });
 
             // Server Manage
