@@ -373,7 +373,7 @@ class StatController extends V2StatController
                     SUM(u) as u, SUM(d) as d, SUM(u + d) as total,
                     MIN(record_at) as record_at
                 ')->groupBy('server_id', 'server_type', 'year', 'month', 'day')
-                  ->orderBy('record_at', 'DESC');
+                  ->orderBy('record_at', 'ASC');
                 break;
 
             case 'hour':
@@ -383,7 +383,7 @@ class StatController extends V2StatController
                     SUM(u) as u, SUM(d) as d, SUM(u + d) as total,
                     MIN(record_at) as record_at
                 ')->groupBy('server_id', 'server_type', 'year', 'month', 'day', 'hour')
-                  ->orderBy('record_at', 'DESC');
+                  ->orderBy('record_at', 'ASC');
                 break;
 
             default: // minute — 原始分钟粒度
@@ -391,7 +391,7 @@ class StatController extends V2StatController
                     server_id, server_type,
                     year, month, day, hour, minute,
                     u, d, (u + d) as total, record_at
-                ')->orderBy('record_at', 'DESC');
+                ')->orderBy('record_at', 'ASC');
                 break;
         }
 

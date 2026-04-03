@@ -4,6 +4,7 @@ namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\Admin\OrderController;
 use App\Http\Controllers\V3\Admin\PlanController;
+use App\Http\Controllers\V3\Admin\Server\ManageController;
 use App\Http\Controllers\V3\Admin\StatController;
 use App\Http\Controllers\V3\Admin\UserController;
 use Illuminate\Contracts\Routing\Registrar;
@@ -48,6 +49,11 @@ class AdminRoute
                 $router->post('/resetSecret',       [UserController::class, 'resetSecret']);
                 $router->post('/setInviteUser',     [UserController::class, 'setInviteUser']);
                 $router->post('/destroy',           [UserController::class, 'destroy']);
+            });
+
+            // Server Manage
+            $router->group(['prefix' => 'server/manage'], function ($router) {
+                $router->post('/batchBindDomain', [ManageController::class, 'batchBindDomain']);
             });
 
             // Stat
