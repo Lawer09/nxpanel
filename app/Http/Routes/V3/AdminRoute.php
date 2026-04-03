@@ -53,7 +53,9 @@ class AdminRoute
 
             // Server Manage
             $router->group(['prefix' => 'server/manage'], function ($router) {
+                $router->get('/onlineUsers',      [ManageController::class, 'getOnlineUsers']);
                 $router->post('/batchBindDomain', [ManageController::class, 'batchBindDomain']);
+                $router->post('/batchSave',       [ManageController::class, 'batchSave']);
             });
 
             // Stat
