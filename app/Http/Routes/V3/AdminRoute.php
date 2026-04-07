@@ -54,7 +54,7 @@ class AdminRoute
 
             // Provider
             $router->group(['prefix' => 'provider'], function ($router) {
-                $router->get('/instances', [ProviderController::class, 'getInstances']);
+                $router->post('/instances', [ProviderController::class, 'getInstances']);
             });
 
             // Server Manage
@@ -62,6 +62,7 @@ class AdminRoute
                 $router->get('/onlineUsers',      [ManageController::class, 'getOnlineUsers']);
                 $router->post('/batchBindDomain', [ManageController::class, 'batchBindDomain']);
                 $router->post('/batchSave',       [ManageController::class, 'batchSave']);
+                $router->get('/testPort',               [ManageController::class, 'testPort']);
             });
 
             // Stat

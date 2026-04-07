@@ -91,7 +91,7 @@ class AdminRoute
                 $router->post('/copy', [ManageController::class, 'copy']);
                 $router->post('/sort', [ManageController::class, 'sort']);
                 $router->post('/saveFromMachineTemplate', [ManageController::class, 'saveFromMachineTemplate']);
-                $router->get('/testPort',               [ManageController::class, 'testPort']);
+                
                 // 节点部署（通过节点ID）
                 $router->post('/deploy',             [ServerDeployController::class, 'deploy']);
                 $router->post('/batchServerDeploy',  [ServerDeployController::class, 'batchDeploy']);

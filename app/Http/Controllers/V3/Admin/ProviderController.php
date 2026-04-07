@@ -15,7 +15,7 @@ class ProviderController extends V2ProviderController
     /**
      * 获取服务商下的云实例列表（v3）
      *
-     * GET /admin/provider/instances?provider_id={id}
+     * POST /admin/provider/instances
      *
      * 通过 CloudProviderManager 调用对应驱动的 listInstances()，
      * 支持透传驱动过滤参数。
@@ -53,19 +53,19 @@ class ProviderController extends V2ProviderController
             'tags.*.key'     => 'required_with:tags|string',
             'tags.*.value'   => 'nullable|string',
             'pageSize'       => 'nullable|integer|min:1|max:100',
-            'pageNum'        => 'nullable|integer|min:1',
+            'page'           => 'nullable|integer|min:1',
         ]);
 
         $provider = Provider::find($request->integer('provider_id'));
 
         if (empty($provider->driver)) {
-            return $this->fail([422, '该服务商未配置云驱动（driver），请先完善服务商信息']);
+            return $this->error([422, '该服务商未配置云驱动（driver），请先完善服务商信息']);
         }
 
         try {
             $driver = CloudProviderManager::make($provider);
         } catch (\InvalidArgumentException $e) {
-            return $this->fail([422, $e->getMessage()]);
+            return $this->error([422, $e->getMessage()]);
         }
 
         $filters = array_filter([
@@ -78,20 +78,20 @@ class ProviderController extends V2ProviderController
             'tagKeys'     => $request->input('tagKeys'),
             'tags'        => $request->input('tags'),
             'pageSize'    => $request->input('pageSize', 20),
-            'pageNum'     => $request->input('pageNum', 1),
+            'page'        => $request->input('page', 1),
         ], fn($v) => $v !== null);
 
         try {
             $result = $driver->listInstances($filters);
         } catch (OperationNotSupportedException $e) {
-            return $this->fail([501, $e->getMessage()]);
+            return $this->error([501, $e->getMessage()]);
         } catch (\RuntimeException $e) {
             Log::error('getInstances failed', [
                 'provider_id' => $provider->id,
                 'driver'      => $provider->driver,
                 'error'       => $e->getMessage(),
             ]);
-            return $this->fail([500, '获取实例列表失败: ' . $e->getMessage()]);
+            return $this->error([500, '获取实例列表失败: ' . $e->getMessage()]);
         }
 
         return $this->ok(array_merge($result, [

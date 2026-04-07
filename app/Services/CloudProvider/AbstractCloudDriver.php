@@ -97,11 +97,11 @@ abstract class AbstractCloudDriver implements CloudDriverInterface
      */
     protected function credential(string $key): string
     {
-        if (empty($this->credentials[$key])) {
+        if (empty($this->credentials[0])) {
             throw new \InvalidArgumentException(
                 "驱动 [{$this->driverName}] 缺少凭证字段: {$key}"
             );
         }
-        return $this->credentials[$key];
+        return $this->credentials[0];
     }
 }

@@ -96,6 +96,17 @@ class MachineController extends Controller
                 return $this->error([422, '密码和私钥至少需要一个']);
             }
 
+            // 创建时检查云端实例是否重复（provider + provider_instance_id 组合）
+            if (!empty($validated['provider']) && !empty($validated['provider_instance_id'])) {
+                $exists = Machine::where('provider', $validated['provider'])
+                    ->where('provider_instance_id', $validated['provider_instance_id'])
+                    ->exists();
+
+                if ($exists) {
+                    return $this->error([422, '云端实例重复']);
+                }
+            }
+
             $validated['is_active'] = $validated['is_active'] ?? true;
             $validated['status'] = 'offline';
 

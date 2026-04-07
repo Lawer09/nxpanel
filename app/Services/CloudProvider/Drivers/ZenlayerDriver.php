@@ -21,7 +21,7 @@ class ZenlayerDriver extends AbstractCloudDriver
 {
     protected string $driverName = 'zenlayer';
 
-    private const API_ENDPOINT = 'https://console.zenlayer.com/api/v2/bmc';
+    private const API_ENDPOINT = 'https://console.zenlayer.com/api/v2/zec'; # 弹性实例
 
     // ----------------------------------------------------------------
     // 核心 HTTP 客户端
@@ -101,7 +101,7 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'status'          => $filters['status']          ?? null,
                 'name'            => $filters['name']            ?? null,
                 'pageSize'        => isset($filters['pageSize'])  ? (int) $filters['pageSize']  : 20,
-                'pageNum'         => isset($filters['pageNum'])   ? (int) $filters['pageNum']   : 1,
+                'pageNum'         => isset($filters['page'])   ? (int) $filters['page']   : 1,
                 'resourceGroupId' => $filters['resourceGroupId'] ?? null,
                 'tagKeys'         => $filters['tagKeys']         ?? null,
                 'tags'            => $filters['tags']            ?? null,
@@ -111,7 +111,7 @@ class ZenlayerDriver extends AbstractCloudDriver
 
             return [
                 'total'   => $resp['totalCount'] ?? 0,
-                'pageNum' => $body['pageNum'],
+                'page' => $body['pageNum'],
                 'pageSize'=> $body['pageSize'],
                 'data'    => $this->normalizeInstances($resp['dataSet'] ?? []),
             ];
@@ -140,6 +140,7 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'instance_type'     => $item['instanceType'] ?? null,
                 'cpu'               => $item['cpu']          ?? null,
                 'memory'            => $item['memory']       ?? null,
+                'disk'              => $item['systemDisk']['diskSize'] ?? null,
                 'public_ips'        => array_values(array_unique($publicIps)),
                 'private_ips'       => $item['privateIpAddresses'] ?? [],
                 'image_id'          => $item['imageId']      ?? null,
