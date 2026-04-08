@@ -170,6 +170,17 @@ class RegisterService
 
         HookManager::call('user.register.after', $user);
 
+        // 邀请礼品卡：注册触发
+        try {
+            $inviteGiftCardService = app(\App\Services\InviteGiftCardService::class);
+            $inviteGiftCardService->issueForRegister($user);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('InviteGiftCard register trigger failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+
         // 清除邮箱验证码
         if ((int) admin_setting('email_verify', 0)) {
             Cache::forget(CacheKey::get('EMAIL_VERIFY_CODE', $email));

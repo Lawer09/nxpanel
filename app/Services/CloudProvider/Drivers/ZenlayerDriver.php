@@ -176,24 +176,48 @@ class ZenlayerDriver extends AbstractCloudDriver
      * 查看账号下所有弹性 IP 列表
      *
      * 支持的 $filters 键：
-     *   eipIds       array   按 EIP ID 过滤
-     *   status       string  EIP 状态
-     *   ipAddress    string  按 IP 地址过滤
-     *   pageSize     int     默认 20
-     *   pageNum      int     默认 1
+     *   eipIds             array   按 EIP ID 过滤
+     *   regionId           string  区域ID
+     *   name               string  EIP 名称
+     *   status             string  EIP 状态
+     *   isDefault          boolean 是否为默认EIP
+     *   pageSize           int     默认 20
+     *   pageNum            int     默认 1
+     *   privateIpAddress   string  按私网IP过滤
+     *   ipAddress          string  按IP地址过滤
+     *   ipAddresses        array   按多个IP地址过滤
+     *   instanceId         string  按实例ID过滤
+     *   associatedId       string  按关联资源ID过滤
+     *   cidrIds            array   按CIDR ID过滤
+     *   resourceGroupId    string  资源组ID
+     *   tagKeys            array   标签键列表
+     *   tags               array   标签列表
+     *   internetChargeType string  计费类型
      */
     public function listElasticIps(array $filters = []): array
     {
         return $this->call(__FUNCTION__, function () use ($filters) {
             $body = array_filter([
-                'eipIds'   => $filters['eipIds']   ?? null,
-                'status'   => $filters['status']   ?? null,
-                'ipAddress'=> $filters['ipAddress']?? null,
-                'pageSize' => isset($filters['pageSize']) ? (int) $filters['pageSize'] : 20,
-                'pageNum'  => isset($filters['pageNum'])  ? (int) $filters['pageNum']  : 1,
+                'eipIds'             => $filters['eipIds']             ?? null,
+                'regionId'           => $filters['regionId']           ?? null,
+                'name'               => $filters['name']               ?? null,
+                'status'             => $filters['status']             ?? null,
+                'isDefault'          => $filters['isDefault']          ?? null,
+                'privateIpAddress'   => $filters['privateIpAddress']   ?? null,
+                'ipAddress'          => $filters['ipAddress']          ?? null,
+                'ipAddresses'        => $filters['ipAddresses']        ?? null,
+                'instanceId'         => $filters['instanceId']         ?? null,
+                'associatedId'       => $filters['associatedId']       ?? null,
+                'cidrIds'            => $filters['cidrIds']            ?? null,
+                'resourceGroupId'    => $filters['resourceGroupId']    ?? null,
+                'tagKeys'            => $filters['tagKeys']            ?? null,
+                'tags'               => $filters['tags']               ?? null,
+                'internetChargeType' => $filters['internetChargeType'] ?? null,
+                'pageSize'           => isset($filters['pageSize']) ? (int) $filters['pageSize'] : 20,
+                'pageNum'            => isset($filters['pageNum'])  ? (int) $filters['pageNum']  : 1,
             ], fn($v) => $v !== null);
 
-            $resp = $this->request('DescribeEipAddresses', $body);
+            $resp = $this->request('DescribeEips', $body);
 
             return [
                 'total'   => $resp['totalCount'] ?? 0,
@@ -244,14 +268,28 @@ class ZenlayerDriver extends AbstractCloudDriver
 
     private function normalizeEips(array $dataSet): array
     {
-        return array_map(fn(array $item) => [
-            'eip_id'      => $item['eipId']      ?? null,
-            'ip_address'  => $item['ipAddress']  ?? null,
-            'status'      => $item['status']      ?? null,
-            'instance_id' => $item['instanceId'] ?? null,
-            'zone_id'     => $item['zoneId']     ?? null,
-            'create_time' => $item['createTime'] ?? null,
-            '_raw'        => $item,
-        ], $dataSet);
+        return array_map(function (array $item) {
+            $metadata = $item;
+
+            unset(
+                $metadata['eipId'],
+                $metadata['publicIpAddresses'],
+                $metadata['status'],
+                $metadata['instanceId'],
+                $metadata['zoneId'],
+                $metadata['createTime']
+            );
+
+            return [
+                'eip_id'      => $item['eipId']      ?? null,
+                'ip_address'  => $item['publicIpAddresses']  ?? null,
+                'status'      => $item['status']      ?? null,
+                'instance_id' => $item['instanceId'] ?? null,
+                'zone_id'     => $item['zoneId']     ?? null,
+                'create_time' => $item['createTime'] ?? null,
+                'metadata'    => empty($metadata) ? null : $metadata,
+                '_raw'        => $item,
+            ];
+        }, $dataSet);
     }
 }

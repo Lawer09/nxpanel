@@ -55,6 +55,7 @@ class AdminRoute
             // Provider
             $router->group(['prefix' => 'provider'], function ($router) {
                 $router->post('/instances', [ProviderController::class, 'getInstances']);
+                $router->post('/eips', [ProviderController::class, 'getElasticIps']);
             });
 
             // Server Manage

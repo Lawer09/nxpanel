@@ -11,6 +11,7 @@ class IpPool extends Model
 
     protected $fillable = [
         'ip',
+        'machine_id',
         'hostname',
         'city',
         'region',
@@ -20,6 +21,7 @@ class IpPool extends Model
         'postal',
         'timezone',
         'readme_url',
+        'metadata',
         'score',
         'load',
         'max_load',
@@ -32,6 +34,8 @@ class IpPool extends Model
     ];
 
     protected $casts = [
+        'machine_id' => 'integer',
+        'metadata' => 'array',
         'score' => 'integer',
         'load' => 'integer',
         'success_rate' => 'integer',

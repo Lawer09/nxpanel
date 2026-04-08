@@ -15,6 +15,7 @@ use App\Http\Controllers\V2\Admin\NoticeController;
 use App\Http\Controllers\V2\Admin\TicketController;
 use App\Http\Controllers\V2\Admin\CouponController;
 use App\Http\Controllers\V2\Admin\GiftCardController;
+use App\Http\Controllers\V2\Admin\InviteGiftCardController;
 use App\Http\Controllers\V2\Admin\KnowledgeController;
 use App\Http\Controllers\V2\Admin\PaymentController;
 use App\Http\Controllers\V2\Admin\SystemController;
@@ -230,6 +231,29 @@ class AdminRoute
                 // Statistics
                 $router->any('/statistics', [GiftCardController::class, 'statistics']);
                 $router->get('/types', [GiftCardController::class, 'types']);
+            });
+
+            // Invite Gift Card
+            $router->group([
+                'prefix' => 'invite-gift-card'
+            ], function ($router) {
+                // Rule management
+                $router->any('/rules', [InviteGiftCardController::class, 'fetchRules']);
+                $router->post('/detail-rule', [InviteGiftCardController::class, 'detailRule']);
+                $router->post('/save-rule', [InviteGiftCardController::class, 'saveRule']);
+                $router->post('/toggle-rule', [InviteGiftCardController::class, 'toggleRule']);
+                $router->post('/delete-rule', [InviteGiftCardController::class, 'deleteRule']);
+                $router->post('/batch-delete-rules', [InviteGiftCardController::class, 'batchDeleteRules']);
+
+                // Logs
+                $router->any('/logs', [InviteGiftCardController::class, 'fetchLogs']);
+
+                // Statistics
+                $router->any('/statistics', [InviteGiftCardController::class, 'statistics']);
+
+                // Options
+                $router->get('/templates', [InviteGiftCardController::class, 'fetchTemplates']);
+                $router->get('/options', [InviteGiftCardController::class, 'getOptions']);
             });
 
             // Knowledge

@@ -75,6 +75,18 @@ class CheckCommission extends Command
                     DB::rollBack();
                     continue;
                 }
+
+                // 邀请礼品卡：订单支付触发
+                try {
+                    $inviteGiftCardService = app(\App\Services\InviteGiftCardService::class);
+                    $inviteGiftCardService->issueForOrder($order);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('InviteGiftCard order trigger failed', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+
                 DB::commit();
             } catch (\Exception $e){
                 DB::rollBack();

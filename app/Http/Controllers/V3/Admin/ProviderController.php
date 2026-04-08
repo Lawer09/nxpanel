@@ -100,4 +100,116 @@ class ProviderController extends V2ProviderController
             'driver'        => $provider->driver,
         ]));
     }
+
+    /**
+     * 获取服务商下的云弹性 IP 列表（v3）
+     *
+     * POST /admin/provider/eips
+     *
+     * 通过 CloudProviderManager 调用对应驱动的 listElasticIps()，
+     * 支持透传驱动过滤参数。
+     *
+     * Query params:
+     *   provider_id         integer  required  Provider ID
+     *   eipIds              array    optional  按 EIP ID 过滤（最多 100 个）
+     *   regionId            string   optional  区域 ID
+     *   name                string   optional  EIP 名称
+     *   status              string   optional  EIP 状态
+     *   isDefault           boolean  optional  是否为默认EIP
+     *   privateIpAddress    string   optional  按私网 IP 过滤
+     *   ipAddress           string   optional  按 IP 地址过滤
+     *   ipAddresses         array    optional  按多个 IP 地址过滤（最多 100 个）
+     *   instanceId          string   optional  按实例 ID 过滤
+     *   associatedId        string   optional  按关联资源 ID 过滤
+     *   cidrIds             array    optional  按 CIDR ID 过滤（最多 100 个）
+     *   resourceGroupId     string   optional  资源组 ID
+     *   tagKeys             array    optional  按标签键过滤（最多 20 个）
+     *   tags                array    optional  按标签过滤，每项含 key/value（最多 20 个）
+     *   internetChargeType  string   optional  计费类型
+     *   pageSize            integer  optional  每页数量，默认 20
+     *   page                integer  optional  页码，默认 1
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getElasticIps(Request $request): JsonResponse
+    {
+        $request->validate([
+            'provider_id'        => 'required|integer|exists:v2_providers,id',
+            'eipIds'             => 'nullable|array|max:100',
+            'eipIds.*'           => 'string',
+            'regionId'           => 'nullable|string',
+            'name'               => 'nullable|string',
+            'status'             => 'nullable|string',
+            'isDefault'          => 'nullable|boolean',
+            'privateIpAddress'   => 'nullable|string',
+            'ipAddress'          => 'nullable|string',
+            'ipAddresses'        => 'nullable|array|max:100',
+            'ipAddresses.*'      => 'string',
+            'instanceId'         => 'nullable|string',
+            'associatedId'       => 'nullable|string',
+            'cidrIds'            => 'nullable|array|max:100',
+            'cidrIds.*'          => 'string',
+            'resourceGroupId'    => 'nullable|string',
+            'tagKeys'            => 'nullable|array|max:20',
+            'tagKeys.*'          => 'string',
+            'tags'               => 'nullable|array|max:20',
+            'tags.*.key'         => 'required_with:tags|string',
+            'tags.*.value'       => 'nullable|string',
+            'internetChargeType' => 'nullable|string',
+            'pageSize'           => 'nullable|integer|min:1|max:100',
+            'page'               => 'nullable|integer|min:1',
+        ]);
+
+        $provider = Provider::find($request->integer('provider_id'));
+
+        if (empty($provider->driver)) {
+            return $this->error([422, '该服务商未配置云驱动（driver），请先完善服务商信息']);
+        }
+
+        try {
+            $driver = CloudProviderManager::make($provider);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
+        }
+
+        $filters = array_filter([
+            'eipIds'             => $request->input('eipIds'),
+            'regionId'           => $request->input('regionId'),
+            'name'               => $request->input('name'),
+            'status'             => $request->input('status'),
+            'isDefault'          => $request->input('isDefault'),
+            'privateIpAddress'   => $request->input('privateIpAddress'),
+            'ipAddress'          => $request->input('ipAddress'),
+            'ipAddresses'        => $request->input('ipAddresses'),
+            'instanceId'         => $request->input('instanceId'),
+            'associatedId'       => $request->input('associatedId'),
+            'cidrIds'            => $request->input('cidrIds'),
+            'resourceGroupId'    => $request->input('resourceGroupId'),
+            'tagKeys'            => $request->input('tagKeys'),
+            'tags'               => $request->input('tags'),
+            'internetChargeType' => $request->input('internetChargeType'),
+            'pageSize'           => $request->input('pageSize', 20),
+            'pageNum'            => $request->input('page', 1),
+        ], fn($v) => $v !== null);
+
+        try {
+            $result = $driver->listElasticIps($filters);
+        } catch (OperationNotSupportedException $e) {
+            return $this->error([501, $e->getMessage()]);
+        } catch (\RuntimeException $e) {
+            Log::error('getElasticIps failed', [
+                'provider_id' => $provider->id,
+                'driver'      => $provider->driver,
+                'error'       => $e->getMessage(),
+            ]);
+            return $this->error([500, '获取弹性IP列表失败: ' . $e->getMessage()]);
+        }
+
+        return $this->ok(array_merge($result, [
+            'provider_id'   => $provider->id,
+            'provider_name' => $provider->name,
+            'driver'        => $provider->driver,
+        ]));
+    }
 }

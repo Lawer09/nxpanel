@@ -61,6 +61,7 @@ class IpPoolController extends Controller
     {
         $validated = $request->validate([
             'ip' => 'required_without:id|ip|unique:v2_ip_pool,ip',
+            'machine_id' => 'nullable|integer',
             'hostname' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
             'region' => 'nullable|string|max:100',
@@ -70,6 +71,7 @@ class IpPoolController extends Controller
             'postal' => 'nullable|string|max:20',
             'timezone' => 'nullable|string|max:50',
             'readme_url' => 'nullable|url',
+            'metadata' => 'nullable|array',
             'score' => 'nullable|integer|min:0|max:100',
             'max_load' => 'nullable|integer|min:1',
             'status' => 'nullable|in:active,cooldown',
@@ -338,8 +340,10 @@ class IpPoolController extends Controller
   
         // 允许更新的字段（不包含ip，ip仅用于匹配）  
         $allowedFields = [  
+            'machine_id',
             'hostname', 'city', 'region', 'country', 'loc',  
             'org', 'postal', 'timezone', 'readme_url',  
+            'metadata',
             'score', 'max_load', 'status', 'risk_level',  
         ];  
   
@@ -351,24 +355,25 @@ class IpPoolController extends Controller
         try {  
             foreach ($items as $index => $item) {  
                 // 验证ip字段必须存在  
-                if (empty($item['ip'])) {  
+                if (!isset($item['ip']) || $item['ip'] === '' || $item['ip'] === null) {  
                     $failed[] = [  
                         'index' => $index,  
                         'ip' => $item['ip'] ?? null,  
                         'reason' => 'IP地址不能为空',  
                     ];  
                     continue;  
-                }  
-  
-                // 验证IP格式  
-                if (!filter_var($item['ip'], FILTER_VALIDATE_IP)) {  
-                    $failed[] = [  
-                        'index' => $index,  
-                        'ip' => $item['ip'],  
-                        'reason' => 'IP地址格式错误',  
-                    ];  
-                    continue;  
-                }  
+                }
+
+                $ips = is_array($item['ip']) ? $item['ip'] : [$item['ip']];
+
+                if (empty($ips)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'ip' => $item['ip'] ?? null,
+                        'reason' => 'IP地址不能为空',
+                    ];
+                    continue;
+                }
   
                 // 验证 country 长度  
                 if (!empty($item['country']) && strlen($item['country']) > 2) {  
@@ -409,22 +414,43 @@ class IpPoolController extends Controller
                     continue;  
                 }  
   
-                // 提取允许的字段  
-                $data = array_intersect_key($item, array_flip($allowedFields));  
+                foreach ($ips as $ip) {
+                    if (empty($ip)) {
+                        $failed[] = [
+                            'index' => $index,
+                            'ip' => $ip,
+                            'reason' => 'IP地址不能为空',
+                        ];
+                        continue;
+                    }
+
+                    // 验证IP格式
+                    if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+                        $failed[] = [
+                            'index' => $index,
+                            'ip' => $ip,
+                            'reason' => 'IP地址格式错误',
+                        ];
+                        continue;
+                    }
+
+                    // 提取允许的字段  
+                    $data = array_intersect_key($item, array_flip($allowedFields));  
   
-                // 检查是否已存在  
-                $existing = IpPool::where('ip', $item['ip'])->first();  
+                    // 检查是否已存在  
+                    $existing = IpPool::where('ip', $ip)->first();  
   
-                if ($existing) {  
-                    // 更新已有记录  
-                    $existing->update($data);  
-                    $updated[] = ['id' => $existing->id, 'ip' => $existing->ip];  
-                } else {  
-                    // 新增记录  
-                    $data['ip'] = $item['ip'];  
-                    $newIp = IpPool::create($data);  
-                    $created[] = ['id' => $newIp->id, 'ip' => $newIp->ip];  
-                }  
+                    if ($existing) {  
+                        // 更新已有记录  
+                        $existing->update($data);  
+                        $updated[] = ['id' => $existing->id, 'ip' => $existing->ip];  
+                    } else {  
+                        // 新增记录  
+                        $data['ip'] = $ip;  
+                        $newIp = IpPool::create($data);  
+                        $created[] = ['id' => $newIp->id, 'ip' => $newIp->ip];  
+                    }  
+                }
             }  
   
             DB::commit();  

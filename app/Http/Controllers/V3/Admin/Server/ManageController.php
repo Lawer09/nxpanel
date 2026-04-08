@@ -7,6 +7,7 @@ use App\Models\Server;
 use App\Models\ServerTemplate;
 use App\Models\User;
 use App\Services\DnsToolService;
+use App\Utils\CacheKey;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -20,17 +21,7 @@ class ManageController extends V2ManageController
      *
      * GET /admin/server/manage/onlineUsers?id={serverId}
      *
-     * 从 Redis 缓存 ALIVE_IP_USER_{userId} 中反查所有在线用户，
-     * 筛选出连接到指定节点的用户及其 IP 列表。
-     *
-     * 缓存数据结构：
-     *   {
-     *     "{nodeType}{nodeId}": {
-     *       "aliveips": ["1.2.3.4_5", ...],   // IP_节点ID
-     *       "lastupdateAt": 1711800000
-     *     },
-     *     "alive_ip": 2
-     *   }
+    * 从 Redis 缓存 USER_ONLINE_CONN_{nodeType}_{nodeId}_{userId} 中查询在线用户连接数。
      *
      * @param Request $request
      * @return JsonResponse
@@ -47,7 +38,8 @@ class ManageController extends V2ManageController
         }
 
         // 构造该节点在缓存中的 key，如 "vless5"、"trojan9"
-        $nodeKey = $server->type . $server->id;
+        $nodeType = strtoupper($server->type);
+        $nodeId = $server->id;
 
         // 查询所有 online_count > 0 的用户（缩小扫描范围）
         $users = User::query()
@@ -58,42 +50,25 @@ class ManageController extends V2ManageController
         $onlineUsers = [];
 
         foreach ($users as $user) {
-            $cacheData = Cache::get('ALIVE_IP_USER_' . $user->id, []);
+            $cacheKey = CacheKey::get("USER_ONLINE_CONN_{$nodeType}_{$nodeId}", $user->id);
+            $conn = cache()->get($cacheKey);
 
-            if (!isset($cacheData[$nodeKey]) || !is_array($cacheData[$nodeKey])) {
-                continue;
-            }
-
-            $nodeData = $cacheData[$nodeKey];
-            $aliveIps = $nodeData['aliveips'] ?? [];
-            $lastUpdateAt = $nodeData['lastupdateAt'] ?? null;
-
-            // 解析 IP 列表（格式为 "ip_nodeId"，取下划线前部分）
-            $ips = collect($aliveIps)
-                ->map(fn($ipNode) => explode('_', $ipNode)[0])
-                ->unique()
-                ->values()
-                ->all();
-
-            if (empty($ips)) {
+            if (empty($conn)) {
                 continue;
             }
 
             $onlineUsers[] = [
-                'user_id'       => $user->id,
-                'email'         => $user->email,
-                'ip_count'      => count($ips),
-                'ips'           => $ips,
-                'last_update_at'=> $lastUpdateAt
-                    ? date('Y-m-d H:i:s', $lastUpdateAt)
-                    : null,
+                'user_id'        => $user->id,
+                'email'          => $user->email,
+                'conn'           => (int) $conn,
+                'last_online_at' => $user->last_online_at,
             ];
         }
 
         return $this->ok([
             'server_id'    => $server->id,
             'server_name'  => $server->name,
-            'node_key'     => $nodeKey,
+            'node_key'     => strtolower($nodeType) . $nodeId,
             'online_count' => count($onlineUsers),
             'users'        => $onlineUsers,
         ]);
