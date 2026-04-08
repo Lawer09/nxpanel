@@ -12,8 +12,7 @@ class ClientRoute
             'prefix' => 'client',
             'middleware' => 'client'
         ], function ($router) {
-            // Client
-            $router->get('/subscribe', [ClientController::class, 'subscribe'])->name('client.subscribe.legacy');
+            $router->get('/sub/json', [ClientController::class, 'subscribeJson']);
         });
     }
 }

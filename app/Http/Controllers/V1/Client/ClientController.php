@@ -16,7 +16,7 @@ class ClientController extends Controller
     /**
      * Protocol prefix mapping for server names
      */
-    private const PROTOCOL_PREFIXES = [
+    protected const PROTOCOL_PREFIXES = [
         'hysteria' => [
             1 => '[Hy]',
             2 => '[Hy2]'
@@ -89,7 +89,7 @@ class ClientController extends Controller
     /**
      * Parses the input string for requested server types.
      */
-    private function parseRequestedTypes(?string $typeInputString): array
+    protected function parseRequestedTypes(?string $typeInputString): array
     {
         if (blank($typeInputString) || $typeInputString === 'all') {
             return Server::VALID_TYPES;
@@ -106,7 +106,7 @@ class ClientController extends Controller
     /**
      * Parses the input string for filter keywords.
      */
-    private function parseFilterKeywords(?string $filterInputString): ?array
+    protected function parseFilterKeywords(?string $filterInputString): ?array
     {
         if (blank($filterInputString) || mb_strlen($filterInputString) > 20) {
             return null;
@@ -121,7 +121,7 @@ class ClientController extends Controller
     /**
      * Filters servers based on allowed types and keywords.
      */
-    private function filterServers(array $servers, array $allowedTypes, ?array $filterKeywords): array
+    protected function filterServers(array $servers, array $allowedTypes, ?array $filterKeywords): array
     {
         return collect($servers)->filter(function ($server) use ($allowedTypes, $filterKeywords) {
             // Condition 1: Server type must be in the list of allowed types
@@ -144,7 +144,7 @@ class ClientController extends Controller
         })->values()->all();
     }
 
-    private function getClientInfo(Request $request): array
+    protected function getClientInfo(Request $request): array
     {
         $flag = strtolower($request->input('flag') ?? $request->header('User-Agent', ''));
 
@@ -189,7 +189,7 @@ class ClientController extends Controller
         ];
     }
 
-    private function setSubscribeInfoToServers(&$servers, $user, $rejectServerCount = 0)
+    protected function setSubscribeInfoToServers(&$servers, $user, $rejectServerCount = 0)
     {
         if (!isset($servers[0]))
             return;
@@ -219,7 +219,7 @@ class ClientController extends Controller
         ]));
     }
 
-    private function addPrefixToServerName(array $servers): array
+    protected function addPrefixToServerName(array $servers): array
     {
         if (!admin_setting('show_protocol_to_server_enable', false)) {
             return $servers;
@@ -232,7 +232,7 @@ class ClientController extends Controller
             ->all();
     }
 
-    private function getPrefixedServerName(array $server): string
+    protected function getPrefixedServerName(array $server): string
     {
         $type = $server['type'] ?? '';
         if (!isset(self::PROTOCOL_PREFIXES[$type])) {
