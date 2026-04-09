@@ -56,6 +56,7 @@ class ManageController extends Controller
         $params = $request->validated();
         $params = $this->fillRealityKeysIfNeeded($params);
         $params = $this->fillPortsIfNeeded($params);
+        $params = $this->fillOnlineLimitIfNeeded($params);
 
         if ($request->input('id')) {
             $server = Server::find($request->input('id'));
@@ -255,6 +256,50 @@ class ManageController extends Controller
         if ($changed) {
             $ps['reality_settings']      = $rs;
             $params['protocol_settings'] = $ps;
+        }
+
+        return $params;
+    }
+
+    /**
+     * 自动填充 online_limit：
+     *   - 如果未指定 online_limit，则根据绑定机器的带宽自动计算
+     *   - 计算规则：online_limit = 机器带宽 / 10
+     *   - 如果机器绑定了 IP，优先使用 IP 的带宽
+     */
+    private function fillOnlineLimitIfNeeded(array $params): array
+    {
+        // 如果已经指定了 online_limit，则不自动计算
+        if (isset($params['online_limit']) && $params['online_limit'] !== null) {
+            return $params;
+        }
+
+        // 必须指定 machine_id
+        if (empty($params['machine_id'])) {
+            return $params;
+        }
+
+        $machine = Machine::with(['ips' => function($query) {
+            $query->wherePivot('is_primary', true)->wherePivot('bind_status', 'active');
+        }])->find($params['machine_id']);
+        
+        if (!$machine) {
+            return $params;
+        }
+
+        // 优先使用主IP的带宽，否则使用机器自身带宽
+        $bandwidth = null;
+        $primaryIp = $machine->primaryIp;
+        
+        if ($primaryIp && $primaryIp->bandwidth) {
+            $bandwidth = $primaryIp->bandwidth;
+        } elseif ($machine->bandwidth) {
+            $bandwidth = $machine->bandwidth;
+        }
+
+        // 计算 online_limit = bandwidth / 10
+        if ($bandwidth && $bandwidth > 0) {
+            $params['online_limit'] = (int) floor($bandwidth / 10);
         }
 
         return $params;

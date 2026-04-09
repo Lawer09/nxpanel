@@ -45,18 +45,27 @@ interface CloudDriverInterface
     /**
      * 将弹性 IP 绑定到实例
      *
-     * @param  string $instanceId   服务商侧实例 ID
+     * @param  string $nicId   网卡 ID
      * @param  string $elasticIpId  弹性 IP 的 ID 或地址（由驱动决定）
      * @return array                操作结果
      */
-    public function bindElasticIp(string $instanceId, string $elasticIpId): array;
+    public function bindElasticIp(string $nicId, string $elasticIpId): array;
 
     /**
      * 将弹性 IP 从实例解绑
      *
-     * @param  string $instanceId   服务商侧实例 ID
+     * @param  string $nicId   网卡 ID
      * @param  string $elasticIpId  弹性 IP 的 ID 或地址
      * @return array                操作结果
      */
-    public function unbindElasticIp(string $instanceId, string $elasticIpId): array;
+    public function unbindElasticIp(string $elasticIpId): array;
+
+    /**
+     * 配置弹性 IP 作为出口 IP（Zenlayer ConfigEipEgressIp）
+     *
+     * @param  string $eipId  弹性 IP 的 ID
+     * @return array          操作结果，包含 requestId
+     * @throws \App\Exceptions\OperationNotSupportedException
+     */
+    public function configEipEgress(string $eipId): array;
 }

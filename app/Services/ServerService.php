@@ -46,7 +46,14 @@ class ServerService
             ->get()
             ->append(['last_check_at', 'last_push_at', 'online', 'is_online', 'available_status', 'cache_key', 'server_key']);
 
-        $servers = collect($servers)->map(function ($server) use ($user) {
+        $servers = collect($servers)
+            ->filter(function ($server) {
+                if ($server->online_limit === null) {
+                    return true;
+                }
+                return (int) $server->online < (int) $server->online_limit;
+            })
+            ->map(function ($server) use ($user) {
             // 判断动态端口
             if (str_contains($server->port, '-')) {
                 $port = $server->port;

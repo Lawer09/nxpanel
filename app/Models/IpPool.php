@@ -11,7 +11,7 @@ class IpPool extends Model
 
     protected $fillable = [
         'ip',
-        'machine_id',
+        'bandwidth',
         'hostname',
         'city',
         'region',
@@ -21,6 +21,9 @@ class IpPool extends Model
         'postal',
         'timezone',
         'readme_url',
+        'provider_id',
+        'provider_ip_id',
+        'ip_type',
         'metadata',
         'score',
         'load',
@@ -34,7 +37,10 @@ class IpPool extends Model
     ];
 
     protected $casts = [
-        'machine_id' => 'integer',
+        'bandwidth' => 'integer',
+        'provider_id' => 'integer',
+        'provider_ip_id' => 'string',
+        'ip_type' => 'string',
         'metadata' => 'array',
         'score' => 'integer',
         'load' => 'integer',
@@ -43,6 +49,14 @@ class IpPool extends Model
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',
     ];
+
+    /**
+     * 关联供应商
+     */
+    public function provider()
+    {
+        return $this->belongsTo(Provider::class, 'provider_id');
+    }
 
     /**
      * 获取可用的IP
@@ -78,5 +92,32 @@ class IpPool extends Model
     {
         $this->status = 'cooldown';
         $this->save();
+    }
+
+    /**
+     * 关联的所有机器（多对多）
+     */
+    public function machines()
+    {
+        return $this->belongsToMany(Machine::class, 'ip_machine', 'ip_id', 'machine_id')
+            ->using(IpMachine::class)
+            ->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * 获取当前绑定的机器（活跃状态）
+     */
+    public function activeMachines()
+    {
+        return $this->machines()->wherePivot('bind_status', 'active');
+    }
+
+    /**
+     * 获取主绑定的机器
+     */
+    public function primaryMachine()
+    {
+        return $this->machines()->wherePivot('is_primary', true)->wherePivot('bind_status', 'active');
     }
 }

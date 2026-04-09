@@ -25,6 +25,10 @@ class IpPoolSave extends FormRequest
             'score' => 'nullable|integer|min:0|max:100',
             'status' => 'nullable|in:active,cooldown',
             'risk_level' => 'nullable|integer|min:0|max:100',
+            'machine_id' => 'nullable|integer|exists:machines,id',
+            'provider_id' => 'nullable|integer|exists:v2_providers,id',
+            'provider_ip_id' => 'nullable|string|max:128',
+            'ip_type' => 'nullable|string|max:32',
         ];
 
         // 新增时IP必填

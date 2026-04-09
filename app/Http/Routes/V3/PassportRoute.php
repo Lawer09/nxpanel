@@ -13,6 +13,8 @@ class PassportRoute
             'prefix' => 'passport',
         ], function ($router) {
             // Auth
+            $router->post('/auth/register', [AuthController::class, 'register']);
+            $router->post('/auth/login', [AuthController::class, 'login']);
             $router->post('/auth/loginByAid', [AuthController::class, 'loginByAid']);
         });
     }

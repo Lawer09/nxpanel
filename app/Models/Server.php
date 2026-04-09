@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
  * @property string $host 主机地址
  * @property string|int $port 端口
  * @property int|null $server_port 服务器端口
+ * @property int|null $machine_id 绑定的机器ID
  * @property array|null $group_ids 分组IDs
  * @property array|null $route_ids 路由IDs
  * @property array|null $tags 标签
@@ -52,6 +53,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
  * @property int|null $d 下行流量
  * @property int|null $total 总流量
  * @property-read array|null $load_status 负载状态（包含CPU、内存、交换区、磁盘信息）
+ * @property int|null $online_limit 在线用户上限（null 表示不限制）
  */
 class Server extends Model
 {

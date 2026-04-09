@@ -32,6 +32,7 @@ class Machine extends Model
         'pay_mode',
         'tags',
         'provider_instance_id',
+        'provider_nic_id',
     ];
 
     protected $casts = [
@@ -91,5 +92,40 @@ class Machine extends Model
     public function scopeOnline($query)
     {
         return $query->where('status', 'online');
+    }
+
+    /**
+     * 关联的所有IP（多对多）
+     */
+    public function ips()
+    {
+        return $this->belongsToMany(IpPool::class, 'ip_machine', 'machine_id', 'ip_id')
+            ->using(IpMachine::class)
+            ->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * 获取主IP（向后兼容）
+     */
+    public function boundIp()
+    {
+        return $this->ips()->wherePivot('is_primary', true)->wherePivot('bind_status', 'active');
+    }
+
+    /**
+     * 获取主IP记录（单个对象）
+     */
+    public function getPrimaryIpAttribute()
+    {
+        return $this->ips()->wherePivot('is_primary', true)->wherePivot('bind_status', 'active')->first();
+    }
+
+    /**
+     * 获取所有活跃的IP
+     */
+    public function activeIps()
+    {
+        return $this->ips()->wherePivot('bind_status', 'active');
     }
 }

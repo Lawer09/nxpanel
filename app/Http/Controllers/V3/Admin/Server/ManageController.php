@@ -21,57 +21,71 @@ class ManageController extends V2ManageController
      *
      * GET /admin/server/manage/onlineUsers?id={serverId}
      *
-    * 从 Redis 缓存 USER_ONLINE_CONN_{nodeType}_{nodeId}_{userId} 中查询在线用户连接数。
      *
      * @param Request $request
      * @return JsonResponse
      */
-    public function getOnlineUsers(Request $request): JsonResponse
-    {
-        $request->validate([
-            'id' => 'required|integer',
-        ]);
-
-        $server = Server::find($request->input('id'));
-        if (!$server) {
-            return $this->fail([400202, '节点不存在']);
-        }
-
-        // 构造该节点在缓存中的 key，如 "vless5"、"trojan9"
-        $nodeType = strtoupper($server->type);
-        $nodeId = $server->id;
-
-        // 查询所有 online_count > 0 的用户（缩小扫描范围）
-        $users = User::query()
-            ->where('online_count', '>', 0)
-            ->select(['id', 'email', 'online_count', 'last_online_at'])
-            ->get();
-
-        $onlineUsers = [];
-
-        foreach ($users as $user) {
-            $cacheKey = CacheKey::get("USER_ONLINE_CONN_{$nodeType}_{$nodeId}", $user->id);
-            $conn = cache()->get($cacheKey);
-
-            if (empty($conn)) {
-                continue;
-            }
-
-            $onlineUsers[] = [
-                'user_id'        => $user->id,
-                'email'          => $user->email,
-                'conn'           => (int) $conn,
-                'last_online_at' => $user->last_online_at,
-            ];
-        }
-
-        return $this->ok([
-            'server_id'    => $server->id,
-            'server_name'  => $server->name,
-            'node_key'     => strtolower($nodeType) . $nodeId,
-            'online_count' => count($onlineUsers),
-            'users'        => $onlineUsers,
-        ]);
+    public function getOnlineUsers(Request $request): JsonResponse  
+    {  
+        $request->validate([  
+            'id' => 'required|integer',  
+        ]);  
+    
+        $server = Server::find($request->input('id'));  
+        if (!$server) {  
+            return $this->fail([400202, '节点不存在']);  
+        }  
+    
+        // nodeKey 格式必须与 UserAliveSyncJob 一致：小写 type + id  
+        $nodeKey = $server->type . $server->id;  
+    
+        $users = User::query()  
+            ->where('online_count', '>', 0)  
+            ->select(['id', 'email', 'online_count', 'last_online_at'])  
+            ->get();  
+    
+        $onlineUsers = [];  
+    
+        foreach ($users as $user) {  
+            // 读取 ALIVE_IP_USER_{userId}，而非 USER_ONLINE_CONN_*  
+            $cacheData = Cache::get('ALIVE_IP_USER_' . $user->id, []);  
+    
+            if (!isset($cacheData[$nodeKey]) || !is_array($cacheData[$nodeKey])) {  
+                continue;  
+            }  
+    
+            $nodeData = $cacheData[$nodeKey];  
+            $aliveIps = $nodeData['aliveips'] ?? [];  
+            $lastUpdateAt = $nodeData['lastupdateAt'] ?? null;  
+    
+            $ips = collect($aliveIps)  
+                ->map(fn($ipNode) => explode('_', $ipNode)[0])  
+                ->unique()  
+                ->values()  
+                ->all();  
+    
+            if (empty($ips)) {  
+                continue;  
+            }  
+    
+            $onlineUsers[] = [  
+                'user_id'        => $user->id,  
+                'email'          => $user->email,  
+                'ip_count'       => count($ips),  
+                'ips'            => $ips,  
+                'last_update_at' => $lastUpdateAt  
+                    ? date('Y-m-d H:i:s', $lastUpdateAt)  
+                    : null,  
+            ];  
+        }  
+    
+        return $this->ok([  
+            'server_id'    => $server->id,  
+            'server_name'  => $server->name,  
+            'node_key'     => $nodeKey,  
+            'online_count' => count($onlineUsers),  
+            'users'        => $onlineUsers,  
+        ]);  
     }
 
     /**

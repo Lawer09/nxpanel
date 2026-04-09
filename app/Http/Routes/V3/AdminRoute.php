@@ -58,6 +58,32 @@ class AdminRoute
                 $router->post('/eips', [ProviderController::class, 'getElasticIps']);
             });
 
+            // Machine
+            $router->group([
+                'prefix' => 'machine'
+            ], function ($router) {
+                $router->any('/fetch', [\App\Http\Controllers\V3\Admin\MachineController::class, 'fetch']);
+                $router->post('/save', [\App\Http\Controllers\V3\Admin\MachineController::class, 'save']);
+                $router->post('/update', [\App\Http\Controllers\V3\Admin\MachineController::class, 'update']);
+                $router->post('/drop', [\App\Http\Controllers\V3\Admin\MachineController::class, 'drop']);
+                $router->post('/detail', [\App\Http\Controllers\V3\Admin\MachineController::class, 'detail']);
+                $router->post('/testConnection', [\App\Http\Controllers\V3\Admin\MachineController::class, 'testConnection']);
+                $router->post('/batchDrop', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchDrop']);
+                $router->post('/batchImport', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchImport']);
+                $router->post('/deployNode', [\App\Http\Controllers\V3\Admin\MachineController::class, 'deployNode']);
+                $router->post('/batchDeploy', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchDeploy']);
+                $router->get('/deployStatus', [\App\Http\Controllers\V3\Admin\MachineController::class, 'deployStatus']);
+                $router->post('/clearNode', [\App\Http\Controllers\V3\Admin\MachineController::class, 'clearNode']);
+                
+                // Machine IP Management
+                $router->post('/switchIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'switchIp']);
+                $router->post('/configEipEgress', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'configEipEgress']);
+                $router->get('/elasticIps', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'getElasticIps']);
+                $router->post('/bindIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'bindIp']);
+                $router->post('/unbindIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'unbindIp']);
+                $router->post('/setPrimaryIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'setPrimaryIp']);
+            });
+
             // Server Manage
             $router->group(['prefix' => 'server/manage'], function ($router) {
                 $router->get('/onlineUsers',      [ManageController::class, 'getOnlineUsers']);

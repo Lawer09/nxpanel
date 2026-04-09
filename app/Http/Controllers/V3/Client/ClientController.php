@@ -29,7 +29,7 @@ class ClientController extends V1ClientController
             return $this->error([403, '用户不可用']);
         }
     
-        // 复用现有逻辑获取并过滤服务器
+        // 过滤服务器
         $servers = ServerService::getAvailableServers($user);
         $servers = HookManager::filter('client.subscribe.servers', $servers, $user, $request);
     

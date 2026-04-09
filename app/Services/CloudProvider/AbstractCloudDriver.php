@@ -48,9 +48,14 @@ abstract class AbstractCloudDriver implements CloudDriverInterface
         throw new OperationNotSupportedException('bindElasticIp', $this->driverName);
     }
 
-    public function unbindElasticIp(string $instanceId, string $elasticIpId): array
+    public function unbindElasticIp(string $elasticIpId): array
     {
         throw new OperationNotSupportedException('unbindElasticIp', $this->driverName);
+    }
+
+    public function configEipEgress(string $eipId): array
+    {
+        throw new OperationNotSupportedException('configEipEgress', $this->driverName);
     }
 
     // ----------------------------------------------------------------

@@ -6,9 +6,46 @@ use App\Http\Controllers\V1\Passport\AuthController as V1AuthController;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Http\Requests\Passport\AuthLogin;
+use App\Http\Requests\Passport\AuthRegister;
+
 
 class AuthController extends V1AuthController
 {
+    /**
+     * 用户注册
+     */
+    public function register(AuthRegister $request)
+    {
+        [$success, $result] = $this->registerService->register($request);
+
+        if (!$success) {
+            return $this->error($result);
+        }
+
+        $authService = new AuthService($result);
+        return $this->ok($authService->generateAuthData());
+    }
+
+    /**
+     * 用户登录
+     */
+    public function login(AuthLogin $request)
+    {
+        $email = $request->input('email');
+        $password = $request->input('password');
+
+        [$success, $result] = $this->loginService->login($email, $password);
+
+        if (!$success) {
+            return $this->error($result);
+        }
+
+        $authService = new AuthService($result);
+        return $this->ok($authService->generateAuthData());
+    }
+
+
     /**
      * 通过AID快捷登录（自动注册）- V3
      *

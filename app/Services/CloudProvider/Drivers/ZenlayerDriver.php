@@ -148,6 +148,7 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'create_time'       => $item['createTime']   ?? null,
                 'expired_time'      => $item['expiredTime']  ?? null,
                 'resource_group_id' => $item['resourceGroupId'] ?? null,
+                'nic_id'            => $item['nics'][0]['nicId'] ?? null, // 取第一个网卡的 ID 作为代表
                 '_raw'              => $item,
             ];
         }, $dataSet);
@@ -231,34 +232,52 @@ class ZenlayerDriver extends AbstractCloudDriver
     /**
      * 将弹性 IP 绑定到实例
      *
-     * @param  string $instanceId   Zenlayer 实例 ID
+     * @param  string $nicId   网卡 ID
      * @param  string $elasticIpId  Zenlayer EIP ID（eipId）
      */
-    public function bindElasticIp(string $instanceId, string $elasticIpId): array
+    public function bindElasticIp(string $nicId, string $elasticIpId): array
     {
-        return $this->call(__FUNCTION__, function () use ($instanceId, $elasticIpId) {
+        return $this->call(__FUNCTION__, function () use ($nicId, $elasticIpId) {
             $this->request('AssociateEipAddress', [
-                'instanceId' => $instanceId,
-                'eipId'      => $elasticIpId,
+                'nicId' => $nicId,
+                'eipIds'      => [$elasticIpId],
             ]);
-            return ['success' => true, 'instance_id' => $instanceId, 'eip_id' => $elasticIpId];
+            return ['success' => true, 'nic_id' => $nicId, 'eip_id' => $elasticIpId];
         });
     }
 
     /**
      * 将弹性 IP 从实例解绑
      *
-     * @param  string $instanceId   Zenlayer 实例 ID
      * @param  string $elasticIpId  Zenlayer EIP ID（eipId）
      */
-    public function unbindElasticIp(string $instanceId, string $elasticIpId): array
+    public function unbindElasticIp(string $elasticIpId): array
     {
-        return $this->call(__FUNCTION__, function () use ($instanceId, $elasticIpId) {
+        return $this->call(__FUNCTION__, function () use ($elasticIpId) {
             $this->request('DisassociateEipAddress', [
-                'instanceId' => $instanceId,
-                'eipId'      => $elasticIpId,
+                'eipIds'      => [$elasticIpId],
             ]);
-            return ['success' => true, 'instance_id' => $instanceId, 'eip_id' => $elasticIpId];
+            return ['success' => true, 'eip_id' => $elasticIpId];
+        });
+    }
+
+    /**
+     * 配置弹性 IP 作为出口 IP（Zenlayer ConfigEipEgressIp）
+     *
+     * @param  string $eipId  Zenlayer EIP ID
+     * @return array          包含 requestId
+     */
+    public function configEipEgress(string $eipId): array
+    {
+        return $this->call(__FUNCTION__, function () use ($eipId) {
+            $resp = $this->request('ConfigEipEgressIp', [
+                'eipId' => $eipId,
+            ]);
+            return [
+                'success' => true,
+                'eip_id' => $eipId,
+                'requestId' => $resp['requestId'] ?? null,
+            ];
         });
     }
 

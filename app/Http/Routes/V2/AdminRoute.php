@@ -339,23 +339,6 @@ class AdminRoute
                 $router->post('reset-user', [TrafficResetController::class, 'resetUser']);
             });
 
-            // Machine
-            $router->group([
-                'prefix' => 'machine'
-            ], function ($router) {
-                $router->any('/fetch', [\App\Http\Controllers\V2\Admin\MachineController::class, 'fetch']);
-                $router->post('/save', [\App\Http\Controllers\V2\Admin\MachineController::class, 'save']);
-                $router->post('/update', [\App\Http\Controllers\V2\Admin\MachineController::class, 'update']);
-                $router->post('/drop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'drop']);
-                $router->post('/detail', [\App\Http\Controllers\V2\Admin\MachineController::class, 'detail']);
-                $router->post('/testConnection', [\App\Http\Controllers\V2\Admin\MachineController::class, 'testConnection']);
-                $router->post('/batchDrop', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDrop']);
-                $router->post('/deployNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'deployNode']);
-                $router->post('/batchDeploy', [\App\Http\Controllers\V2\Admin\MachineController::class, 'batchDeploy']);
-                $router->get('/deployStatus', [\App\Http\Controllers\V2\Admin\MachineController::class, 'deployStatus']);
-                $router->post('/clearNode', [\App\Http\Controllers\V2\Admin\MachineController::class, 'clearNode']);
-            });
-
             // IP Pool Management
             $router->group([
                 'prefix' => 'ip-pool'
@@ -371,7 +354,6 @@ class AdminRoute
                 $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
                 $router->post('/batchImport', [IpPoolController::class, 'batchImport']);
             });
-
 
             // ASN Management
             $router->group([

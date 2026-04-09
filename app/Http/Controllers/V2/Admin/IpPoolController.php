@@ -61,7 +61,7 @@ class IpPoolController extends Controller
     {
         $validated = $request->validate([
             'ip' => 'required_without:id|ip|unique:v2_ip_pool,ip',
-            'machine_id' => 'nullable|integer',
+            'bandwidth' => 'nullable|integer|min:0',
             'hostname' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
             'region' => 'nullable|string|max:100',
@@ -71,6 +71,9 @@ class IpPoolController extends Controller
             'postal' => 'nullable|string|max:20',
             'timezone' => 'nullable|string|max:50',
             'readme_url' => 'nullable|url',
+            'provider_id' => 'nullable|integer|exists:v2_providers,id',
+            'provider_ip_id' => 'nullable|string|max:128',
+            'ip_type' => 'nullable|string|max:32',
             'metadata' => 'nullable|array',
             'score' => 'nullable|integer|min:0|max:100',
             'max_load' => 'nullable|integer|min:1',
@@ -238,6 +241,21 @@ class IpPoolController extends Controller
             $builder->where('status', $request->input('status'));
         }
 
+        // 按供应商过滤
+        if ($request->filled('provider_id')) {
+            $builder->where('provider_id', $request->input('provider_id'));
+        }
+
+        // 按云服务商IP ID过滤
+        if ($request->filled('provider_ip_id')) {
+            $builder->where('provider_ip_id', $request->input('provider_ip_id'));
+        }
+
+        // 按IP类型过滤
+        if ($request->filled('ip_type')) {
+            $builder->where('ip_type', $request->input('ip_type'));
+        }
+
         // 按风险等级过滤
         if ($request->filled('risk_level')) {
             $level = $request->input('risk_level');
@@ -340,9 +358,12 @@ class IpPoolController extends Controller
   
         // 允许更新的字段（不包含ip，ip仅用于匹配）  
         $allowedFields = [  
-            'machine_id',
+            'bandwidth',
             'hostname', 'city', 'region', 'country', 'loc',  
             'org', 'postal', 'timezone', 'readme_url',  
+            'provider_id',
+            'provider_ip_id',
+            'ip_type',
             'metadata',
             'score', 'max_load', 'status', 'risk_level',  
         ];  

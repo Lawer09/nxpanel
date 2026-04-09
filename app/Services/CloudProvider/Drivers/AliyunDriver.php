@@ -68,12 +68,12 @@ class AliyunDriver extends AbstractCloudDriver
     /**
      * 将弹性 IP 绑定到实例
      *
-     * @param  string $instanceId   ECS 实例 ID（如 i-bp1xxxxx）
+     * @param  string $nicId   网卡 ID（如 eni-bp1xxxxx）
      * @param  string $elasticIpId  EIP 分配 ID（AllocationId，如 eip-bp1xxxxx）
      */
-    public function bindElasticIp(string $instanceId, string $elasticIpId): array
+    public function bindElasticIp(string $nicId, string $elasticIpId): array
     {
-        return $this->call(__FUNCTION__, function () use ($instanceId, $elasticIpId) {
+        return $this->call(__FUNCTION__, function () use ($nicId, $elasticIpId) {
             // TODO: 调用阿里云 VPC AssociateEipAddress API
             // GET https://vpc.aliyuncs.com/?Action=AssociateEipAddress
             //   &AllocationId=$elasticIpId&InstanceId=$instanceId&InstanceType=EcsInstance
@@ -85,12 +85,11 @@ class AliyunDriver extends AbstractCloudDriver
     /**
      * 将弹性 IP 从实例解绑
      *
-     * @param  string $instanceId   ECS 实例 ID
      * @param  string $elasticIpId  EIP 分配 ID（AllocationId）
      */
-    public function unbindElasticIp(string $instanceId, string $elasticIpId): array
+    public function unbindElasticIp(string $elasticIpId): array
     {
-        return $this->call(__FUNCTION__, function () use ($instanceId, $elasticIpId) {
+        return $this->call(__FUNCTION__, function () use ($elasticIpId) {
             // TODO: 调用阿里云 VPC UnassociateEipAddress API
             // GET https://vpc.aliyuncs.com/?Action=UnassociateEipAddress
             //   &AllocationId=$elasticIpId&InstanceId=$instanceId&InstanceType=EcsInstance

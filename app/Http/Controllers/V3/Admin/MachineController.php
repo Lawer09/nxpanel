@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V2\Admin;
+namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\DeployNodeJob;
@@ -89,6 +89,7 @@ class MachineController extends Controller
                 'pay_mode'             => 'nullable|integer',
                 'tags'                 => 'nullable|string',
                 'provider_instance_id' => 'nullable|string|max:255',
+                'provider_nic_id'      => 'nullable|string|max:255',
             ]);
 
             // 密码和私钥至少需要一个
@@ -167,6 +168,238 @@ class MachineController extends Controller
             return $this->error([404, '机器不存在']);
         } catch (\Exception $e) {
             return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 批量导入机器
+     *
+     * 当 provider_instance_id 存在时：按 provider_instance_id 更新
+     * 否则：创建新机器
+     *
+     * POST /admin/machine/batchImport
+     * {
+     *   "items": [
+     *     {
+     *       "name": "xxx",
+     *       "hostname": "xxx",
+     *       "ip_address": "1.2.3.4",
+     *       "port": 22,
+     *       "username": "root",
+     *       "password": "***",
+     *       "provider": 1,
+     *       "provider_instance_id": "i-xxx"
+     *     }
+     *   ]
+     * }
+     */
+    public function batchImport(Request $request)
+    {
+        $items = $request->input('items', []);
+
+        if (empty($items) || !is_array($items)) {
+            return $this->error([422, '导入数据不能为空']);
+        }
+
+        $allowedFields = [
+            'name',
+            'hostname',
+            'ip_address',
+            'port',
+            'username',
+            'password',
+            'private_key',
+            'status',
+            'os_type',
+            'cpu_cores',
+            'memory',
+            'disk',
+            'description',
+            'is_active',
+            'gpu_info',
+            'bandwidth',
+            'provider',
+            'price',
+            'pay_mode',
+            'tags',
+            'provider_instance_id',
+            'provider_nic_id',
+        ];
+
+        $created = [];
+        $updated = [];
+        $failed = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($items as $index => $item) {
+                if (!is_array($item)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'reason' => '数据格式错误，必须为对象',
+                    ];
+                    continue;
+                }
+
+                $data = array_intersect_key($item, array_flip($allowedFields));
+                $providerInstanceId = $data['provider_instance_id'] ?? null;
+                $provider = $data['provider'] ?? null;
+
+                if (isset($data['status']) && !in_array($data['status'], ['online', 'offline', 'error'], true)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => 'status 只能是 online/offline/error',
+                    ];
+                    continue;
+                }
+
+                if (isset($data['port']) && (!is_numeric($data['port']) || $data['port'] < 1 || $data['port'] > 65535)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => '端口必须在 1-65535 之间',
+                    ];
+                    continue;
+                }
+
+                if (isset($data['provider']) && !is_numeric($data['provider'])) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => 'provider 必须为整数',
+                    ];
+                    continue;
+                }
+
+                if (isset($data['price']) && !is_numeric($data['price'])) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => 'price 必须为数字',
+                    ];
+                    continue;
+                }
+
+                if (isset($data['is_active']) && !in_array($data['is_active'], [0, 1, true, false], true)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => 'is_active 必须为布尔值',
+                    ];
+                    continue;
+                }
+
+                $machine = null;
+                if (!empty($providerInstanceId)) {
+                    $query = Machine::where('provider_instance_id', $providerInstanceId);
+                    if ($provider !== null && $provider !== '') {
+                        $query->where('provider', $provider);
+                    }
+                    $machine = $query->first();
+                }
+
+                if ($machine) {
+                    if (!empty($data['hostname'])) {
+                        $exists = Machine::where('hostname', $data['hostname'])
+                            ->where('id', '!=', $machine->id)
+                            ->exists();
+                        if ($exists) {
+                            $failed[] = [
+                                'index' => $index,
+                                'provider_instance_id' => $providerInstanceId,
+                                'reason' => 'hostname 已存在',
+                            ];
+                            continue;
+                        }
+                    }
+
+                    $machine->update($data);
+                    $updated[] = [
+                        'id' => $machine->id,
+                        'provider_instance_id' => $providerInstanceId,
+                    ];
+                    continue;
+                }
+
+                $requiredFields = ['name', 'hostname', 'ip_address', 'port', 'username'];
+                $missing = [];
+                foreach ($requiredFields as $field) {
+                    if (empty($data[$field])) {
+                        $missing[] = $field;
+                    }
+                }
+
+                if (!empty($missing)) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => '缺少必填字段: ' . implode(',', $missing),
+                    ];
+                    continue;
+                }
+
+                if (empty($data['password']) && empty($data['private_key'])) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => '密码和私钥至少需要一个',
+                    ];
+                    continue;
+                }
+
+                $hostnameExists = Machine::where('hostname', $data['hostname'])->exists();
+                if ($hostnameExists) {
+                    $failed[] = [
+                        'index' => $index,
+                        'provider_instance_id' => $providerInstanceId,
+                        'reason' => 'hostname 已存在',
+                    ];
+                    continue;
+                }
+
+                if (!empty($providerInstanceId)) {
+                    $instanceExists = Machine::where('provider_instance_id', $providerInstanceId)
+                        ->when($provider !== null && $provider !== '', function ($query) use ($provider) {
+                            $query->where('provider', $provider);
+                        })
+                        ->exists();
+                    if ($instanceExists) {
+                        $failed[] = [
+                            'index' => $index,
+                            'provider_instance_id' => $providerInstanceId,
+                            'reason' => 'Cloud Provider 实例已存在',
+                        ];
+                        continue;
+                    }
+                }
+
+                $data['is_active'] = $data['is_active'] ?? true;
+                $data['status'] = $data['status'] ?? 'offline';
+
+                $newMachine = Machine::create($data);
+                $created[] = [
+                    'id' => $newMachine->id,
+                    'provider_instance_id' => $providerInstanceId,
+                ];
+            }
+
+            DB::commit();
+
+            return $this->ok([
+                'created' => $created,
+                'updated' => $updated,
+                'failed' => $failed,
+                'summary' => [
+                    'total' => count($items),
+                    'created_count' => count($created),
+                    'updated_count' => count($updated),
+                    'failed_count' => count($failed),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);
         }
     }
 
