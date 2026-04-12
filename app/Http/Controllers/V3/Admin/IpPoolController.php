@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\V2\Admin;
+namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\IpPool;
+use App\Models\Machine;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,10 @@ class IpPoolController extends Controller
         $this->applyFiltersAndSorts($request, $query);
 
         $total = $query->count();
-        $items = $query->orderByDesc('created_at')
+        $items = $query->with(['machines' => function ($q) {
+            $q->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at']);
+        }])
+            ->orderByDesc('created_at')
             ->offset(($current - 1) * $pageSize)
             ->limit($pageSize)
             ->get();
@@ -45,7 +49,9 @@ class IpPoolController extends Controller
     public function detail(Request $request)
     {
         $id = $request->input('id');
-        $ipPool = IpPool::find($id);
+        $ipPool = IpPool::with(['machines' => function ($q) {
+            $q->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at']);
+        }])->find($id);
 
         if (!$ipPool) {
             return $this->error([400202, 'IP池不存在']);
@@ -487,10 +493,168 @@ class IpPoolController extends Controller
                     'failed_count' => count($failed),  
                 ],  
             ]);  
-        } catch (\Exception $e) {  
-            DB::rollBack();  
-            Log::error('IP Pool batch import failed', ['error' => $e->getMessage()]);  
-            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);  
-        }  
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('IP Pool batch import failed', ['error' => $e->getMessage()]);
+            return $this->error([500, '批量导入失败: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 获取IP绑定的所有机器
+     */
+    public function getMachines(Request $request)
+    {
+        $id = $request->input('id');
+        $ipPool = IpPool::find($id);
+
+        if (!$ipPool) {
+            return $this->error([400202, 'IP不存在']);
+        }
+
+        // 获取所有绑定的机器及其关系信息
+        $machines = $ipPool->machines()->get();
+
+        return $this->ok([
+            'ip_id' => $ipPool->id,
+            'ip' => $ipPool->ip,
+            'machines' => $machines,
+            'total' => $machines->count(),
+        ]);
+    }
+
+    /**
+     * 获取IP的活跃绑定机器
+     */
+    public function getActiveMachines(Request $request)
+    {
+        $id = $request->input('id');
+        $ipPool = IpPool::find($id);
+
+        if (!$ipPool) {
+            return $this->error([400202, 'IP不存在']);
+        }
+
+        // 获取所有活跃绑定的机器
+        $activeMachines = $ipPool->activeMachines()->get();
+
+        return $this->ok([
+            'ip_id' => $ipPool->id,
+            'ip' => $ipPool->ip,
+            'machines' => $activeMachines,
+            'total' => $activeMachines->count(),
+        ]);
+    }
+
+    /**
+     * 获取IP的主绑定机器
+     */
+    public function getPrimaryMachine(Request $request)
+    {
+        $id = $request->input('id');
+        $ipPool = IpPool::find($id);
+
+        if (!$ipPool) {
+            return $this->error([400202, 'IP不存在']);
+        }
+
+        // 获取主绑定的机器
+        $primaryMachine = $ipPool->primaryMachine()->first();
+
+        if (!$primaryMachine) {
+            return $this->error([400202, '该IP没有主绑定机器']);
+        }
+
+        return $this->ok($primaryMachine);
+    }
+
+    /**
+     * 获取可切换的IP列表（同国家/地区 & 绑定状态为 inactive）
+     */
+    public function getSwitchableIps(Request $request)
+    {
+        $machineId = $request->input('machine_id');
+        $current = $request->input('current', 1);
+        $pageSize = $request->input('pageSize', 10);
+
+        if (!$machineId) {
+            return $this->error([422, '机器ID不能为空']);
+        }
+
+        $machine = Machine::with(['ips' => function ($q) {
+            $q->wherePivot('is_primary', true)
+              ->wherePivot('bind_status', 'active');
+        }])->find($machineId);
+
+        if (!$machine) {
+            return $this->error([404, '机器不存在']);
+        }
+
+        $pairs = [];
+
+        if (!empty($machine->ip_address)) {
+            $machineIp = IpPool::where('ip', $machine->ip_address)->first();
+            if ($machineIp && ($machineIp->country || $machineIp->region)) {
+                $pairs[] = [
+                    'country' => $machineIp->country,
+                    'region' => $machineIp->region,
+                ];
+            }
+        }
+
+        foreach ($machine->ips as $ip) {
+            if ($ip->country || $ip->region) {
+                $pairs[] = [
+                    'country' => $ip->country,
+                    'region' => $ip->region,
+                ];
+            }
+        }
+
+        $pairs = collect($pairs)
+            ->unique(fn ($p) => ($p['country'] ?? 'NULL') . '|' . ($p['region'] ?? 'NULL'))
+            ->values()
+            ->all();
+
+        if (empty($pairs)) {
+            return $this->ok([]);
+        }
+
+        $query = IpPool::query()
+            ->select('v2_ip_pool.id', 'v2_ip_pool.ip', 'v2_ip_pool.country', 'v2_ip_pool.region')
+            ->join('ip_machine', 'v2_ip_pool.id', '=', 'ip_machine.ip_id')
+            ->where('ip_machine.bind_status', 'inactive');
+
+        $query->where(function ($q) use ($pairs) {
+            foreach ($pairs as $pair) {
+                $q->orWhere(function ($q2) use ($pair) {
+                    if ($pair['country'] === null) {
+                        $q2->whereNull('v2_ip_pool.country');
+                    } else {
+                        $q2->where('v2_ip_pool.country', $pair['country']);
+                    }
+
+                    if ($pair['region'] === null) {
+                        $q2->whereNull('v2_ip_pool.region');
+                    } else {
+                        $q2->where('v2_ip_pool.region', $pair['region']);
+                    }
+                });
+            }
+        });
+
+        $total = (clone $query)->distinct()->count('v2_ip_pool.id');
+
+        $items = $query->distinct()
+            ->offset(($current - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        return $this->ok([
+            'data' => $items,
+            'total' => $total,
+            'pageSize' => $pageSize,
+            'page' => $current,
+        ]);
     }
 }

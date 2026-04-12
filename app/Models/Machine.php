@@ -13,6 +13,7 @@ class Machine extends Model
         'name',
         'hostname',
         'ip_address',
+        'private_ip_address',
         'port',
         'username',
         'password',

@@ -339,22 +339,6 @@ class AdminRoute
                 $router->post('reset-user', [TrafficResetController::class, 'resetUser']);
             });
 
-            // IP Pool Management
-            $router->group([
-                'prefix' => 'ip-pool'
-            ], function ($router) {
-                $router->any('/fetch', [IpPoolController::class, 'fetch']);
-                $router->post('/save', [IpPoolController::class, 'save']);
-                $router->post('/detail', [IpPoolController::class, 'detail']);
-                $router->post('/delete', [IpPoolController::class, 'delete']);
-                $router->post('/enable', [IpPoolController::class, 'enable']);
-                $router->post('/disable', [IpPoolController::class, 'disable']);
-                $router->post('/reset-score', [IpPoolController::class, 'resetScore']);
-                $router->get('/stats', [IpPoolController::class, 'stats']);
-                $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
-                $router->post('/batchImport', [IpPoolController::class, 'batchImport']);
-            });
-
             // ASN Management
             $router->group([
                 'prefix' => 'asn'

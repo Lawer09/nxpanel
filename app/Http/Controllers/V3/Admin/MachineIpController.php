@@ -47,33 +47,36 @@ class MachineIpController extends Controller
         try {
             $driver = null;
             $oldPrimaryIp = $machine->primaryIp;
+            $warnings = [];
 
             // ========== 第一步：绑定新IP并设置出口IP ==========
-            if ($machine->provider && $machine->provider_nic_id) {
+            if ($machine->provider && $machine->provider_nic_id && $ip->provider_ip_id && $machine->private_ip_address) {
+                
+                $elasticIpId = $ip->provider_ip_id;
+                $nicId = $machine->provider_nic_id;
+                $privateIpAddress = $machine->private_ip_address;
+
                 try {
                     $driver = CloudProviderManager::makeById((int) $machine->provider);
                     
-                    // 使用IP池中记录的云服务商侧IP ID（若无则回退到IP地址）
-                    $elasticIpId = $ip->provider_ip_id ?: $ip->ip;
-                    $nic_id = $machine->provider_nic_id;
-                    
                     // 绑定新IP到云服务商
                     $bindResult = $driver->bindElasticIp(
-                        $nic_id,
-                        $elasticIpId
+                        $nicId,
+                        $elasticIpId,
+                        $privateIpAddress   
                     );
 
                     Log::info('Step 1: New elastic IP bound via cloud API', [
                         'machine_id' => $machine->id,
                         'new_ip' => $ip->ip,
-                        'nic_id' => $nic_id,
+                        'nic_id' => $nicId,
                         'result' => $bindResult,
                     ]);
                 } catch (\Exception $e) {
                     Log::error('Step 1: Failed to bind new IP via cloud API', [
                         'machine_id' => $machine->id,
                         'new_ip' => $ip->ip,
-                        'nic_id' => $nic_id,
+                        'nic_id' => $nicId,
                         'error' => $e->getMessage(),
                     ]);
                     // 绑定新IP失败直接返回错误
@@ -84,33 +87,25 @@ class MachineIpController extends Controller
                 $isEgressSet = false;
                 if ($setAsEgress) {
                     try {
-                        $eipId = $ip->provider_ip_id ?: null;
-
-                        if ($eipId) {
-                            // 调用云服务商API设置出口IP
-                            $egressResult = $driver->configEipEgress($eipId);
-                            
-                            $isEgressSet = true;
-                            
-                            Log::info('Step 1: New IP set as egress IP successfully', [
-                                'machine_id' => $machine->id,
-                                'ip' => $ip->ip,
-                                'eip_id' => $eipId,
-                                'result' => $egressResult,
-                            ]);
-                        } else {
-                            Log::warning('Step 1: Failed to get EIP ID, egress IP not set', [
-                                'machine_id' => $machine->id,
-                                'ip' => $ip->ip,
-                            ]);
-                            // 无法获取EIP ID则继续，不阻断流程
-                        }
+                        // 调用云服务商API设置出口IP
+                        $egressResult = $driver->configEipEgress($elasticIpId);
+                        
+                        $isEgressSet = true;
+                        
+                        Log::info('Step 1: New IP set as egress IP successfully', [
+                            'machine_id' => $machine->id,
+                            'ip' => $ip->ip,
+                            'eip_id' => $elasticIpId,
+                            'result' => $egressResult,
+                        ]);
+                        $machine->update(['ip_address' => $ip->ip]);
                     } catch (\App\Exceptions\OperationNotSupportedException $e) {
                         Log::warning('Step 1: Cloud provider does not support egress IP configuration', [
                             'machine_id' => $machine->id,
                             'error' => $e->getMessage(),
                         ]);
                         // 不支持此操作，不影响绑定成功状态
+                        $warnings[] = '设置出口IP失败：云服务商不支持此操作';
                     } catch (\Exception $e) {
                         Log::warning('Step 1: Failed to set egress IP', [
                             'machine_id' => $machine->id,
@@ -118,6 +113,7 @@ class MachineIpController extends Controller
                             'error' => $e->getMessage(),
                         ]);
                         // 设置出口IP失败，不影响绑定成功状态
+                        $warnings[] = '设置出口IP失败：' . $e->getMessage();
                     }
                 }
 
@@ -165,17 +161,20 @@ class MachineIpController extends Controller
                 // ========== 第二步：新IP成功后才解除旧绑定 ==========
                 if ($oldPrimaryIp && $oldPrimaryIp->id != $ip->id) {
                     try {
-                        $oldElasticIpId = $oldPrimaryIp->provider_ip_id ?: $oldPrimaryIp->ip;
+                        $oldElasticIpId = $oldPrimaryIp->provider_ip_id;
                         // 调用云API解除旧IP
-                        $driver->unbindElasticIp(
-                            $machine->provider_instance_id,
-                            $oldElasticIpId
-                        );
-                        
-                        Log::info('Step 2: Old primary IP unbound from cloud API', [
-                            'machine_id' => $machine->id,
-                            'old_ip' => $oldPrimaryIp->ip,
-                        ]);
+                        if ($oldElasticIpId){
+                            $driver->unbindElasticIp(
+                                $machine->provider_instance_id,
+                                $oldElasticIpId
+                            );
+                        } else {
+                            $warnings[] = '旧IP缺少云服务商侧IP ID，无法自动解绑，请手动解绑';
+                            Log::info('Step 2: Old primary IP unbound from cloud API', [
+                                'machine_id' => $machine->id,
+                                'old_ip' => $oldPrimaryIp->ip,
+                            ]);
+                        }
                     } catch (\Exception $e) {
                         Log::warning('Step 2: Failed to unbind old IP, but new IP is already active', [
                             'machine_id' => $machine->id,
@@ -183,6 +182,7 @@ class MachineIpController extends Controller
                             'error' => $e->getMessage(),
                         ]);
                         // 解绑旧IP失败仅记录警告，不阻断流程
+                        $warnings[] = '解绑旧IP失败：' . $e->getMessage();
                     }
 
                     // 更新数据库：设旧IP为非活跃
@@ -199,40 +199,7 @@ class MachineIpController extends Controller
                     ]);
                 }
             } else {
-                // 无云服务商配置，仅做数据库操作
-                $existingBind = $machine->ips()->where('ip_id', $ip->id)->first();
-                
-                if ($existingBind) {
-                    $machine->ips()->updateExistingPivot($ip->id, [
-                        'bind_status' => 'active',
-                        'is_primary' => $setAsPrimary,
-                        'is_egress' => false,
-                        'bound_at' => now(),
-                        'unbound_at' => null,
-                    ]);
-                } else {
-                    $machine->ips()->attach($ip->id, [
-                        'is_primary' => $setAsPrimary,
-                        'is_egress' => false,
-                        'bind_status' => 'active',
-                        'bound_at' => now(),
-                    ]);
-                }
-
-                if ($setAsPrimary) {
-                    $machine->ips()
-                        ->where('ip_id', '!=', $ip->id)
-                        ->update(['ip_machine.is_primary' => false]);
-                }
-
-                if ($oldPrimaryIp && $oldPrimaryIp->id != $ip->id) {
-                    $machine->ips()->updateExistingPivot($oldPrimaryIp->id, [
-                        'bind_status' => 'inactive',
-                        'is_primary' => false,
-                        'is_egress' => false,
-                        'unbound_at' => now(),
-                    ]);
-                }
+                return $this->error([422, '机器未配置云服务商或网卡ID']);
             }
 
             return $this->ok([
@@ -241,6 +208,8 @@ class MachineIpController extends Controller
                 'ip' => $ip->ip,
                 'is_primary' => $setAsPrimary,
                 'is_egress' => $setAsEgress,
+                'warnings' => $warnings,
+                'message' => empty($warnings) ? '切换IP成功' : ('切换IP成功，部分操作失败：' . implode('；', $warnings)),
             ]);
         } catch (\Exception $e) {
             Log::error('Switch IP failed', [

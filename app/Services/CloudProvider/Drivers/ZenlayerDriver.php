@@ -234,13 +234,15 @@ class ZenlayerDriver extends AbstractCloudDriver
      *
      * @param  string $nicId   网卡 ID
      * @param  string $elasticIpId  Zenlayer EIP ID（eipId）
+     * @param  string $private_ip_address  实例的内网 IP 地址   
      */
-    public function bindElasticIp(string $nicId, string $elasticIpId): array
+    public function bindElasticIp(string $nicId, string $elasticIpId, string $private_ip_address): array
     {
-        return $this->call(__FUNCTION__, function () use ($nicId, $elasticIpId) {
+        return $this->call(__FUNCTION__, function () use ($nicId, $elasticIpId, $private_ip_address) {
             $this->request('AssociateEipAddress', [
                 'nicId' => $nicId,
                 'eipIds'      => [$elasticIpId],
+                'lanIp' => $private_ip_address,
             ]);
             return ['success' => true, 'nic_id' => $nicId, 'eip_id' => $elasticIpId];
         });
@@ -254,7 +256,7 @@ class ZenlayerDriver extends AbstractCloudDriver
     public function unbindElasticIp(string $elasticIpId): array
     {
         return $this->call(__FUNCTION__, function () use ($elasticIpId) {
-            $this->request('DisassociateEipAddress', [
+            $this->request('UnassociateEipAddress', [
                 'eipIds'      => [$elasticIpId],
             ]);
             return ['success' => true, 'eip_id' => $elasticIpId];

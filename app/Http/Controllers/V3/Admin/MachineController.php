@@ -45,7 +45,9 @@ class MachineController extends Controller
             }
 
             $total = $query->count();
-            $data = $query->orderByDesc('created_at')
+            $data = $query->with(['ips' => function ($q) {
+                $q->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at']);
+            }])->orderByDesc('created_at')
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get()
@@ -72,6 +74,7 @@ class MachineController extends Controller
                 'name'                 => 'required|string|max:255',
                 'hostname'             => 'required|string|unique:machines,hostname|max:255',
                 'ip_address'           => 'required|string|max:255',
+                'private_ip_address'   => 'required|string|max:255',
                 'port'                 => 'required|integer|min:1|max:65535',
                 'username'             => 'required|string|max:255',
                 'password'             => 'nullable|string',
@@ -139,6 +142,7 @@ class MachineController extends Controller
                 'name'                 => 'sometimes|required|string|max:255',
                 'hostname'             => 'sometimes|required|string|unique:machines,hostname,' . $id . '|max:255',
                 'ip_address'           => 'sometimes|required|string|max:255',
+                'private_ip_address'   => 'sometimes|required|string|max:255',
                 'port'                 => 'sometimes|required|integer|min:1|max:65535',
                 'username'             => 'sometimes|required|string|max:255',
                 'password'             => 'nullable|string',
@@ -205,6 +209,7 @@ class MachineController extends Controller
             'name',
             'hostname',
             'ip_address',
+            'private_ip_address',
             'port',
             'username',
             'password',
@@ -438,7 +443,9 @@ class MachineController extends Controller
                 return $this->error([422, '机器ID不能为空']);
             }
 
-            $machine = Machine::findOrFail($id);
+            $machine = Machine::with(['ips' => function ($q) {
+                $q->withPivot(['is_primary', 'is_egress', 'bind_status', 'bound_at', 'unbound_at']);
+            }])->findOrFail($id);
 
             return $this->ok($machine->makeHidden(['password', 'private_key']));
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {

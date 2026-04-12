@@ -8,7 +8,11 @@ use App\Http\Controllers\V3\Admin\ProviderController;
 use App\Http\Controllers\V3\Admin\Server\ManageController;
 use App\Http\Controllers\V3\Admin\StatController;
 use App\Http\Controllers\V3\Admin\UserController;
+use App\Http\Controllers\V3\Admin\MachineController;
+use App\Http\Controllers\V3\Admin\MachineIpController;
+use App\Http\Controllers\V3\Admin\IpPoolController;
 use Illuminate\Contracts\Routing\Registrar;
+
 
 class AdminRoute
 {
@@ -103,6 +107,26 @@ class AdminRoute
                 $router->get('/getStatServerDetail',    [StatController::class, 'getStatServerDetail']);
                 $router->get('/getRanking',             [StatController::class, 'getRanking']);
                 $router->get('/getTrafficRank',         [StatController::class, 'getTrafficRank']);
+            });
+
+             // IP Pool Management
+            $router->group([
+                'prefix' => 'ip-pool'
+            ], function ($router) {
+                $router->any('/fetch', [IpPoolController::class, 'fetch']);
+                $router->post('/save', [IpPoolController::class, 'save']);
+                $router->post('/detail', [IpPoolController::class, 'detail']);
+                $router->post('/delete', [IpPoolController::class, 'delete']);
+                $router->post('/enable', [IpPoolController::class, 'enable']);
+                $router->post('/disable', [IpPoolController::class, 'disable']);
+                $router->post('/reset-score', [IpPoolController::class, 'resetScore']);
+                $router->get('/stats', [IpPoolController::class, 'stats']);
+                $router->get('/get-ipinfo', [IpPoolController::class, 'getIpInfo']);
+                $router->post('/batchImport', [IpPoolController::class, 'batchImport']);
+                $router->post('/get-machines', [IpPoolController::class, 'getMachines']);
+                $router->post('/get-active-machines', [IpPoolController::class, 'getActiveMachines']);
+                $router->post('/get-primary-machine', [IpPoolController::class, 'getPrimaryMachine']);
+                $router->post('/get-switchable-ips', [IpPoolController::class, 'getSwitchableIps']);
             });
         });
     }

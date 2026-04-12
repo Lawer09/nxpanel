@@ -43,7 +43,7 @@ abstract class AbstractCloudDriver implements CloudDriverInterface
         throw new OperationNotSupportedException('listElasticIps', $this->driverName);
     }
 
-    public function bindElasticIp(string $instanceId, string $elasticIpId): array
+    public function bindElasticIp(string $instanceId, string $elasticIpId, string $private_ip_address): array
     {
         throw new OperationNotSupportedException('bindElasticIp', $this->driverName);
     }

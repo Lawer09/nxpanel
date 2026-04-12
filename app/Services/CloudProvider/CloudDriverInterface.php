@@ -47,9 +47,10 @@ interface CloudDriverInterface
      *
      * @param  string $nicId   网卡 ID
      * @param  string $elasticIpId  弹性 IP 的 ID 或地址（由驱动决定）
+     * @param  string $private_ip_address  实例的内网 IP 地址
      * @return array                操作结果
      */
-    public function bindElasticIp(string $nicId, string $elasticIpId): array;
+    public function bindElasticIp(string $nicId, string $elasticIpId, string $private_ip_address): array;
 
     /**
      * 将弹性 IP 从实例解绑
