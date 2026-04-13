@@ -30,6 +30,14 @@ interface CloudDriverInterface
      */
     public function createInstance(array $params): array;
 
+    /**
+     * 获取密钥对列表
+     *
+     * @param  array $filters 可选过滤条件
+     * @return array          密钥对列表
+     */
+    public function listKeyPairs(array $filters = []): array;
+
     // ----------------------------------------------------------------
     // 弹性 IP
     // ----------------------------------------------------------------

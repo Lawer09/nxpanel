@@ -70,6 +70,7 @@ class SshKeyController extends Controller
                 'provider_id'     => 'nullable|integer|exists:v2_providers,id',
                 'provider_key_id' => 'nullable|string|max:255',
                 'secret_key'      => 'required|string',
+                'public_key'      => 'nullable|string',
                 'note'            => 'nullable|string',
             ]);
 
@@ -105,6 +106,7 @@ class SshKeyController extends Controller
                 'provider_id'     => 'nullable|integer|exists:v2_providers,id',
                 'provider_key_id' => 'nullable|string|max:255',
                 'secret_key'      => 'sometimes|required|string',
+                'public_key'      => 'nullable|string',
                 'note'            => 'nullable|string',
             ]);
 
@@ -222,6 +224,7 @@ class SshKeyController extends Controller
             'provider_id',
             'provider_key_id',
             'secret_key',
+            'public_key',
             'note',
         ];
 

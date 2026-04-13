@@ -760,7 +760,7 @@ class MachineController extends Controller
      * POST /admin/machine/createSimple
      * Body:
      * {
-     *   "provider_id": 1,
+     *   "providerId": 1,
      *   "zoneId": "xxx",
      *   "instanceType": "xxx",
      *   "instanceCount": 1,
@@ -771,21 +771,18 @@ class MachineController extends Controller
     public function createSimple(Request $request)
     {
         $request->validate([
-            'provider_id'   => 'required|integer|exists:v2_providers,id',
+            'providerId'   => 'required|integer|exists:v2_providers,id',
             'zoneId'        => 'required|string',
             'instanceType'  => 'required|string',
             'name'          => 'required|string|max:255',
             'instanceCount' => 'required|integer|min:1|max:100',
             'eipIds'        => 'required|array|min:1|max:100',
             'eipIds.*'      => 'string',
-            'username'      => 'required|string|max:255',
-            'port'          => 'nullable|integer|min:1|max:65535',
-            'password'      => 'nullable|string',
-            'private_key'   => 'nullable|string',
+            'sshKeyId'      => 'required|integer|exists:v2_ssh_keys,id',
         ]);
 
         try {
-            $driver = CloudProviderManager::makeById((int) $request->input('provider_id'));
+            $driver = CloudProviderManager::makeById((int) $request->input('providerId'));
 
             $instanceCount = (int) $request->input('instanceCount');
             $eipIds = $request->input('eipIds', []);
@@ -794,8 +791,10 @@ class MachineController extends Controller
                 return $this->error([422, 'instanceCount 必须与 eipIds 数量一致']);
             }
 
-            if (empty($request->input('password')) && empty($request->input('private_key'))) {
-                return $this->error([422, '密码和私钥至少需要一个']);
+            $sshKey = \App\Models\SshKey::findOrFail($request->input('sshKeyId'));
+
+            if (empty($sshKey->provider_key_id)) {
+                return $this->error([422, '所选SSH密钥未配置云服务商密钥ID']);
             }
 
             $params = [
@@ -805,7 +804,7 @@ class MachineController extends Controller
                 'instanceCount'        => $instanceCount,
                 'subnetId'             => '1604048104989009153',
                 'instanceName'         => $request->input('name'),
-                'keyId'                => 'key-RIDRfFik',
+                'keyId'                => $sshKey->provider_key_id,
                 'nicNetworkType'       => 'Auto',
                 'systemDisk'           => [
                     'type'        => 'BASIC_NVME_SSD',
@@ -901,12 +900,17 @@ class MachineController extends Controller
                     'ip_address'           => $publicIp ?? $privateIp,
                     'private_ip_address'   => $privateIp,
                     'port'                 => (int) ($request->input('port') ?? 22),
-                    'username'             => $request->input('username'),
-                    'password'             => $request->input('password'),
-                    'private_key'          => $request->input('private_key'),
-                    'provider'             => (int) $request->input('provider_id'),
+                    'username'             => 'root',
+                    'password'             => '',
+                    'private_key'          => $sshKey->private_key,
+                    'provider'             => (int) $request->input('providerId'),
                     'provider_instance_id' => $instanceId,
                     'provider_nic_id'      => $nicId,
+                    'status'               => $instance['status'] ?? '',
+                    'os_type'              => $instance['image_name'] ?? '',
+                    'cpu_cores'            => $instance['cpu'] ?? 1,
+                    'memory'               => $instance['memory'] ?? 1,
+                    'disk'                 => $instance['disk'] ?? 20,
                 ];
             }
 

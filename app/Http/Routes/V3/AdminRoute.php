@@ -61,6 +61,7 @@ class AdminRoute
             $router->group(['prefix' => 'provider'], function ($router) {
                 $router->post('/instances', [ProviderController::class, 'getInstances']);
                 $router->post('/eips', [ProviderController::class, 'getElasticIps']);
+                $router->post('/keypairs', [ProviderController::class, 'getKeyPairs']);
             });
 
             // Machine

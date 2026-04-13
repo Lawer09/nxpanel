@@ -15,6 +15,7 @@ class SshKey extends Model
         'provider_id',
         'provider_key_id',
         'secret_key',
+        'public_key',
         'note',
     ];
 

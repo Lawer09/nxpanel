@@ -18,6 +18,7 @@ return new class extends Migration
             $table->unsignedBigInteger('provider_id')->nullable()->comment('云服务商ID');
             $table->string('provider_key_id')->nullable()->comment('云服务商密钥ID');
             $table->text('secret_key')->comment('密钥内容（加密存储）');
+            $table->text('public_key')->nullable()->comment('公钥');
             $table->text('note')->nullable()->comment('备注');
             $table->timestamps();
             $table->softDeletes();

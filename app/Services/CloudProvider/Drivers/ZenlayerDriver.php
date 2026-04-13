@@ -305,6 +305,32 @@ class ZenlayerDriver extends AbstractCloudDriver
         });
     }
 
+    /**
+     * 获取密钥对列表
+     *
+     * @param  string filters 可选过滤条件
+     */
+    public function listKeyPairs(array $filters = []): array
+    {
+        return $this->call(__FUNCTION__, function () use ($filters) {
+            $body = array_filter([
+                'keyIds'   => $filters['keyIds']   ?? null,
+                'keyName'  => $filters['keyName']  ?? null,
+                'pageSize' => isset($filters['pageSize']) ? (int) $filters['pageSize'] : 20,
+                'pageNum'  => isset($filters['page'])  ? (int) $filters['page']  : 1,
+            ], fn($v) => $v !== null);
+
+            $resp = $this->request('DescribeKeyPairs', $body);
+
+            return [
+                'total'    => $resp['totalCount'] ?? 0,
+                'page'  => $body['pageNum'] ?? 1,
+                'pageSize' => $body['pageSize'] ?? 20,
+                'data'     => $this->normalizeKeyPairs($resp['dataSet'] ?? []),
+            ];
+        });
+    }
+
     // ----------------------------------------------------------------
     // 内部工具
     // ----------------------------------------------------------------
@@ -332,6 +358,23 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'create_time' => $item['createTime'] ?? null,
                 'metadata'    => empty($metadata) ? null : $metadata,
                 '_raw'        => $item,
+            ];
+        }, $dataSet);
+    }
+
+    /**
+     * 规范化密钥对数据
+     */
+    private function normalizeKeyPairs(array $dataSet): array
+    {
+        return array_map(function (array $item) {
+            return [
+                'key_id'          => $item['keyId']          ?? null,
+                'key_name'        => $item['keyName']        ?? null,
+                'key_description' => $item['keyDescription'] ?? null,
+                'public_key'      => $item['publicKey']      ?? null,
+                'create_time'     => $item['createTime']     ?? null,
+                '_raw'            => $item,
             ];
         }, $dataSet);
     }

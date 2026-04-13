@@ -212,4 +212,72 @@ class ProviderController extends V2ProviderController
             'driver'        => $provider->driver,
         ]));
     }
+
+    /**
+     * 获取服务商下的密钥对列表（v3）
+     *
+     * POST /admin/provider/keypairs
+     *
+     * 通过 CloudProviderManager 调用对应驱动的 listKeyPairs()，
+     * 支持透传驱动过滤参数。
+     *
+     * Query params:
+     *   provider_id  integer  required  Provider ID
+     *   keyIds       array    optional  按密钥对 ID 过滤
+     *   keyName      string   optional  密钥对名称（模糊搜索）
+     *   pageSize     integer  optional  每页数量，默认 20，最大 1000
+     *   page          integer  optional  页码，默认 1
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getKeyPairs(Request $request): JsonResponse
+    {
+        $request->validate([
+            'provider_id' => 'required|integer|exists:v2_providers,id',
+            'keyIds'      => 'nullable|array',
+            'keyIds.*'    => 'string',
+            'keyName'     => 'nullable|string',
+            'pageSize'    => 'nullable|integer|min:1|max:1000',
+            'page'     => 'nullable|integer|min:1',
+        ]);
+
+        $provider = Provider::find($request->integer('provider_id'));
+
+        if (empty($provider->driver)) {
+            return $this->error([422, '该服务商未配置云驱动（driver），请先完善服务商信息']);
+        }
+
+        try {
+            $driver = CloudProviderManager::make($provider);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
+        }
+
+        $filters = array_filter([
+            'keyIds'   => $request->input('keyIds'),
+            'keyName'  => $request->input('keyName'),
+            'pageSize' => $request->input('pageSize', 20),
+            'page'  => $request->input('page', 1),
+        ], fn($v) => $v !== null);
+
+        try {
+            $result = $driver->listKeyPairs($filters);
+        } catch (OperationNotSupportedException $e) {
+            return $this->error([501, $e->getMessage()]);
+        } catch (\RuntimeException $e) {
+            Log::error('getKeyPairs failed', [
+                'provider_id' => $provider->id,
+                'driver'      => $provider->driver,
+                'error'       => $e->getMessage(),
+            ]);
+            return $this->error([500, '获取密钥对列表失败: ' . $e->getMessage()]);
+        }
+
+        return $this->ok(array_merge($result, [
+            'provider_id'   => $provider->id,
+            'provider_name' => $provider->name,
+            'driver'        => $provider->driver,
+        ]));
+    }
 }
