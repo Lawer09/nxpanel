@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin\Server;
 
 use App\Http\Controllers\V2\Admin\Server\ManageController as V2ManageController;
+use App\Models\Machine;
 use App\Models\Server;
 use App\Models\ServerTemplate;
 use App\Models\User;
@@ -33,7 +34,7 @@ class ManageController extends V2ManageController
     
         $server = Server::find($request->input('id'));  
         if (!$server) {  
-            return $this->fail([400202, '节点不存在']);  
+            return $this->error([400202, '节点不存在']);  
         }  
     
         // nodeKey 格式必须与 UserAliveSyncJob 一致：小写 type + id  
@@ -89,65 +90,111 @@ class ManageController extends V2ManageController
     }
 
     /**
-     * 批量为节点绑定域名（v3）
-     *
-     * POST /admin/server/manage/batchBindDomain
-     *
-     * Body params:
-     *   id        integer   required  节点 ID
-     *   bindings  array     required  绑定列表，每项包含：
-     *     - domain    string   required  主域名（如 example.com）
-     *     - subdomain string   nullable  子域名前缀（为空则直接解析到主域名）
-     *     - unique    boolean  optional  是否唯一解析，默认 false
-     *
-     * 逻辑：
-     *   1. 查找节点，若 host 为域名则先用系统 DNS 解析为 IP
-     *   2. 逐条调用 DNS 工具 resolveRecord
-     *   3. 全部处理完毕后，取第一条成功绑定的 fqdn 更新节点 host
-     *
+    * 批量为节点绑定域名（v3）
+    *
+    * POST /admin/server/manage/batchBindDomain
+    *
+    * Body params:
+    *   bindings  array     required  绑定列表，每项包含：
+    *     - id        integer   required  节点 ID
+    *     - domain    string   required  主域名（如 example.com）
+    *     - subdomain string   nullable  子域名前缀（为空则直接解析到主域名）
+    *     - unique    boolean  optional  是否唯一解析，默认 false
+    *
+    * Response (ok):
+    *   results  array  成功列表，每项包含：
+    *     - index        integer
+    *     - server_id    integer
+    *     - machine_id   integer
+    *     - domain       string
+    *     - subdomain    string|null
+    *     - unique       boolean
+    *     - resolved_ip  string
+    *     - fqdn         string
+    *     - updated_host string
+    *     - success      boolean
+    *   errors   array  失败列表，每项包含：
+    *     - index     integer
+    *     - server_id integer
+    *     - domain    string
+    *     - subdomain string|null
+    *     - error     string
+    *
+    * 逻辑：
+    *   1. 逐条查找节点，并从绑定机器获取 IP
+    *   2. 调用 DNS 工具 resolveRecord
+    *   3. 成功项批量更新节点 host
+     
      * @param Request $request
      * @return JsonResponse
      */
     public function batchBindDomain(Request $request): JsonResponse
     {
         $request->validate([
-            'id'                   => 'required|integer',
             'bindings'             => 'required|array|min:1',
+            'bindings.*.id'        => 'required|integer',
             'bindings.*.domain'    => 'required|string',
             'bindings.*.subdomain' => 'nullable|string',
             'bindings.*.unique'    => 'nullable|boolean',
         ]);
 
-        $server = Server::find($request->input('id'));
-        if (!$server) {
-            return $this->fail([400202, '节点不存在']);
-        }
-
-        // ── 1. 确定节点 IP ────────────────────────────────────────────────
-        $host = $server->host;
-        $isIp = filter_var($host, FILTER_VALIDATE_IP) !== false;
-
-        if ($isIp) {
-            $ip = $host;
-        } else {
-            // host 是域名，通过系统 DNS 解析为 IP
-            $resolved = gethostbyname($host);
-            if ($resolved === $host) {
-                return $this->fail([422, "节点 host ({$host}) 无法解析为 IP，请先确认 DNS 配置"]);
-            }
-            $ip = $resolved;
-        }
-
         // ── 2. 逐条绑定 ───────────────────────────────────────────────────
         $dnsService = new DnsToolService();
         $results    = [];
         $errors     = [];
-        $firstFqdn  = null;
-
+        $updates    = [];
         foreach ($request->input('bindings') as $index => $binding) {
+            $serverId  = $binding['id'];
             $domain    = $binding['domain'];
             $subdomain = $binding['subdomain'] ?? '';
-            $unique    = (bool) ($binding['unique'] ?? false);
+            $unique    = (bool) ($binding['unique'] ?? true);
+
+            $server = Server::find($serverId);
+            if (!$server) {
+                $errors[] = [
+                    'index'     => $index,
+                    'server_id' => $serverId,
+                    'domain'    => $domain,
+                    'subdomain' => $subdomain,
+                    'error'     => '节点不存在',
+                ];
+                continue;
+            }
+
+            if (!$server->machine_id) {
+                $errors[] = [
+                    'index'     => $index,
+                    'server_id' => $server->id,
+                    'domain'    => $domain,
+                    'subdomain' => $subdomain,
+                    'error'     => '节点未绑定机器',
+                ];
+                continue;
+            }
+
+            $machine = Machine::find($server->machine_id);
+            if (!$machine) {
+                $errors[] = [
+                    'index'     => $index,
+                    'server_id' => $server->id,
+                    'domain'    => $domain,
+                    'subdomain' => $subdomain,
+                    'error'     => '机器不存在',
+                ];
+                continue;
+            }
+
+            $ip = $machine->ip_address;
+            if (!$ip || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                $errors[] = [
+                    'index'     => $index,
+                    'server_id' => $server->id,
+                    'domain'    => $domain,
+                    'subdomain' => $subdomain,
+                    'error'     => '机器IP地址无效',
+                ];
+                continue;
+            }
 
             try {
                 $result = $dnsService->resolveRecord($ip, $subdomain, $domain, $unique);
@@ -168,16 +215,22 @@ class ManageController extends V2ManageController
                     $fqdn = $subdomain ? "{$subdomain}.{$domain}" : $domain;
                 }
 
-                if ($firstFqdn === null) {
-                    $firstFqdn = $fqdn;
-                }
+                $updates[] = [
+                    'id'         => $server->id,
+                    'host'       => $fqdn,
+                    'updated_at' => now(),
+                ];
 
                 $results[] = [
                     'index'     => $index,
+                    'server_id' => $server->id,
+                    'machine_id'=> $machine->id,
                     'domain'    => $domain,
                     'subdomain' => $subdomain,
                     'unique'    => $unique,
+                    'resolved_ip' => $ip,
                     'fqdn'      => $fqdn,
+                    'updated_host' => $fqdn,
                     'success'   => true,
                 ];
             } catch (\Throwable $e) {
@@ -190,6 +243,7 @@ class ManageController extends V2ManageController
                 ]);
                 $errors[] = [
                     'index'     => $index,
+                    'server_id' => $server->id,
                     'domain'    => $domain,
                     'subdomain' => $subdomain,
                     'error'     => $e->getMessage(),
@@ -197,27 +251,35 @@ class ManageController extends V2ManageController
             }
         }
 
-        // ── 3. 更新节点 host（取第一条成功绑定的 fqdn）──────────────────
-        $updatedHost = null;
-        if ($firstFqdn !== null) {
+        if (!empty($updates)) {
             try {
-                $server->host = $firstFqdn;
-                $server->save();
-                $updatedHost = $firstFqdn;
+                    $table = (new Server())->getTable();
+                    $cases = [];
+                    $bindings = [];
+                    $ids = [];
+
+                    foreach ($updates as $row) {
+                        $cases[] = 'when ? then ?';
+                        $bindings[] = $row['id'];
+                        $bindings[] = $row['host'];
+                        $ids[] = $row['id'];
+                    }
+
+                    $bindings[] = now();
+                    $idsPlaceholders = implode(',', array_fill(0, count($ids), '?'));
+                    $sql = "update `{$table}` set `host` = case `id` " . implode(' ', $cases) . " end, `updated_at` = ? where `id` in ({$idsPlaceholders})";
+                    $bindings = array_merge($bindings, $ids);
+
+                    DB::update($sql, $bindings);
             } catch (\Exception $e) {
-                Log::error('batchBindDomain: failed to update server host', [
-                    'server_id' => $server->id,
-                    'fqdn'      => $firstFqdn,
-                    'error'     => $e->getMessage(),
+                Log::error('batchBindDomain: failed to batch update server host', [
+                    'error' => $e->getMessage(),
                 ]);
-                return $this->fail([500, '域名绑定成功但节点地址更新失败: ' . $e->getMessage()]);
+                return $this->error([500, '域名绑定成功但节点地址批量更新失败: ' . $e->getMessage()]);
             }
         }
 
         return $this->ok([
-            'server_id'    => $server->id,
-            'resolved_ip'  => $ip,
-            'updated_host' => $updatedHost,
             'results'      => $results,
             'errors'       => $errors,
         ]);
@@ -320,7 +382,7 @@ class ManageController extends V2ManageController
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('batchSave failed', ['error' => $e->getMessage()]);
-            return $this->fail([500, '批量保存失败: ' . $e->getMessage()]);
+            return $this->error([500, '批量保存失败: ' . $e->getMessage()]);
         }
 
         return $this->ok([
@@ -358,13 +420,13 @@ class ManageController extends V2ManageController
         if ($request->filled('id')) {
             $server = Server::find($request->input('id'));
             if (!$server) {
-                return $this->fail([400202, '节点不存在']);
+                return $this->error([400202, '节点不存在']);
             }
             $host = $server->host;
             $port = (int) ($server->server_port ?: $server->port);
         } else {
             if (!$request->filled('host') || !$request->filled('port')) {
-                return $this->fail([422, '请提供节点 id 或 host + port']);
+                return $this->error([422, '请提供节点 id 或 host + port']);
             }
             $host = $request->input('host');
             $port = (int) $request->input('port');

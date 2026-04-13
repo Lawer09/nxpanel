@@ -70,8 +70,9 @@ class AliyunDriver extends AbstractCloudDriver
      *
      * @param  string $nicId   网卡 ID（如 eni-bp1xxxxx）
      * @param  string $elasticIpId  EIP 分配 ID（AllocationId，如 eip-bp1xxxxx）
+     * @param  string $private_ip_address  私有 IP 地址
      */
-    public function bindElasticIp(string $nicId, string $elasticIpId): array
+    public function bindElasticIp(string $nicId, string $elasticIpId, string $private_ip_address): array
     {
         return $this->call(__FUNCTION__, function () use ($nicId, $elasticIpId) {
             // TODO: 调用阿里云 VPC AssociateEipAddress API

@@ -165,7 +165,6 @@ class MachineIpController extends Controller
                         // 调用云API解除旧IP
                         if ($oldElasticIpId){
                             $driver->unbindElasticIp(
-                                $machine->provider_instance_id,
                                 $oldElasticIpId
                             );
                         } else {

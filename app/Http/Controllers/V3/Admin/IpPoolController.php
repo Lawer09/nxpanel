@@ -625,6 +625,12 @@ class IpPoolController extends Controller
             ->join('ip_machine', 'v2_ip_pool.id', '=', 'ip_machine.ip_id')
             ->where('ip_machine.bind_status', 'inactive');
 
+        if (!empty($machine->provider)) {
+            $query->where('v2_ip_pool.provider_id', $machine->provider);
+        } else {
+            $query->whereNull('v2_ip_pool.provider_id');
+        }
+
         $query->where(function ($q) use ($pairs) {
             foreach ($pairs as $pair) {
                 $q->orWhere(function ($q2) use ($pair) {

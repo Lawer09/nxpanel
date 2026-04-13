@@ -22,6 +22,14 @@ interface CloudDriverInterface
      */
     public function listInstances(array $filters = []): array;
 
+    /**
+     * 创建实例
+     *
+     * @param  array $params 创建参数（由驱动自行定义）
+     * @return array         创建结果
+     */
+    public function createInstance(array $params): array;
+
     // ----------------------------------------------------------------
     // 弹性 IP
     // ----------------------------------------------------------------

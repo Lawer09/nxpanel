@@ -8,6 +8,9 @@ use App\Models\Machine;
 use App\Models\NodeDeployTask;
 use App\Services\MachineSSHService;
 use App\Services\NodeDeployService;
+use App\Services\CloudProvider\CloudProviderManager;
+use App\Services\CloudProvider\OperationNotSupportedException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -459,7 +462,7 @@ class MachineController extends Controller
      * 测试SSH连接  
      */  
     public function testConnection(Request $request)  
-    {  
+    {
         try {  
             $id = $request->input('id');  
   
@@ -749,5 +752,179 @@ class MachineController extends Controller
                 'msg' => $e->getMessage()  
             ]);  
         }  
+    }
+
+    /**
+     * 简单创建云实例（Zenlayer）
+     *
+     * POST /admin/machine/createSimple
+     * Body:
+     * {
+     *   "provider_id": 1,
+     *   "zoneId": "xxx",
+     *   "instanceType": "xxx",
+     *   "instanceCount": 1,
+     *   "eipIds": ["eip-1", "eip-2"],
+     *   "name": "xxx"
+     * }
+     */
+    public function createSimple(Request $request)
+    {
+        $request->validate([
+            'provider_id'   => 'required|integer|exists:v2_providers,id',
+            'zoneId'        => 'required|string',
+            'instanceType'  => 'required|string',
+            'name'          => 'required|string|max:255',
+            'instanceCount' => 'required|integer|min:1|max:100',
+            'eipIds'        => 'required|array|min:1|max:100',
+            'eipIds.*'      => 'string',
+            'username'      => 'required|string|max:255',
+            'port'          => 'nullable|integer|min:1|max:65535',
+            'password'      => 'nullable|string',
+            'private_key'   => 'nullable|string',
+        ]);
+
+        try {
+            $driver = CloudProviderManager::makeById((int) $request->input('provider_id'));
+
+            $instanceCount = (int) $request->input('instanceCount');
+            $eipIds = $request->input('eipIds', []);
+
+            if (count($eipIds) !== $instanceCount) {
+                return $this->error([422, 'instanceCount 必须与 eipIds 数量一致']);
+            }
+
+            if (empty($request->input('password')) && empty($request->input('private_key'))) {
+                return $this->error([422, '密码和私钥至少需要一个']);
+            }
+
+            $params = [
+                'zoneId'               => $request->input('zoneId'),
+                'imageId'              => 'debian12_20251225',
+                'instanceType'         => $request->input('instanceType'),
+                'instanceCount'        => $instanceCount,
+                'subnetId'             => '1604048104989009153',
+                'instanceName'         => $request->input('name'),
+                'keyId'                => 'key-RIDRfFik',
+                'nicNetworkType'       => 'Auto',
+                'systemDisk'           => [
+                    'type'        => 'BASIC_NVME_SSD',
+                    'size'        => 20,
+                    'burstEnable' => false,
+                ],
+                'dataDisks'            => [],
+                'securityGroupId'      => '1604048217236974337',
+                'timeZone'             => 'Asia/Shanghai',
+                'enableAgent'          => true,
+                'enableIpForward'      => true,
+                'internetChargeType'   => '',
+                'eipBindType'          => 'FullNat',
+                'tags'                 => [
+                    'tags' => [
+                        ['key' => '深圳产品', 'value' => 'NODE'],
+                    ],
+                ],
+                'userData'             => '',
+                'marketingOptions'     => [
+                    'usePocVoucher' => false,
+                ],
+                'resourceGroupId'      => 'bebaaa61-ebce-4a7f-8d3b-e11d9afcd459',
+            ];
+
+            $overrides = $request->except([
+                'provider_id', 'zoneId', 'instanceType', 'instanceCount', 'name', 'eipIds'
+            ]);
+
+            if (!empty($overrides)) {
+                $params = array_replace_recursive($params, $overrides);
+            }
+
+            $result = $driver->createInstance($params);
+
+            $instanceIdSet = $result['data']['instanceIdSet'] ?? [];
+            $instanceIds = array_values(
+                array_filter(
+                    array_keys($instanceIdSet) ?: (is_array($instanceIdSet) ? $instanceIdSet : [])
+                )
+            );
+
+            if (count($instanceIds) !== $instanceCount) {
+                return $this->error([500, '实例创建数量与返回实例ID数量不一致']);
+            }
+
+            $instances = $driver->listInstances([
+                'instanceIds' => $instanceIds,
+                'pageSize' => $instanceCount,
+                'page' => 1,
+            ]);
+
+            $instanceMap = collect($instances['data'] ?? [])->keyBy('instance_id');
+            $bindResults = [];
+
+            foreach ($instanceIds as $index => $instanceId) {
+                $instance = $instanceMap->get($instanceId);
+                $privateIp = $instance['private_ips'][0] ?? null;
+
+                if (!$privateIp) {
+                    return $this->error([500, "实例 {$instanceId} 未获取到内网IP"]);
+                }
+
+                $bindResults[] = $driver->bindElasticIp(
+                    '1604048104989009153',
+                    $eipIds[$index],
+                    $privateIp
+                );
+            }
+
+            $eipInfo = $driver->listElasticIps([
+                'eipIds' => $eipIds,
+                'pageSize' => $instanceCount,
+                'pageNum' => 1,
+            ]);
+            $eipMap = collect($eipInfo['data'] ?? [])->keyBy('eip_id');
+
+            $items = [];
+            foreach ($instanceIds as $index => $instanceId) {
+                $instance = $instanceMap->get($instanceId);
+                $privateIp = $instance['private_ips'][0] ?? null;
+                $nicId = $instance['nic_id'] ?? null;
+
+                $eip = $eipMap->get($eipIds[$index]);
+                $publicIp = $eip['ip_address'] ?? null;
+                if (is_array($publicIp)) {
+                    $publicIp = $publicIp[0] ?? null;
+                }
+
+                $items[] = [
+                    'name'                 => $request->input('name'),
+                    'hostname'             => $instanceId,
+                    'ip_address'           => $publicIp ?? $privateIp,
+                    'private_ip_address'   => $privateIp,
+                    'port'                 => (int) ($request->input('port') ?? 22),
+                    'username'             => $request->input('username'),
+                    'password'             => $request->input('password'),
+                    'private_key'          => $request->input('private_key'),
+                    'provider'             => (int) $request->input('provider_id'),
+                    'provider_instance_id' => $instanceId,
+                    'provider_nic_id'      => $nicId,
+                ];
+            }
+
+            $importResponse = $this->batchImport(new Request(['items' => $items]));
+            $importData = $importResponse->getData(true);
+
+            return $this->ok(array_merge($result, [
+                'bind_results' => $bindResults,
+                'machine_import' => $importData['data'] ?? $importData,
+            ]));
+        } catch (OperationNotSupportedException $e) {
+            return $this->error([501, $e->getMessage()]);
+        } catch (\RuntimeException $e) {
+            Log::error('createSimple failed', [
+                'provider_id' => $request->input('provider_id'),
+                'error' => $e->getMessage(),
+            ]);
+            return $this->error([500, '创建实例失败: ' . $e->getMessage()]);
+        }
     }
 }

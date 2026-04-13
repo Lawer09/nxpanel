@@ -119,6 +119,28 @@ class ZenlayerDriver extends AbstractCloudDriver
     }
 
     /**
+     * 创建实例（CreateZecInstances）
+     *
+     * @param  array $params 创建参数（透传 Zenlayer CreateZecInstances 参数）
+     * @return array
+     */
+    public function createInstance(array $params): array
+    {
+        return $this->call(__FUNCTION__, function () use ($params) {
+            $resp = $this->request('CreateZecInstances', $params);
+
+            return [
+                'code'    => 0,
+                'msg'     => 'success',
+                'data'    => [
+                    'orderSn'       => $resp['orderNumber'] ?? null,
+                    'instanceIdSet' => $resp['instanceIdSet'] ?? [],
+                ],
+            ];
+        });
+    }
+
+    /**
      * 规范化实例数据，提取关键字段
      */
     private function normalizeInstances(array $dataSet): array

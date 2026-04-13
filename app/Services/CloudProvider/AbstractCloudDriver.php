@@ -33,6 +33,11 @@ abstract class AbstractCloudDriver implements CloudDriverInterface
         throw new OperationNotSupportedException('listInstances', $this->driverName);
     }
 
+    public function createInstance(array $params): array
+    {
+        throw new OperationNotSupportedException('createInstance', $this->driverName);
+    }
+
     public function getInstanceElasticIps(string $instanceId): array
     {
         throw new OperationNotSupportedException('getInstanceElasticIps', $this->driverName);

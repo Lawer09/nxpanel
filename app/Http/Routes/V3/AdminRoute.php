@@ -11,6 +11,7 @@ use App\Http\Controllers\V3\Admin\UserController;
 use App\Http\Controllers\V3\Admin\MachineController;
 use App\Http\Controllers\V3\Admin\MachineIpController;
 use App\Http\Controllers\V3\Admin\IpPoolController;
+use App\Http\Controllers\V3\Admin\SshKeyController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -78,6 +79,7 @@ class AdminRoute
                 $router->post('/batchDeploy', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchDeploy']);
                 $router->get('/deployStatus', [\App\Http\Controllers\V3\Admin\MachineController::class, 'deployStatus']);
                 $router->post('/clearNode', [\App\Http\Controllers\V3\Admin\MachineController::class, 'clearNode']);
+                $router->post('/createSimple', [\App\Http\Controllers\V3\Admin\MachineController::class, 'createSimple']);
                 
                 // Machine IP Management
                 $router->post('/switchIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'switchIp']);
@@ -127,6 +129,19 @@ class AdminRoute
                 $router->post('/get-active-machines', [IpPoolController::class, 'getActiveMachines']);
                 $router->post('/get-primary-machine', [IpPoolController::class, 'getPrimaryMachine']);
                 $router->post('/get-switchable-ips', [IpPoolController::class, 'getSwitchableIps']);
+            });
+
+            // SSH Key Management
+            $router->group([
+                'prefix' => 'ssh-key'
+            ], function ($router) {
+                $router->any('/fetch', [SshKeyController::class, 'fetch']);
+                $router->post('/save', [SshKeyController::class, 'save']);
+                $router->post('/update', [SshKeyController::class, 'update']);
+                $router->post('/drop', [SshKeyController::class, 'drop']);
+                $router->post('/detail', [SshKeyController::class, 'detail']);
+                $router->post('/batchDrop', [SshKeyController::class, 'batchDrop']);
+                $router->post('/batchImport', [SshKeyController::class, 'batchImport']);
             });
         });
     }
