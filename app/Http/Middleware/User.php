@@ -4,7 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Exceptions\ApiException;
 use App\Services\AuthService;
-use Auth;
+use Illuminate\Support\Facades\Auth;
 use Closure;
 use Illuminate\Support\Facades\Cache;
 

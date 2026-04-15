@@ -3,6 +3,8 @@
 namespace App\Services\CloudProvider\Drivers;
 
 use App\Services\CloudProvider\AbstractCloudDriver;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -342,7 +344,10 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'zoneIds' => $filters['zoneIds'] ?? null,
             ], fn($v) => $v !== null);
 
-            $resp = $this->request('DescribeZones', $body);
+            $cacheKey = 'cloud:zenlayer:listZones:' . md5(json_encode($body));
+            $resp = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($body) {
+                return $this->request('DescribeZones', $body);
+            });
 
             return [
                 'requestId' => $resp['requestId'] ?? null,

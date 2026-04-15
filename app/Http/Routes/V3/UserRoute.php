@@ -20,8 +20,7 @@ class UserRoute
             $router->get('/plan/fetch', [PlanController::class, 'fetch']);
             // sub
             $router->get('/getSubscribe', [UserController::class, 'getSubscribe']);
-
-            // Performance Reporting (新增)
+            // Performance Reporting
             $router->post('/performance/report', [PerformanceController::class, 'report']);
             $router->post('/performance/batchReport', [PerformanceController::class, 'batchReport']);
             $router->get('/performance/clientIpInfo', [PerformanceController::class, 'getClientIpInfo']);

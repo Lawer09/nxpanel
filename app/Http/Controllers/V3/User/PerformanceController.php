@@ -4,6 +4,10 @@ namespace App\Http\Controllers\V3\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\NodePerformanceReport;
+use App\Http\Requests\User\PerformanceBatchReport;
+use App\Http\Requests\User\PerformanceHistory;
+use App\Http\Requests\User\PerformanceNodeStats;
+use App\Http\Requests\User\PerformanceReport;
 use App\Services\NodePerformanceService;
 use App\Services\IpInfoService;
 use Illuminate\Http\Request;
@@ -14,18 +18,11 @@ class PerformanceController extends Controller
     /**
      * 单个节点性能上报
      */
-    public function report(Request $request)
+    public function report(PerformanceReport $request)
     {
-        $validated = $request->validate([
-            'node_id' => 'required|integer',
-            'delay' => 'required|integer|min:0|max:60000',
-            'success_rate' => 'required|integer|min:0|max:100',
-            'app_version' => 'nullable|string|max:50',
-            'metadata' => 'nullable|json',
-        ]);
-
+        $validated = $request->validated();
         try {
-            $userId = $userId = $request->user()->id;
+            $userId = $request->user()->id;
             $clientIp = $request->getClientIp();
 
             $report = NodePerformanceService::reportPerformance(
@@ -36,37 +33,25 @@ class PerformanceController extends Controller
                 $request
             );
 
-            return $this->success([
+            return $this->ok([
                 'id' => $report->id,
                 'message' => '上报成功',
             ]);
         } catch (\Exception $e) {
             Log::error('Performance report error', ['error' => $e->getMessage()]);
-            return $this->fail([500, '上报失败，请稍后重试']);
+            return $this->error([500, '上报失败，请稍后重试']);
         }
     }
 
     /**
      * 批量节点性能上报
      */
-    public function batchReport(Request $request)
+    public function batchReport(PerformanceBatchReport $request)
     {
-        $validated = $request->validate([
-            'reports' => 'required|array|min:1|max:100',
-            'reports.*.node_id' => 'required|integer',
-            'reports.*.delay' => 'required|integer|min:0|max:60000',
-            'reports.*.success_rate' => 'required|integer|min:0|max:100',
-            'reports.*.app_version' => 'nullable|string|max:50',
-            'reports.*.metadata' => 'nullable|json',
-        ]);
-
+        $validated = $request->validated();
         try {
-            $user = auth('user')->user();
-            if (!$user) {
-                return $this->error([401, '未授权']);
-            }
-            
-            $userId = $user->id;
+            $userId = $request->user()->id;
+
             $clientIp = $request->getClientIp();
 
             $results = NodePerformanceService::batchReportPerformance(
@@ -95,30 +80,25 @@ class PerformanceController extends Controller
             $clientIp = $request->getClientIp();
             $ipInfo = IpInfoService::getIpInfo($clientIp);
 
-            return $this->success($ipInfo);
+            return $this->ok($ipInfo);
         } catch (\Exception $e) {
             Log::error('Get client IP info error', ['error' => $e->getMessage()]);
-            return $this->fail([500, $e->getMessage()]);
+            return $this->error([500, $e->getMessage()]);
         }
     }
 
     /**
      * 获取用户的上报历史
      */
-    public function getHistory(Request $request)
+    public function getHistory(PerformanceHistory $request)
     {
-        $validated = $request->validate([
-            'limit' => 'nullable|integer|min:1|max:1000',
-            'node_id' => 'nullable|integer',
-        ]);
-
+        $validated = $request->validated();
         try {
-            $user = auth('user')->user();
-            if (!$user) {
-                return $this->fail([401, '未授权']);
+            $userId = $request->user()->id;
+            if (!$userId) {
+                return $this->error([401, '未授权']);
             }
             
-            $userId = $user->id;
             $limit = $validated['limit'] ?? 100;
 
             $query = NodePerformanceReport::where('user_id', $userId);
@@ -131,23 +111,19 @@ class PerformanceController extends Controller
                 ->limit($limit)
                 ->get();
 
-            return $this->success($reports);
+            return $this->ok($reports);
         } catch (\Exception $e) {
             Log::error('Get history error', ['error' => $e->getMessage()]);
-            return $this->fail([500, '获取历史记录失败']);
+            return $this->error([500, '获取历史记录失败']);
         }
     }
 
     /**
      * 获取节点的平均性能
      */
-    public function getNodeStats(Request $request)
+    public function getNodeStats(PerformanceNodeStats $request)
     {
-        $validated = $request->validate([
-            'node_id' => 'required|integer',
-            'days' => 'nullable|integer|min:1|max:90',
-        ]);
-
+        $validated = $request->validated();
         try {
             $days = $validated['days'] ?? 7;
             $stats = NodePerformanceReport::getNodeAveragePerformance(
@@ -155,7 +131,7 @@ class PerformanceController extends Controller
                 $days
             );
 
-            return $this->success([
+            return $this->ok([
                 'node_id' => $validated['node_id'],
                 'period_days' => $days,
                 'avg_delay' => $stats->avg_delay ?? 0,
@@ -166,7 +142,7 @@ class PerformanceController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get node stats error', ['error' => $e->getMessage()]);
-            return $this->fail([500, '获取统计数据失败']);
+            return $this->error([500, '获取统计数据失败']);
         }
     }
 }

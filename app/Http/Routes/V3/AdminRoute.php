@@ -12,6 +12,7 @@ use App\Http\Controllers\V3\Admin\MachineController;
 use App\Http\Controllers\V3\Admin\MachineIpController;
 use App\Http\Controllers\V3\Admin\IpPoolController;
 use App\Http\Controllers\V3\Admin\SshKeyController;
+use App\Http\Controllers\V3\Admin\TicketController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -73,27 +74,27 @@ class AdminRoute
             $router->group([
                 'prefix' => 'machine'
             ], function ($router) {
-                $router->any('/fetch', [\App\Http\Controllers\V3\Admin\MachineController::class, 'fetch']);
-                $router->post('/save', [\App\Http\Controllers\V3\Admin\MachineController::class, 'save']);
-                $router->post('/update', [\App\Http\Controllers\V3\Admin\MachineController::class, 'update']);
-                $router->post('/drop', [\App\Http\Controllers\V3\Admin\MachineController::class, 'drop']);
-                $router->post('/detail', [\App\Http\Controllers\V3\Admin\MachineController::class, 'detail']);
-                $router->post('/testConnection', [\App\Http\Controllers\V3\Admin\MachineController::class, 'testConnection']);
-                $router->post('/batchDrop', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchDrop']);
-                $router->post('/batchImport', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchImport']);
-                $router->post('/deployNode', [\App\Http\Controllers\V3\Admin\MachineController::class, 'deployNode']);
-                $router->post('/batchDeploy', [\App\Http\Controllers\V3\Admin\MachineController::class, 'batchDeploy']);
-                $router->get('/deployStatus', [\App\Http\Controllers\V3\Admin\MachineController::class, 'deployStatus']);
-                $router->post('/clearNode', [\App\Http\Controllers\V3\Admin\MachineController::class, 'clearNode']);
-                $router->post('/createSimple', [\App\Http\Controllers\V3\Admin\MachineController::class, 'createSimple']);
+                $router->any('/fetch', [MachineController::class, 'fetch']);
+                $router->post('/save', [MachineController::class, 'save']);
+                $router->post('/update', [MachineController::class, 'update']);
+                $router->post('/drop', [MachineController::class, 'drop']);
+                $router->post('/detail', [MachineController::class, 'detail']);
+                $router->post('/testConnection', [MachineController::class, 'testConnection']);
+                $router->post('/batchDrop', [MachineController::class, 'batchDrop']);
+                $router->post('/batchImport', [MachineController::class, 'batchImport']);
+                $router->post('/deployNode', [MachineController::class, 'deployNode']);
+                $router->post('/batchDeploy', [MachineController::class, 'batchDeploy']);
+                $router->get('/deployStatus', [MachineController::class, 'deployStatus']);
+                $router->post('/clearNode', [MachineController::class, 'clearNode']);
+                $router->post('/createSimple', [MachineController::class, 'createSimple']);
                 
                 // Machine IP Management
-                $router->post('/switchIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'switchIp']);
-                $router->post('/configEipEgress', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'configEipEgress']);
-                $router->get('/elasticIps', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'getElasticIps']);
-                $router->post('/bindIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'bindIp']);
-                $router->post('/unbindIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'unbindIp']);
-                $router->post('/setPrimaryIp', [\App\Http\Controllers\V3\Admin\MachineIpController::class, 'setPrimaryIp']);
+                $router->post('/switchIp', [MachineIpController::class, 'switchIp']);
+                $router->post('/configEipEgress', [MachineIpController::class, 'configEipEgress']);
+                $router->get('/elasticIps', [MachineIpController::class, 'getElasticIps']);
+                $router->post('/bindIp', [MachineIpController::class, 'bindIp']);
+                $router->post('/unbindIp', [MachineIpController::class, 'unbindIp']);
+                $router->post('/setPrimaryIp', [MachineIpController::class, 'setPrimaryIp']);
             });
 
             // Server Manage
@@ -149,6 +150,14 @@ class AdminRoute
                 $router->post('/detail', [SshKeyController::class, 'detail']);
                 $router->post('/batchDrop', [SshKeyController::class, 'batchDrop']);
                 $router->post('/batchImport', [SshKeyController::class, 'batchImport']);
+            });
+
+            $router->group([
+                'prefix' => 'ticket'
+            ], function ($router) {
+                $router->any('/fetch', [TicketController::class, 'fetch']);
+                $router->post('/reply', [TicketController::class, 'reply']);
+                $router->post('/close', [TicketController::class, 'close']);
             });
         });
     }

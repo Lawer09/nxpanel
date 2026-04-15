@@ -112,6 +112,7 @@ class ProviderController extends V2ProviderController
      * Query params:
      *   providerId          integer  required  Provider ID
      *   eipIds              array    optional  按 EIP ID 过滤（最多 100 个）
+    *   zoneId              string   optional  可用区 ID（自动换算 regionId）
      *   regionId            string   optional  区域 ID
      *   name                string   optional  EIP 名称
      *   status              string   optional  EIP 状态
@@ -174,9 +175,32 @@ class ProviderController extends V2ProviderController
             return $this->error([422, $e->getMessage()]);
         }
 
+        $zoneId = $request->input('zoneId');
+        $regionId = $request->input('regionId');
+        if (!empty($zoneId)) {
+            try {
+                $zones = $driver->listZones(['zoneIds' => [$zoneId]]);
+                $zone = collect($zones['data'] ?? [])->firstWhere('zoneId', $zoneId);
+                if (!$zone || empty($zone['regionId'])) {
+                    return $this->error([422, 'zoneId 无法匹配 regionId']);
+                }
+                $regionId = $zone['regionId'];
+            } catch (OperationNotSupportedException $e) {
+                return $this->error([501, $e->getMessage()]);
+            } catch (\RuntimeException $e) {
+                Log::error('getZones failed for getElasticIps', [
+                    'providerId' => $provider->id,
+                    'driver'     => $provider->driver,
+                    'zoneId'     => $zoneId,
+                    'error'      => $e->getMessage(),
+                ]);
+                return $this->error([500, '获取可用区失败: ' . $e->getMessage()]);
+            }
+        }
+
         $filters = array_filter([
             'eipIds'             => $request->input('eipIds'),
-            'regionId'           => $request->input('regionId'),
+            'regionId'           => $regionId,
             'name'               => $request->input('name'),
             'status'             => $request->input('status'),
             'isDefault'          => $request->input('isDefault'),
@@ -241,7 +265,6 @@ class ProviderController extends V2ProviderController
                     $binding['privateIpAddress']
                 );
             }
-
             return $this->ok($results);
         } catch (\InvalidArgumentException $e) {
             return $this->error([422, $e->getMessage()]);
