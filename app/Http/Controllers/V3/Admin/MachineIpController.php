@@ -30,19 +30,19 @@ class MachineIpController extends Controller
     public function switchIp(Request $request)
     {
         $request->validate([
-            'machine_id' => 'required|integer|exists:machines,id',
-            'ip_id' => 'required|integer|exists:v2_ip_pool,id',
-            'set_as_primary' => 'nullable|boolean',
-            'set_as_egress' => 'nullable|boolean',
+            'machineId' => 'required|integer|exists:machines,id',
+            'ipId' => 'required|integer|exists:v2_ip_pool,id',
+            'setAsPrimary' => 'nullable|boolean',
+            'setAsEgress' => 'nullable|boolean',
         ]);
 
         $machine = Machine::with(['ips' => function($query) {
             $query->wherePivot('is_primary', true)->wherePivot('bind_status', 'active');
-        }])->findOrFail($request->integer('machine_id'));
+        }])->findOrFail($request->integer('machineId'));
         
-        $ip = IpPool::findOrFail($request->integer('ip_id'));
-        $setAsPrimary = $request->boolean('set_as_primary', true);
-        $setAsEgress = $request->boolean('set_as_egress', true);
+        $ip = IpPool::findOrFail($request->integer('ipId'));
+        $setAsPrimary = $request->boolean('setAsPrimary', true);
+        $setAsEgress = $request->boolean('setAsEgress', true);
 
         try {
             $driver = null;
@@ -68,15 +68,15 @@ class MachineIpController extends Controller
 
                     Log::info('Step 1: New elastic IP bound via cloud API', [
                         'machine_id' => $machine->id,
-                        'new_ip' => $ip->ip,
-                        'nic_id' => $nicId,
+                        'newIp' => $ip->ip,
+                        'nicId' => $nicId,
                         'result' => $bindResult,
                     ]);
                 } catch (\Exception $e) {
                     Log::error('Step 1: Failed to bind new IP via cloud API', [
-                        'machine_id' => $machine->id,
-                        'new_ip' => $ip->ip,
-                        'nic_id' => $nicId,
+                        'machineId' => $machine->id,
+                        'newIp' => $ip->ip,
+                        'nicId' => $nicId,
                         'error' => $e->getMessage(),
                     ]);
                     // 绑定新IP失败直接返回错误
@@ -95,13 +95,13 @@ class MachineIpController extends Controller
                         Log::info('Step 1: New IP set as egress IP successfully', [
                             'machine_id' => $machine->id,
                             'ip' => $ip->ip,
-                            'eip_id' => $elasticIpId,
+                            'eipId' => $elasticIpId,
                             'result' => $egressResult,
                         ]);
                         $machine->update(['ip_address' => $ip->ip]);
                     } catch (\App\Exceptions\OperationNotSupportedException $e) {
                         Log::warning('Step 1: Cloud provider does not support egress IP configuration', [
-                            'machine_id' => $machine->id,
+                            'machineId' => $machine->id,
                             'error' => $e->getMessage(),
                         ]);
                         // 不支持此操作，不影响绑定成功状态

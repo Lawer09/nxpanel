@@ -74,6 +74,11 @@ class UserController extends Controller
         if (!$user->save()) {
             return $this->fail([400, __('Save failed')]);
         }
+        // 密码修改成功后，清除其他设备的 session（保留当前）  
+        $currentTokenId = $user->currentAccessToken()->id;  
+        $authService = new AuthService($user);  
+        $authService->removeOtherSessions($currentTokenId); 
+        
         return $this->success(true);
     }
 
@@ -101,7 +106,7 @@ class UserController extends Controller
         if (!$user) {
             return $this->fail([400, __('The user does not exist')]);
         }
-        $user['avatar_url'] = 'https://cdn.v2ex.com/gravatar/' . md5($user->email) . '?s=64&d=identicon';
+        // $user['avatar_url'] = 'https://cdn.v2ex.com/gravatar/' . md5($user->email) . '?s=64&d=identicon';
         return $this->success($user);
     }
 

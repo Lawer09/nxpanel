@@ -9,6 +9,7 @@ use App\Models\ServerTemplate;
 use App\Models\User;
 use App\Services\DnsToolService;
 use App\Utils\CacheKey;
+use App\Services\RemoteScriptService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -459,4 +460,80 @@ class ManageController extends V2ManageController
         ]);
     }
 
+    /**
+     * 更新节点基础配置（异步执行 node-config-update.sh）
+     *
+     * POST /admin/server/manage/updateNodeConfig
+     *
+     * Body params:
+     *   id       integer  required  节点 ID
+     *   timeout  integer  optional  SSH 执行超时（秒），默认 300
+     *
+     * Response:
+     *   task_id  string   任务 ID，可用于查询进度
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function updateBaseConfig(Request $request): JsonResponse
+    {
+        $request->validate([
+            'id'      => 'required|integer',
+            'timeout' => 'nullable|integer|min:30|max:600',
+        ]);
+
+        $server = Server::find($request->input('id'));
+
+        $defaultEnv = [
+            'API_HOST'  => config('app.url'),
+            'API_KEY'   => admin_setting('server_token'),
+            'CORE_TYPE' => $server->core_type ?: 'sing',
+            'NODE_TYPE' => $server->type,
+            'NODE_ID'   => $server->id,
+            'CERT_MODE' => 'dns',
+            'CERT_DOMAIN' => $server->host,
+            'CERT_EMAIL' => env('TLS_EMAIL', ''),
+        ];
+
+        if (!$server) {
+            return $this->error([400202, '节点不存在']);
+        }
+
+        if (!$server->machine_id) {
+            return $this->error([422, '节点未绑定机器']);
+        }
+
+        $machine = Machine::find($server->machine_id);
+        if (!$machine) {
+            return $this->error([422, '机器不存在']);
+        }
+
+        $timeout = (int) $request->input('timeout', 300);
+
+        try {
+            $taskId = RemoteScriptService::dispatch(
+                $machine->id,
+                'node-config-update.sh',
+                [],
+                true,
+                $timeout
+            );
+
+            return $this->ok([
+                'task_id'    => $taskId,
+                'server_id'  => $server->id,
+                'machine_id' => $machine->id,
+                'message'    => '配置更新任务已提交',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('updateNodeConfig failed', [
+                'server_id'  => $server->id,
+                'machine_id' => $machine->id,
+                'error'      => $e->getMessage(),
+            ]);
+            return $this->error([500, '提交配置更新任务失败: ' . $e->getMessage()]);
+        }
+    }
+
+    
 }

@@ -68,6 +68,21 @@ abstract class AbstractCloudDriver implements CloudDriverInterface
         throw new OperationNotSupportedException('configEipEgress', $this->driverName);
     }
 
+    public function listZones(array $filters = []): array
+    {
+        throw new OperationNotSupportedException('listZones', $this->driverName);
+    }
+
+    public function listSubnets(array $filters = []): array
+    {
+        throw new OperationNotSupportedException('listSubnets', $this->driverName);
+    }
+
+    public function listInstanceTypes(array $filters = []): array
+    {
+        throw new OperationNotSupportedException('listInstanceTypes', $this->driverName);
+    }
+
     // ----------------------------------------------------------------
     // 公共工具方法
     // ----------------------------------------------------------------

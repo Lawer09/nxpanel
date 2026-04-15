@@ -56,6 +56,7 @@ class ClientController extends V1ClientController
             ->map(function ($nodes, $country) {  
                 return $nodes->map(function ($server) {  
                     return [
+                        'id' => $server['id'],
                         'name' => $server['name'],
                         'type' => $server['type'],
                         'host' => $server['host'],  

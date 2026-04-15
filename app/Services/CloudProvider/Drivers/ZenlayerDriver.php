@@ -130,12 +130,10 @@ class ZenlayerDriver extends AbstractCloudDriver
             $resp = $this->request('CreateZecInstances', $params);
 
             return [
-                'code'    => 0,
-                'msg'     => 'success',
-                'data'    => [
-                    'orderSn'       => $resp['orderNumber'] ?? null,
-                    'instanceIdSet' => $resp['instanceIdSet'] ?? [],
-                ],
+                'orderSn'       => $resp['orderNumber'] ?? null,
+                'instanceIds' => $resp['instanceIdSet'] ?? [],
+                'requestId'     => $resp['requestId'] ?? null,
+                '_raw'          => $resp,
             ];
         });
     }
@@ -237,14 +235,14 @@ class ZenlayerDriver extends AbstractCloudDriver
                 'tags'               => $filters['tags']               ?? null,
                 'internetChargeType' => $filters['internetChargeType'] ?? null,
                 'pageSize'           => isset($filters['pageSize']) ? (int) $filters['pageSize'] : 20,
-                'pageNum'            => isset($filters['pageNum'])  ? (int) $filters['pageNum']  : 1,
+                'pageNum'            => isset($filters['page'])  ? (int) $filters['page']  : 1,
             ], fn($v) => $v !== null);
 
             $resp = $this->request('DescribeEips', $body);
 
             return [
                 'total'   => $resp['totalCount'] ?? 0,
-                'pageNum' => $body['pageNum']  ?? 1,
+                'page' => $body['pageNum']  ?? 1,
                 'pageSize'=> $body['pageSize'] ?? 20,
                 'data'    => $this->normalizeEips($resp['dataSet'] ?? []),
             ];
@@ -331,6 +329,91 @@ class ZenlayerDriver extends AbstractCloudDriver
         });
     }
 
+    /**
+     * 获取可用区列表
+     *
+     * 支持的 $filters 键：
+     *   zoneIds  array  按可用区 ID 过滤
+     */
+    public function listZones(array $filters = []): array
+    {
+        return $this->call(__FUNCTION__, function () use ($filters) {
+            $body = array_filter([
+                'zoneIds' => $filters['zoneIds'] ?? null,
+            ], fn($v) => $v !== null);
+
+            $resp = $this->request('DescribeZones', $body);
+
+            return [
+                'requestId' => $resp['requestId'] ?? null,
+                'data'   => $this->normalizeZones($resp['zoneSet'] ?? []),
+            ];
+        });
+    }
+
+    /**
+     * 获取子网列表
+     *
+     * 支持的 $filters 键：
+     *   subnetIds        array   子网 ID 列表
+     *   name             string  子网名称（模糊搜索）
+     *   cidrBlock        string  CIDR 过滤
+     *   regionId         string  节点/区域 ID
+     *   pageSize         int     每页数量（1-1000）
+     *   pageNum          int     页码（从 1 开始）
+     *   vpcIds           array   VPC ID 列表
+     *   dhcpOptionsSetId string  DHCP 选项集 ID
+     */
+    public function listSubnets(array $filters = []): array
+    {
+        return $this->call(__FUNCTION__, function () use ($filters) {
+            $body = array_filter([
+                'subnetIds'        => $filters['subnetIds']        ?? null,
+                'name'             => $filters['name']             ?? null,
+                'cidrBlock'        => $filters['cidrBlock']        ?? null,
+                'regionId'         => $filters['regionId']         ?? null,
+                'pageSize'         => isset($filters['pageSize']) ? (int) $filters['pageSize'] : 20,
+                'pageNum'          => isset($filters['page'])  ? (int) $filters['page']  : 1,
+                'vpcIds'           => $filters['vpcIds']           ?? null,
+                'dhcpOptionsSetId' => $filters['dhcpOptionsSetId'] ?? null,
+            ], fn($v) => $v !== null);
+
+            $resp = $this->request('DescribeSubnets', $body);
+
+            return [
+                'requestId'  => $resp['requestId'] ?? null,
+                'total' => $resp['totalCount'] ?? 0,
+                'page'    => $body['pageNum'] ?? 1,
+                'pageSize'   => $body['pageSize'] ?? 20,
+                'data'    => $this->normalizeSubnets($resp['dataSet'] ?? []),
+            ];
+        });
+    }
+
+    /**
+     * 获取可用区机型规格信息
+     *
+     * 支持的 $filters 键：
+     *   zoneId       string  可用区 ID
+     *   instanceType string  实例规格
+     */
+    public function listInstanceTypes(array $filters = []): array
+    {
+        return $this->call(__FUNCTION__, function () use ($filters) {
+            $body = array_filter([
+                'zoneId'       => $filters['zoneId'] ?? null,
+                'instanceType' => $filters['instanceType'] ?? null,
+            ], fn($v) => $v !== null);
+
+            $resp = $this->request('DescribeZoneInstanceConfigInfos', $body);
+
+            return [
+                'requestId'            => $resp['requestId'] ?? null,
+                'data' => $this->normalizeInstanceTypes($resp['instanceTypeQuotaSet'] ?? []),
+            ];
+        });
+    }
+
     // ----------------------------------------------------------------
     // 内部工具
     // ----------------------------------------------------------------
@@ -350,12 +433,12 @@ class ZenlayerDriver extends AbstractCloudDriver
             );
 
             return [
-                'eip_id'      => $item['eipId']      ?? null,
-                'ip_address'  => $item['publicIpAddresses']  ?? null,
+                'eipId'      => $item['eipId']      ?? null,
+                'ipAddress'  => $item['publicIpAddresses']  ?? null,
                 'status'      => $item['status']      ?? null,
-                'instance_id' => $item['instanceId'] ?? null,
-                'zone_id'     => $item['zoneId']     ?? null,
-                'create_time' => $item['createTime'] ?? null,
+                'instanceId' => $item['instanceId'] ?? null,
+                'zoneId'     => $item['zoneId']     ?? null,
+                'createTime' => $item['createTime'] ?? null,
                 'metadata'    => empty($metadata) ? null : $metadata,
                 '_raw'        => $item,
             ];
@@ -369,12 +452,76 @@ class ZenlayerDriver extends AbstractCloudDriver
     {
         return array_map(function (array $item) {
             return [
-                'key_id'          => $item['keyId']          ?? null,
-                'key_name'        => $item['keyName']        ?? null,
-                'key_description' => $item['keyDescription'] ?? null,
-                'public_key'      => $item['publicKey']      ?? null,
-                'create_time'     => $item['createTime']     ?? null,
+                'keyId'          => $item['keyId']          ?? null,
+                'keyName'        => $item['keyName']        ?? null,
+                'keyDescription' => $item['keyDescription'] ?? null,
+                'publicKey'      => $item['publicKey']      ?? null,
+                'createTime'     => $item['createTime']     ?? null,
                 '_raw'            => $item,
+            ];
+        }, $dataSet);
+    }
+
+    /**
+     * 规范化可用区数据
+     */
+    private function normalizeZones(array $zoneSet): array
+    {
+        return array_map(function (array $item) {
+            return [
+                'zoneId'               => $item['zoneId']              ?? null,
+                'zoneName'             => $item['zoneName']            ?? null,
+                'regionId'             => $item['regionId']            ?? null,
+                'supportSecurityGroup'=> $item['supportSecurityGroup']?? null,
+                '_raw'                  => $item,
+            ];
+        }, $zoneSet);
+    }
+
+    /**
+     * 规范化子网数据
+     */
+    private function normalizeSubnets(array $dataSet): array
+    {
+        return array_map(function (array $item) {
+            return [
+                'subnetId'            => $item['subnetId']          ?? null,
+                'regionId'            => $item['regionId']          ?? ($item['regionid'] ?? null),
+                'name'                 => $item['name']              ?? null,
+                'cidrBlock'           => $item['cidrBlock']         ?? null,
+                'gatewayIpAddress'   => $item['gatewayIpAddress']  ?? null,
+                'ipv6GatewayIpAddress'      => $item['ipv6GatewayIpAddress'] ?? null,
+                'ipv6CidrBlock'      => $item['ipv6CidrBlock']     ?? null,
+                'stackType'           => $item['stackType']         ?? null,
+                'ipv6Type'            => $item['ipv6Type']          ?? null,
+                'vpcId'               => $item['vpcId']             ?? null,
+                'vpcName'             => $item['vpcName']           ?? null,
+                'usageIpv4Count'     => $item['usageIpv4Count']    ?? null,
+                'usageIpv6Count'     => $item['usageIpv6Count']    ?? null,
+                'createTime'          => $item['createTime']        ?? null,
+                'isDefault'           => $item['isDefault']         ?? null,
+                'dhcpOptionsSetId'  => $item['dhcpOptionsSetId']  ?? null,
+                '_raw'                 => $item,
+            ];
+        }, $dataSet);
+    }
+
+    /**
+     * 规范化机型规格数据
+     */
+    private function normalizeInstanceTypes(array $dataSet): array
+    {
+        return array_map(function (array $item) {
+            return [
+                'zoneId'                         => $item['zoneId'] ?? null,
+                'instanceType'                   => $item['instanceType'] ?? null,
+                'cpuCount'                       => $item['cpuCount'] ?? null,
+                'memory'                          => $item['memory'] ?? null,
+                'withStock'                      => $item['withStock'] ?? null,
+                'internetMaxBandwidthOutLimit'=> $item['internetMaxBandwidthOutLimit'] ?? null,
+                'instanceTypeName'              => $item['instanceTypeName'] ?? null,
+                'internetChargeTypes'           => $item['internetChargeTypes'] ?? null,
+                '_raw'                            => $item,
             ];
         }, $dataSet);
     }

@@ -82,7 +82,38 @@ interface CloudDriverInterface
      *
      * @param  string $eipId  弹性 IP 的 ID
      * @return array          操作结果，包含 requestId
-     * @throws \App\Exceptions\OperationNotSupportedException
      */
     public function configEipEgress(string $eipId): array;
+
+    /**
+     * 获取可用区列表
+     *
+     * 支持的 $filters 键：
+     *   zoneIds  array  按可用区 ID 过滤
+     */
+    public function listZones(array $filters = []): array;
+
+    /**
+     * 获取子网列表
+     *
+     * 支持的 $filters 键：
+     *   subnetIds        array   子网 ID 列表
+     *   name             string  子网名称（模糊搜索）
+     *   cidrBlock        string  CIDR 过滤
+     *   regionId         string  节点/区域 ID
+     *   pageSize         int     每页数量（1-1000）
+     *   pageNum          int     页码（从 1 开始）
+     *   vpcIds           array   VPC ID 列表
+     *   dhcpOptionsSetId string  DHCP 选项集 ID
+     */
+    public function listSubnets(array $filters = []): array;
+
+    /**
+     * 获取可用区机型规格信息
+     *
+     * 支持的 $filters 键：
+     *   zoneId       string  可用区 ID
+     *   instanceType string  实例规格
+     */
+    public function listInstanceTypes(array $filters = []): array;
 }

@@ -88,7 +88,7 @@ class ServerDeployController extends Controller
         DB::beginTransaction();
         try {
             foreach ($servers as $server) {
-                $machine = $this->resolveMachine($server);
+                $machine = $this->resolveMachine($server, $server->machine_id ?? null);
                 if (!$machine) {
                     $skipped[] = ['server_id' => $server->id, 'reason' => "找不到与 host ({$server->host}) 对应的机器"];
                     continue;

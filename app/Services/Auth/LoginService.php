@@ -171,6 +171,9 @@ class LoginService
         if (!$user->save()) {
             return [false, [500, __('Reset failed')]];
         }
+        
+        // 密码重置后清除所有 session，强制重新登录  
+        $user->tokens()->delete();
 
         HookManager::call('user.password.reset.after', $user);
 

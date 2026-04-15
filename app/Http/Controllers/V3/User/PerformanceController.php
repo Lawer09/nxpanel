@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V2\Client;
+namespace App\Http\Controllers\V3\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\NodePerformanceReport;
@@ -25,12 +25,7 @@ class PerformanceController extends Controller
         ]);
 
         try {
-            $user = auth('user')->user();
-            if (!$user) {
-                return $this->fail([401, '未授权']);
-            }
-            
-            $userId = $user->id;
+            $userId = $userId = $request->user()->id;
             $clientIp = $request->getClientIp();
 
             $report = NodePerformanceService::reportPerformance(

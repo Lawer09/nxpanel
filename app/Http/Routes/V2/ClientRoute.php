@@ -18,11 +18,11 @@ class ClientRoute
             $router->get('/app/getVersion', [AppController::class, 'getVersion']);
         });
 
-         // Performance Reporting (新增)
-            $router->post('/performance/report', [PerformanceController::class, 'report']);
-            $router->post('/performance/batchReport', [PerformanceController::class, 'batchReport']);
-            $router->get('/performance/clientIpInfo', [PerformanceController::class, 'getClientIpInfo']);
-            $router->get('/performance/history', [PerformanceController::class, 'getHistory']);
-            $router->get('/performance/nodeStats', [PerformanceController::class, 'getNodeStats']);
+        // Performance Reporting (新增)
+        $router->post('/performance/report', [PerformanceController::class, 'report']);
+        $router->post('/performance/batchReport', [PerformanceController::class, 'batchReport']);
+        $router->get('/performance/clientIpInfo', [PerformanceController::class, 'getClientIpInfo']);
+        $router->get('/performance/history', [PerformanceController::class, 'getHistory']);
+        $router->get('/performance/nodeStats', [PerformanceController::class, 'getNodeStats']);
     }
 }

@@ -61,7 +61,12 @@ class AdminRoute
             $router->group(['prefix' => 'provider'], function ($router) {
                 $router->post('/instances', [ProviderController::class, 'getInstances']);
                 $router->post('/eips', [ProviderController::class, 'getElasticIps']);
+                $router->post('/bindeips', [ProviderController::class, 'bindElasticIp']);
                 $router->post('/keypairs', [ProviderController::class, 'getKeyPairs']);
+                $router->post('/zones', [ProviderController::class, 'getZones']);
+                $router->post('/subnets', [ProviderController::class, 'getSubnets']);
+                $router->post('/instance-types', [ProviderController::class, 'getInstanceTypes']);
+                $router->post('/create-instance', [ProviderController::class, 'createInstance']);
             });
 
             // Machine
@@ -97,6 +102,7 @@ class AdminRoute
                 $router->post('/batchBindDomain', [ManageController::class, 'batchBindDomain']);
                 $router->post('/batchSave',       [ManageController::class, 'batchSave']);
                 $router->get('/testPort',               [ManageController::class, 'testPort']);
+                $router->post('/updateNodeConfig',      [ManageController::class, 'updateNodeConfig']);
             });
 
             // Stat

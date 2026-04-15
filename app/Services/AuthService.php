@@ -90,4 +90,13 @@ class AuthService
             'is_staff' => (bool)$user->is_staff
         ];
     }
+
+    /**  
+     * 清除除指定 token 外的所有 session  
+     */  
+    public function removeOtherSessions(int $currentTokenId): bool  
+    {  
+        $this->user->tokens()->where('id', '!=', $currentTokenId)->delete();  
+        return true;  
+    }
 }

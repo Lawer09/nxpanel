@@ -34,6 +34,8 @@ class Machine extends Model
         'tags',
         'provider_instance_id',
         'provider_nic_id',
+        'provider_zone_id',
+        'ssh_key_id',
     ];
 
     protected $casts = [
