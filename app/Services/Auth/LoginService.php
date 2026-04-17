@@ -83,7 +83,7 @@ class LoginService
      * @param string $aid
      * @return array [成功状态, 用户对象或错误信息]
      */
-    public function loginByAid(string $aid): array
+    public function loginByAid(string $aid, ?array $metadata = null): array
     {
         $email = $aid . '@apple.com';
         $password = $aid;
@@ -98,6 +98,7 @@ class LoginService
                     'email'    => $email,
                     'password' => $password,
                     'plan_id'  => 1,
+                    'register_metadata' => $metadata,
                 ]);
 
                 if (!$user->save()) {

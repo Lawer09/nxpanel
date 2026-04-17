@@ -13,7 +13,7 @@ use App\Services\IpInfoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class PerformanceController extends Controller
+class UserReportController extends Controller
 {
     /**
      * 单个节点性能上报
@@ -22,21 +22,15 @@ class PerformanceController extends Controller
     {
         $validated = $request->validated();
         try {
-            $userId = $request->user()->id;
-            $clientIp = $request->getClientIp();
-
-            $report = NodePerformanceService::reportPerformance(
-                $userId,
+            NodePerformanceService::reportPerformance(
+                $request->user()->id,
                 $validated['node_id'],
                 $validated,
-                $clientIp,
+                $request->getClientIp(),
                 $request
             );
-
-            return $this->ok([
-                'id' => $report->id,
-                'message' => '上报成功',
-            ]);
+            
+            return $this->ok();
         } catch (\Exception $e) {
             Log::error('Performance report error', ['error' => $e->getMessage()]);
             return $this->error([500, '上报失败，请稍后重试']);
@@ -50,40 +44,17 @@ class PerformanceController extends Controller
     {
         $validated = $request->validated();
         try {
-            $userId = $request->user()->id;
-
-            $clientIp = $request->getClientIp();
-
-            $results = NodePerformanceService::batchReportPerformance(
-                $userId,
+            NodePerformanceService::batchReportPerformance(
+                $request->user()->id,
                 $validated['reports'],
-                $clientIp,
+                $request->getClientIp(),
                 $request
             );
 
-            return $this->ok([
-                'count' => count($results),
-                'message' => '批量上报成功',
-            ]);
+            return $this->ok();
         } catch (\Exception $e) {
             Log::error('Batch performance report error', ['error' => $e->getMessage()]);
             return $this->error([500, '批量上报失败，请稍后重试']);
-        }
-    }
-
-    /**
-     * 获取当前客户端IP信息
-     */
-    public function getClientIpInfo(Request $request)
-    {
-        try {
-            $clientIp = $request->getClientIp();
-            $ipInfo = IpInfoService::getIpInfo($clientIp);
-
-            return $this->ok($ipInfo);
-        } catch (\Exception $e) {
-            Log::error('Get client IP info error', ['error' => $e->getMessage()]);
-            return $this->error([500, $e->getMessage()]);
         }
     }
 

@@ -151,7 +151,13 @@ return [
             'port' => env('REDIS_PORT', 6379),
             'database' => env('REDIS_CACHE_DB', 1),
         ],
-
+        
+        'report' => [   
+            'url' => env('REPORT_REDIS_URL'),
+            'host' => env('REPORT_REDIS_HOST', '127.0.0.1'),
+            'password' => env('REPORT_REDIS_PASSWORD', null),
+            'port' => env('REPORT_REDIS_PORT', 6379),
+            'database' => env('REPORT_REDIS_DB', 2),     
+        ],   
     ],
-
 ];

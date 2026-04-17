@@ -199,7 +199,8 @@ class UserService
             'group_id',
             'speed_limit',
             'expired_at',
-            'transfer_enable'
+            'transfer_enable',
+            'register_metadata',
         ];
 
         foreach ($optionalFields as $field) {

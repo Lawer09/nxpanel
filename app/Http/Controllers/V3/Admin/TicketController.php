@@ -71,7 +71,7 @@ class TicketController extends Controller
             ->latest('updated_at')
             ->paginate(
                 perPage: $request->integer('pageSize', 10),
-                page: $request->integer('current', 1)
+                page: $request->integer('page', 1)
             );
 
         $tickets->getCollection()->transform(function ($ticket) {

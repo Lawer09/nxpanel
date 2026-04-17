@@ -161,6 +161,7 @@ class RegisterService
             'email' => $email,
             'password' => $password,
             'invite_user_id' => $inviteUserId,
+            'register_metadata' => $request->input('metadata'),
         ]);
 
         // 保存用户

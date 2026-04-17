@@ -50,8 +50,12 @@ class Kernel extends ConsoleKernel
 
         // OSS 流量数据归档（每小时，归档上一小时数据）
         $schedule->command('stat:archive-to-oss')->hourly()->onOneServer()->withoutOverlapping(10);
+        
         // 清理两周前的流量明细（每日凌晨 2:00）
         $schedule->command('stat:prune-detail')->dailyAt('2:00')->onOneServer()->withoutOverlapping(30);
+
+        // 节点性能上报聚合（每 5 分钟）
+        $schedule->command('perf:aggregate')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
 
         app(PluginManager::class)->registerPluginSchedules($schedule);
 

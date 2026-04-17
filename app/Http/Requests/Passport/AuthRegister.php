@@ -15,7 +15,14 @@ class AuthRegister extends FormRequest
     {
         return [
             'email' => 'required|email:strict',
-            'password' => 'required|min:8'
+            'password' => 'required|min:8',
+            'metadata' => 'nullable|array',
+            'metadata.app_id' => 'nullable|string|max:255',
+            'metadata.app_version' => 'nullable|string|max:50',
+            'metadata.platform' => 'nullable|string|max:100',
+            'metadata.brand' => 'nullable|string|max:100',
+            'metadata.country' => 'nullable|string|max:100',
+            'metadata.city' => 'nullable|string|max:100',
         ];
     }
 

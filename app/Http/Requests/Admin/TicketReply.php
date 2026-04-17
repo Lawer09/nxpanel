@@ -9,7 +9,7 @@ class TicketReply extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => 'required|integer|exists:tickets,id',
+            'id' => 'required|integer|exists:v2_ticket,id',
             'message' => 'required|string',
         ];
     }

@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $created_at
  * @property int $updated_at
  * @property bool $commission_auto_check 是否自动计算佣金
+ * @property array|null $register_metadata 注册时客户端元数据
  *
  * @property-read User|null $invite_user 邀请人信息
  * @property-read \App\Models\Plan|null $plan 用户订阅计划
@@ -75,6 +76,7 @@ class User extends Authenticatable
         'commission_rate' => 'float',
         'next_reset_at' => 'timestamp',
         'last_reset_at' => 'timestamp',
+        'register_metadata' => 'json',
     ];
     protected $hidden = ['password'];
 

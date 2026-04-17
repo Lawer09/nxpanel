@@ -12,6 +12,14 @@ trait ApiResponse
 {
 
     /**
+     * 空响应
+     * @return JsonResponse
+     */
+    public function empty(){
+        return response()->noContent();
+    }
+
+    /**
      * 成功
      * @param mixed $data
      * @param array $codeResponse

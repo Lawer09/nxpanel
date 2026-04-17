@@ -39,7 +39,8 @@ class UserController extends V1UserController
                 'discount',
                 'commission_rate',
                 'telegram_id',
-                'uuid'
+                'uuid',
+                'register_metadata'
             ])
             ->first();
         if (!$user) {

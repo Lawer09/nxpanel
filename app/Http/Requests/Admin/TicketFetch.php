@@ -9,13 +9,13 @@ class TicketFetch extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => 'nullable|integer|exists:tickets,id',
+            'id' => 'nullable|integer|exists:v2_ticket,id',
             'status' => 'nullable|integer',
             'reply_status' => 'nullable|array',
             'reply_status.*' => 'integer',
             'email' => 'nullable|email',
             'pageSize' => 'nullable|integer|min:1|max:100',
-            'current' => 'nullable|integer|min:1',
+            'page' => 'nullable|integer|min:1',
             'filter' => 'nullable|array',
             'filter.*.id' => 'required_with:filter|string',
             'filter.*.value' => 'required_with:filter',

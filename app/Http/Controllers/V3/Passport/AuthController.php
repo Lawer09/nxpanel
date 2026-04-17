@@ -61,11 +61,21 @@ class AuthController extends V1AuthController
     {
         $request->validate([
             'aid' => 'required|string|min:1|max:255',
+            'metadata' => 'nullable|array',
+            'metadata.app_id' => 'nullable|string|max:255',
+            'metadata.app_version' => 'nullable|string|max:50',
+            'metadata.platform' => 'nullable|string|max:100',
+            'metadata.brand' => 'nullable|string|max:100',
+            'metadata.country' => 'nullable|string|max:100',
+            'metadata.city' => 'nullable|string|max:100',
         ], [
             'aid.required' => 'aid参数不能为空',
         ]);
 
-        [$success, $result] = $this->loginService->loginByAid($request->input('aid'));
+        [$success, $result] = $this->loginService->loginByAid(
+            $request->input('aid'),
+            $request->input('metadata')
+        );
 
         if (!$success) {
             return $this->error($result);

@@ -4,7 +4,7 @@ namespace App\Http\Routes\V3;
 use App\Http\Controllers\V3\User\OrderController;
 use App\Http\Controllers\V3\User\PlanController;
 use App\Http\Controllers\V3\User\UserController;
-use App\Http\Controllers\V3\User\PerformanceController;
+use App\Http\Controllers\V3\User\UserReportController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class UserRoute
@@ -20,12 +20,13 @@ class UserRoute
             $router->get('/plan/fetch', [PlanController::class, 'fetch']);
             // sub
             $router->get('/getSubscribe', [UserController::class, 'getSubscribe']);
-            // Performance Reporting
-            $router->post('/performance/report', [PerformanceController::class, 'report']);
-            $router->post('/performance/batchReport', [PerformanceController::class, 'batchReport']);
-            $router->get('/performance/clientIpInfo', [PerformanceController::class, 'getClientIpInfo']);
-            $router->get('/performance/history', [PerformanceController::class, 'getHistory']);
-            $router->get('/performance/nodeStats', [PerformanceController::class, 'getNodeStats']);
+
+            // Reporting
+            $router->post('/performance/report', [UserReportController::class, 'report']);
+            $router->post('/performance/batchReport', [UserReportController::class, 'batchReport']);
+            $router->get('/performance/clientIpInfo', [UserReportController::class, 'getClientIpInfo']);
+            $router->get('/performance/history', [UserReportController::class, 'getHistory']);
+            $router->get('/performance/nodeStats', [UserReportController::class, 'getNodeStats']);
         });
     }
 }

@@ -13,6 +13,16 @@ class ServerService
 {
 
     /**
+     * 节点信息缓存前缀（含机器信息）
+     */
+    public const NODE_CACHE_PREFIX = 'perf:node:';
+
+    /**
+     * 节点缓存 TTL（秒）
+     */
+    public const NODE_CACHE_TTL = 600; // 10 分钟
+
+    /**
      * 获取所有服务器列表
      * @return Collection
      */

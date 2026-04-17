@@ -391,6 +391,11 @@ class Server extends Model
         return $this->belongsTo(self::class, 'parent_id', 'id');
     }
 
+    public function machine(): BelongsTo
+    {
+        return $this->belongsTo(Machine::class, 'machine_id', 'id');
+    }
+
     public function stats(): HasMany
     {
         return $this->hasMany(StatServer::class, 'server_id', 'id');
