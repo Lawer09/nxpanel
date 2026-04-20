@@ -14,6 +14,7 @@ use App\Http\Controllers\V3\Admin\IpPoolController;
 use App\Http\Controllers\V3\Admin\SshKeyController;
 use App\Http\Controllers\V3\Admin\TicketController;
 use App\Http\Controllers\V3\Admin\PerformanceController;
+use App\Http\Controllers\V3\Admin\VersionController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -163,9 +164,23 @@ class AdminRoute
 
             // Performance
             $router->group(['prefix' => 'performance'], function ($router) {
-                $router->get('/aggregated',      [PerformanceController::class, 'getAggregated']);
-                $router->get('/userReportCount', [PerformanceController::class, 'getUserReportCount']);
-                $router->get('/userReportDaily', [PerformanceController::class, 'getUserReportDaily']);
+                $router->get('/aggregated',            [PerformanceController::class, 'getAggregated']);
+                $router->get('/userReportCount',       [PerformanceController::class, 'getUserReportCount']);
+                $router->get('/userReportDaily',       [PerformanceController::class, 'getUserReportDaily']);
+                $router->get('/versionDistribution',   [PerformanceController::class, 'getVersionDistribution']);
+                $router->get('/platformDistribution',  [PerformanceController::class, 'getPlatformDistribution']);
+                $router->get('/countryDistribution',   [PerformanceController::class, 'getCountryDistribution']);
+                $router->get('/failedNodes',           [PerformanceController::class, 'getFailedNodes']);
+            });
+
+            // Version Changelog Management
+            $router->group(['prefix' => 'version'], function ($router) {
+                $router->get('/fetch',    [VersionController::class, 'fetch']);
+                $router->post('/save',    [VersionController::class, 'save']);
+                $router->post('/update',  [VersionController::class, 'update']);
+                $router->post('/drop',    [VersionController::class, 'drop']);
+                $router->get('/detail',   [VersionController::class, 'detail']);
+                $router->post('/publish', [VersionController::class, 'publish']);
             });
         });
     }

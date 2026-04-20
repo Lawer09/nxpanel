@@ -47,6 +47,7 @@ class UserReportController extends Controller
             NodePerformanceService::batchReportPerformance(
                 $request->user()->id,
                 $validated['reports'],
+                $validated['metadata'] ?? [],
                 $request->getClientIp(),
                 $request
             );

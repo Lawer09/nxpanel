@@ -17,6 +17,8 @@ class UserReportCount extends Model
         'user_id',
         'report_count',
         'node_count',
+        'client_country',
+        'client_isp',
         'platform',
         'app_id',
         'app_version',

@@ -69,14 +69,12 @@ class NodePerformanceService
     /**
      * 批量上报 → 写入当前 5 分钟桶（pipeline）
      */
-    public static function batchReportPerformance(int $userId, array $nodeReports, string $clientIp, $request): void
+    public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, string $clientIp, $request): void
     {
         $records = [];
         $now = now()->toDateTimeString();
 
         foreach ($nodeReports as $report) {
-            $metadata = $report['metadata'] ?? [];
-
             $record = [
                 'user_id'         => $userId,
                 'node_id'         => (int) $report['node_id'],
@@ -111,6 +109,7 @@ class NodePerformanceService
             'user_id' => $userId,
             'count'   => count($records),
             'bucket'  => $key,
+            // 'records' => count($records) > 0 ? $records[0] : null, // 仅记录第一条示例
         ]);
     }
 

@@ -9,20 +9,20 @@ class PerformanceBatchReport extends FormRequest
     public function rules(): array
     {
         return [
-            'reports'                          => 'required|array|min:1|max:100',
-            'reports.*.node_id'                => 'required|integer',
-            'reports.*.delay'                  => 'required|integer|min:0|max:60000',
-            'reports.*.success_rate'           => 'required|integer|min:0|max:100',
-            'reports.*.metadata'               => 'nullable|array',
-            'reports.*.metadata.app_id'        => 'nullable|string|max:255',
-            'reports.*.metadata.app_version'   => 'nullable|string|max:50',
-            'reports.*.metadata.platform'      => 'nullable|string|max:100',
-            'reports.*.metadata.brand'         => 'nullable|string|max:100',
-            'reports.*.metadata.country'       => 'nullable|string|max:2',
-            'reports.*.metadata.city'          => 'nullable|string|max:100',
-            'reports.*.metadata.isp'           => 'nullable|string|max:255',
-            'reports.*.metadata.timestamp'     => 'nullable|integer',
-            'reports.*.metadata.connect_country' => 'nullable|string|max:2',
+            'reports'                    => 'required|array|min:1|max:100',
+            'reports.*.node_id'          => 'required|integer',
+            'reports.*.delay'            => 'required|integer|min:0|max:60000',
+            'reports.*.success_rate'     => 'required|integer|min:0|max:100',
+            'metadata'                   => 'nullable|array',
+            'metadata.app_id'            => 'nullable|string|max:255',
+            'metadata.app_version'       => 'nullable|string|max:50',
+            'metadata.platform'          => 'nullable|string|max:100',
+            'metadata.brand'             => 'nullable|string|max:100',
+            'metadata.country'           => 'nullable|string|max:2',
+            'metadata.city'              => 'nullable|string|max:100',
+            'metadata.isp'               => 'nullable|string|max:255',
+            'metadata.timestamp'         => 'nullable|integer',
+            'metadata.connect_country'   => 'nullable|string|max:2',
         ];
     }
 
@@ -43,9 +43,9 @@ class PerformanceBatchReport extends FormRequest
             'reports.*.success_rate.integer'      => 'success_rate必须为数字',
             'reports.*.success_rate.min'          => 'success_rate最小为0',
             'reports.*.success_rate.max'          => 'success_rate最大为100',
-            'reports.*.metadata.array'            => 'metadata必须为对象',
-            'reports.*.metadata.country.max'      => 'country为2位国家缩写',
-            'reports.*.metadata.connect_country.max' => 'connect_country为2位国家缩写',
+            'metadata.array'                      => 'metadata必须为对象',
+            'metadata.country.max'                => 'country为2位国家缩写',
+            'metadata.connect_country.max'        => 'connect_country为2位国家缩写',
         ];
     }
 }

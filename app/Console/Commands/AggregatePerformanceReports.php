@@ -55,9 +55,10 @@ class AggregatePerformanceReports extends Command
             return implode('|', [
                 $record['node_id'] ?? 0,
                 $record['client_country'] ?? '',
-                $record['client_city'] ?? '',
                 $record['platform'] ?? '',
                 $record['client_isp'] ?? '',
+                $record['app_id'] ?? '',
+                $record['app_version'] ?? '',
             ]);
         });
 
@@ -76,9 +77,10 @@ class AggregatePerformanceReports extends Command
                 'minute'           => $minute,
                 'node_id'          => (int) ($first['node_id'] ?? 0),
                 'client_country'   => $first['client_country'] ?? null,
-                'client_city'      => $first['client_city'] ?? null,
                 'platform'         => $first['platform'] ?? null,
                 'client_isp'       => $first['client_isp'] ?? null,
+                'app_id'           => $first['app_id'] ?? null,
+                'app_version'      => $first['app_version'] ?? null,
                 'avg_success_rate' => round($avgSuccessRate, 2),
                 'avg_delay'        => round($avgDelay, 2),
                 'total_count'      => $totalCount,
@@ -94,9 +96,10 @@ class AggregatePerformanceReports extends Command
                     'minute'         => $row['minute'],
                     'node_id'        => $row['node_id'],
                     'client_country' => $row['client_country'],
-                    'client_city'    => $row['client_city'],
                     'platform'       => $row['platform'],
                     'client_isp'     => $row['client_isp'],
+                    'app_id'         => $row['app_id'],
+                    'app_version'    => $row['app_version'],
                 ],
                 [
                     // 增量合并：加权平均
@@ -156,11 +159,13 @@ class AggregatePerformanceReports extends Command
                     'user_id' => (int) $userId,
                 ],
                 [
-                    'report_count' => DB::raw('report_count + ' . $items->count()),
-                    'node_count'   => $nodeCount,
-                    'platform'     => $last['platform'] ?? null,
-                    'app_id'       => $last['app_id'] ?? null,
-                    'app_version'  => $last['app_version'] ?? null,
+                    'report_count'   => DB::raw('report_count + ' . $items->count()),
+                    'node_count'     => $nodeCount,
+                    'client_country' => $last['client_country'] ?? null,
+                    'client_isp'     => $last['client_isp'] ?? null,
+                    'platform'       => $last['platform'] ?? null,
+                    'app_id'         => $last['app_id'] ?? null,
+                    'app_version'    => $last['app_version'] ?? null,
                 ]
             );
         }
