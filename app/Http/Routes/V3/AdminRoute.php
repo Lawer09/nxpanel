@@ -13,6 +13,7 @@ use App\Http\Controllers\V3\Admin\MachineIpController;
 use App\Http\Controllers\V3\Admin\IpPoolController;
 use App\Http\Controllers\V3\Admin\SshKeyController;
 use App\Http\Controllers\V3\Admin\TicketController;
+use App\Http\Controllers\V3\Admin\PerformanceController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -158,6 +159,13 @@ class AdminRoute
                 $router->any('/fetch', [TicketController::class, 'fetch']);
                 $router->post('/reply', [TicketController::class, 'reply']);
                 $router->post('/close', [TicketController::class, 'close']);
+            });
+
+            // Performance
+            $router->group(['prefix' => 'performance'], function ($router) {
+                $router->get('/aggregated',      [PerformanceController::class, 'getAggregated']);
+                $router->get('/userReportCount', [PerformanceController::class, 'getUserReportCount']);
+                $router->get('/userReportDaily', [PerformanceController::class, 'getUserReportDaily']);
             });
         });
     }

@@ -9,13 +9,34 @@ use Illuminate\Support\Facades\Redis;
 class NodePerformanceService
 {
     /**
-     * Redis List key，存放原始上报数据
+     * Redis List key 前缀，按 5 分钟桶存储
+     * 完整 key 格式: perf:raw:{YmdHi}  例如 perf:raw:202604191530
      */
-    public const REDIS_RAW_KEY = 'perf:raw_reports';
-
+    public const REDIS_RAW_PREFIX = 'perf:raw:';
 
     /**
-     * 单条上报 → 写入 Redis
+     * 获取当前 5 分钟桶的 Redis key
+     */
+    public static function currentBucketKey(): string
+    {
+        $now = now();
+        $minute = (int) floor($now->minute / 5) * 5;
+        $bucket = $now->copy()->minute($minute)->second(0)->format('YmdHi');
+        return self::REDIS_RAW_PREFIX . $bucket;
+    }
+
+    /**
+     * 获取指定时间戳的桶 key
+     */
+    public static function bucketKeyAt(\Carbon\Carbon $time): string
+    {
+        $minute = (int) floor($time->minute / 5) * 5;
+        $bucket = $time->copy()->minute($minute)->second(0)->format('YmdHi');
+        return self::REDIS_RAW_PREFIX . $bucket;
+    }
+
+    /**
+     * 单条上报 → 写入当前 5 分钟桶
      */
     public static function reportPerformance(int $userId, int $nodeId, array $data, string $clientIp, $request): void
     {
@@ -39,11 +60,14 @@ class NodePerformanceService
             'created_at'      => now()->toDateTimeString(),
         ];
 
-        Redis::rpush(self::REDIS_RAW_KEY, json_encode($record, JSON_UNESCAPED_UNICODE));
+        $key = self::currentBucketKey();
+        Redis::rpush($key, json_encode($record, JSON_UNESCAPED_UNICODE));
+        // 桶 key 设置 30 分钟过期，防止残留
+        Redis::expire($key, 1800);
     }
 
     /**
-     * 批量上报 → 写入 Redis（pipeline）
+     * 批量上报 → 写入当前 5 分钟桶（pipeline）
      */
     public static function batchReportPerformance(int $userId, array $nodeReports, string $clientIp, $request): void
     {
@@ -74,33 +98,34 @@ class NodePerformanceService
             $records[] = $record;
         }
 
-        // Pipeline 批量写入
-        Redis::pipeline(function ($pipe) use ($records) {
+        $key = self::currentBucketKey();
+
+        Redis::pipeline(function ($pipe) use ($key, $records) {
             foreach ($records as $record) {
-                $pipe->rpush(self::REDIS_RAW_KEY, json_encode($record, JSON_UNESCAPED_UNICODE));
+                $pipe->rpush($key, json_encode($record, JSON_UNESCAPED_UNICODE));
             }
+            $pipe->expire($key, 1800);
         });
 
         Log::info('Batch performance buffered to Redis', [
             'user_id' => $userId,
             'count'   => count($records),
+            'bucket'  => $key,
         ]);
     }
 
     /**
-     * 从 Redis 弹出指定数量的原始上报记录
-     *
-     * @param int $batchSize 每次弹出数量
-     * @return array
+     * 弹出指定桶的全部原始上报记录，弹完后删除 key
      */
-    public static function popRawReports(int $batchSize = 5000): array
+    public static function popBucket(string $bucketKey, int $batchSize = 10000): array
     {
-        $jsonArray = Redis::lpop(self::REDIS_RAW_KEY, $batchSize);
+        $jsonArray = Redis::lrange($bucketKey, 0, $batchSize - 1);
         if (empty($jsonArray)) {
             return [];
         }
+        // 消费完毕，删除桶
+        Redis::del($bucketKey);
 
         return array_map(fn($json) => json_decode($json, true), $jsonArray);
     }
-
 }
