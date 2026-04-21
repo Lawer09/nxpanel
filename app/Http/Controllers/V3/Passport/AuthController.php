@@ -68,6 +68,7 @@ class AuthController extends V1AuthController
             'metadata.brand' => 'nullable|string|max:100',
             'metadata.country' => 'nullable|string|max:100',
             'metadata.city' => 'nullable|string|max:100',
+            'metadata.device_id' => 'nullable|string|max:255',
         ], [
             'aid.required' => 'aid参数不能为空',
         ]);

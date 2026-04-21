@@ -57,6 +57,9 @@ class Kernel extends ConsoleKernel
         // 节点性能上报聚合（每 5 分钟）
         $schedule->command('perf:aggregate')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
 
+        // 应用客户端凭证同步到 Redis（每分钟）
+        $schedule->command('app-client:sync-redis')->everyMinute()->onOneServer()->withoutOverlapping(2);
+
         app(PluginManager::class)->registerPluginSchedules($schedule);
 
     }

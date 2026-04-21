@@ -23,6 +23,7 @@ class AuthRegister extends FormRequest
             'metadata.brand' => 'nullable|string|max:100',
             'metadata.country' => 'nullable|string|max:100',
             'metadata.city' => 'nullable|string|max:100',
+            'metadata.device_id' => 'nullable|string|max:255',
         ];
     }
 

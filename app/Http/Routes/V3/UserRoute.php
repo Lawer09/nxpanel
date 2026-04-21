@@ -3,6 +3,7 @@ namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\User\OrderController;
 use App\Http\Controllers\V3\User\PlanController;
+use App\Http\Controllers\V3\User\IpInfoController;
 use App\Http\Controllers\V3\User\UserController;
 use App\Http\Controllers\V3\User\UserReportController;
 use Illuminate\Contracts\Routing\Registrar;
@@ -21,10 +22,11 @@ class UserRoute
             // sub
             $router->get('/getSubscribe', [UserController::class, 'getSubscribe']);
 
+            $router->get('/ipInfo', [IpInfoController::class, 'getClientIpInfo']);
+
             // Reporting
             $router->post('/performance/report', [UserReportController::class, 'report']);
             $router->post('/performance/batchReport', [UserReportController::class, 'batchReport']);
-            $router->get('/performance/clientIpInfo', [UserReportController::class, 'getClientIpInfo']);
             $router->get('/performance/history', [UserReportController::class, 'getHistory']);
             $router->get('/performance/nodeStats', [UserReportController::class, 'getNodeStats']);
         });

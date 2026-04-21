@@ -15,6 +15,8 @@ use App\Http\Controllers\V3\Admin\SshKeyController;
 use App\Http\Controllers\V3\Admin\TicketController;
 use App\Http\Controllers\V3\Admin\PerformanceController;
 use App\Http\Controllers\V3\Admin\VersionController;
+use App\Http\Controllers\V3\Admin\AppController;
+use App\Http\Controllers\V3\Admin\AppTrafficController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -119,6 +121,13 @@ class AdminRoute
                 $router->get('/getStatServerDetail',    [StatController::class, 'getStatServerDetail']);
                 $router->get('/getRanking',             [StatController::class, 'getRanking']);
                 $router->get('/getTrafficRank',         [StatController::class, 'getTrafficRank']);
+
+                // App Traffic Report (按 register_metadata 中 app_id / app_version 统计流量)
+                $router->group(['prefix' => 'appTraffic'], function ($router) {
+                    $router->post('/aggregate', [AppTrafficController::class, 'aggregate']);
+                    $router->post('/trend',     [AppTrafficController::class, 'trend']);
+                    $router->post('/summary',   [AppTrafficController::class, 'summary']);
+                });
             });
 
              // IP Pool Management
@@ -171,6 +180,9 @@ class AdminRoute
                 $router->get('/platformDistribution',  [PerformanceController::class, 'getPlatformDistribution']);
                 $router->get('/countryDistribution',   [PerformanceController::class, 'getCountryDistribution']);
                 $router->get('/failedNodes',           [PerformanceController::class, 'getFailedNodes']);
+                $router->get('/retention',             [PerformanceController::class, 'getRetention']);
+                $router->get('/activeUsers',           [PerformanceController::class, 'getActiveUsers']);
+                $router->get('/activeUsersSummary',    [PerformanceController::class, 'getActiveUsersSummary']);
             });
 
             // Version Changelog Management
@@ -181,6 +193,16 @@ class AdminRoute
                 $router->post('/drop',    [VersionController::class, 'drop']);
                 $router->get('/detail',   [VersionController::class, 'detail']);
                 $router->post('/publish', [VersionController::class, 'publish']);
+            });
+
+            // App Client Management
+            $router->group(['prefix' => 'app-client'], function ($router) {
+                $router->get('/fetch',        [AppController::class, 'fetch']);
+                $router->post('/save',        [AppController::class, 'save']);
+                $router->post('/update',      [AppController::class, 'update']);
+                $router->post('/drop',        [AppController::class, 'drop']);
+                $router->get('/detail',       [AppController::class, 'detail']);
+                $router->post('/resetSecret', [AppController::class, 'resetSecret']);
             });
         });
     }
