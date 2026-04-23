@@ -21,6 +21,7 @@ use App\Http\Controllers\V3\Admin\AdAccountController;
 use App\Http\Controllers\V3\Admin\ProjectMappingController;
 use App\Http\Controllers\V3\Admin\SyncServerController;
 use App\Http\Controllers\V3\Admin\SyncMonitorController;
+use App\Http\Controllers\V3\Admin\AdRevenueController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -233,6 +234,15 @@ class AdminRoute
                 $router->post('/',                   [SyncServerController::class, 'save']);
                 $router->put('/{server_id}',         [SyncServerController::class, 'update']);
                 $router->patch('/{server_id}/status', [SyncServerController::class, 'updateStatus']);
+            });
+
+            // Ad Revenue Report
+            $router->group(['prefix' => 'ad-revenue'], function ($router) {
+                $router->get('/fetch',     [AdRevenueController::class, 'fetch']);
+                $router->post('/aggregate', [AdRevenueController::class, 'aggregate']);
+                $router->get('/trend',     [AdRevenueController::class, 'trend']);
+                $router->get('/summary',   [AdRevenueController::class, 'summary']);
+                $router->post('/top-rank', [AdRevenueController::class, 'topRank']);
             });
 
             // Sync Monitor
