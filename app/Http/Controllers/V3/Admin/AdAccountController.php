@@ -111,10 +111,8 @@ class AdAccountController extends Controller
 
             $params = $request->validated();
 
-            // 前端未传 credentials_json 时不覆盖原值
-            if (!$request->has('credentials_json')) {
-                unset($params['credentials_json']);
-            }
+            // 只保留前端实际传递的字段，避免 nullable 字段被置 null
+            $params = array_intersect_key($params, $request->all());
 
             // 唯一性校验（排除自身）
             $exists = AdPlatformAccount::where('source_platform', $params['source_platform'])
