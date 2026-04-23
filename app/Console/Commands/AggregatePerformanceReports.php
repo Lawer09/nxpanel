@@ -134,7 +134,7 @@ class AggregatePerformanceReports extends Command
         // 6. 用户上报次数统计
         $this->aggregateUserReportCount($rawRecords, $date, $hour, $minute);
 
-        // 7. 清理 2 周前的旧数据
+        // 7. 清理旧数据
         $this->pruneOldData();
 
         Log::info('perf:aggregate completed', [
@@ -258,11 +258,11 @@ class AggregatePerformanceReports extends Command
     }
 
     /**
-     * 删除 2 周前的聚合数据和用户上报统计数据
+     * 删除 30 天前的聚合数据和用户上报统计数据
      */
     private function pruneOldData(): void
     {
-        $cutoff = Carbon::now()->subDays(14)->toDateString();
+        $cutoff = Carbon::now()->subDays(30)->toDateString();
 
         $deletedAgg = DB::table('v2_node_performance_aggregated')
             ->where('date', '<', $cutoff)

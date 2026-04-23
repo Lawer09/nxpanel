@@ -12,17 +12,43 @@ class AdPlatformAccount extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'tags'             => 'array',
-        'credentials_json' => 'array',
-        'ext_json'         => 'array',
-        'created_at'       => 'datetime',
-        'updated_at'       => 'datetime',
+        'tags'       => 'array',
+        'ext_json'   => 'array',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**
      * 响应时隐藏凭据明文
      */
     protected $hidden = ['credentials_json'];
+
+    /**
+     * 获取解密后的凭据
+     */
+    public function getCredentialsJsonAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+        try {
+            $decrypted = decrypt($value);
+            return json_decode($decrypted, true);
+        } catch (\Exception $e) {
+            return json_decode($value, true);
+        }
+    }
+
+    /**
+     * 设置凭据时自动加密
+     */
+    public function setCredentialsJsonAttribute($value)
+    {
+        if (is_array($value)) {
+            $value = json_encode($value);
+        }
+        $this->attributes['credentials_json'] = $value ? encrypt($value) : null;
+    }
 
     // ── 状态常量 ──────────────────────────────
     public const STATUS_ENABLED  = 'enabled';

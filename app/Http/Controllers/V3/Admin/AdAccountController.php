@@ -88,11 +88,6 @@ class AdAccountController extends Controller
                 }
             }
 
-            // credentials_json 加密落库（应用层 AES）
-            if (isset($params['credentials_json'])) {
-                $params['credentials_json'] = $this->encryptCredentials($params['credentials_json']);
-            }
-
             $account = AdPlatformAccount::create($params);
 
             return $this->ok($account, [201, '创建成功']);
@@ -130,11 +125,6 @@ class AdAccountController extends Controller
                 if (!SyncServer::where('server_id', $params['assigned_server_id'])->exists()) {
                     return $this->error([422, '分配的服务器不存在']);
                 }
-            }
-
-            // credentials_json 加密落库
-            if (isset($params['credentials_json'])) {
-                $params['credentials_json'] = $this->encryptCredentials($params['credentials_json']);
             }
 
             $account->update($params);
@@ -185,7 +175,7 @@ class AdAccountController extends Controller
                 return $this->error([404, '账号不存在']);
             }
 
-            $credentials = $this->decryptCredentials($account->getRawOriginal('credentials_json'));
+            $credentials = $account->credentials_json;
 
             // TODO: 根据 source_platform 调用对应平台 SDK 验证凭据
             // 目前返回占位结果
@@ -249,21 +239,4 @@ class AdAccountController extends Controller
         }
     }
 
-    // ── 凭据加解密（应用层 AES） ─────────────────
-    private function encryptCredentials(array $credentials): string
-    {
-        $key = config('app.key');
-        $json = json_encode($credentials);
-        return encrypt($json);
-    }
-
-    private function decryptCredentials(string $encrypted): array
-    {
-        try {
-            $json = decrypt($encrypted);
-            return json_decode($json, true) ?? [];
-        } catch (\Exception $e) {
-            return [];
-        }
-    }
 }
