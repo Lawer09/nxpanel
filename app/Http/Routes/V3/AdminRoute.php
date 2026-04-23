@@ -17,6 +17,10 @@ use App\Http\Controllers\V3\Admin\PerformanceController;
 use App\Http\Controllers\V3\Admin\VersionController;
 use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\AppTrafficController;
+use App\Http\Controllers\V3\Admin\AdAccountController;
+use App\Http\Controllers\V3\Admin\ProjectMappingController;
+use App\Http\Controllers\V3\Admin\SyncServerController;
+use App\Http\Controllers\V3\Admin\SyncMonitorController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -204,6 +208,44 @@ class AdminRoute
                 $router->get('/detail',       [AppController::class, 'detail']);
                 $router->post('/resetSecret', [AppController::class, 'resetSecret']);
             });
+
+            // Ad Platform Accounts
+            $router->group(['prefix' => 'ad-accounts'], function ($router) {
+                $router->get('/',                    [AdAccountController::class, 'fetch']);
+                $router->post('/',                   [AdAccountController::class, 'save']);
+                $router->put('/{id}',                [AdAccountController::class, 'update']);
+                $router->patch('/{id}/status',       [AdAccountController::class, 'updateStatus']);
+                $router->post('/{id}/test-credential', [AdAccountController::class, 'testCredential']);
+                $router->post('/batch-assign-server', [AdAccountController::class, 'batchAssignServer']);
+            });
+
+            // Project App Mappings
+            $router->group(['prefix' => 'project-app-mappings'], function ($router) {
+                $router->get('/',              [ProjectMappingController::class, 'fetch']);
+                $router->post('/',             [ProjectMappingController::class, 'save']);
+                $router->put('/{id}',          [ProjectMappingController::class, 'update']);
+                $router->patch('/{id}/status', [ProjectMappingController::class, 'updateStatus']);
+            });
+
+            // Sync Servers
+            $router->group(['prefix' => 'sync-servers'], function ($router) {
+                $router->get('/',                    [SyncServerController::class, 'fetch']);
+                $router->post('/',                   [SyncServerController::class, 'save']);
+                $router->put('/{server_id}',         [SyncServerController::class, 'update']);
+                $router->patch('/{server_id}/status', [SyncServerController::class, 'updateStatus']);
+            });
+
+            // Sync Monitor
+            $router->get('/sync-states',  [SyncMonitorController::class, 'states']);
+            $router->get('/sync-logs',    [SyncMonitorController::class, 'logs']);
+            $router->post('/sync-jobs/trigger', [SyncMonitorController::class, 'trigger']);
+        });
+
+        // Internal API（不走 admin 中间件）
+        $router->group([
+            'prefix' => 'internal',
+        ], function ($router) {
+            $router->post('/sync-servers/{server_id}/heartbeat', [SyncServerController::class, 'heartbeat']);
         });
     }
 }
