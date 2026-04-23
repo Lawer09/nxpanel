@@ -6,6 +6,7 @@ use App\Http\Controllers\V3\User\PlanController;
 use App\Http\Controllers\V3\User\IpInfoController;
 use App\Http\Controllers\V3\User\UserController;
 use App\Http\Controllers\V3\User\UserReportController;
+use App\Http\Controllers\V3\User\TicketController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class UserRoute
@@ -29,6 +30,12 @@ class UserRoute
             $router->post('/performance/batchReport', [UserReportController::class, 'batchReport']);
             $router->get('/performance/history', [UserReportController::class, 'getHistory']);
             $router->get('/performance/nodeStats', [UserReportController::class, 'getNodeStats']);
+
+            $router->post('/ticket/reply', [TicketController::class, 'reply']);
+            $router->post('/ticket/close', [TicketController::class, 'close']);
+            $router->post('/ticket/save', [TicketController::class, 'save']);
+            $router->get('/ticket/fetch', [TicketController::class, 'fetch']);
+            $router->post('/ticket/withdraw', [TicketController::class, 'withdraw']);
         });
     }
 }
