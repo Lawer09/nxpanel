@@ -61,8 +61,8 @@ class AuthController extends V1AuthController
     {
         $request->validate([
             'aid' => 'required|string|min:1|max:255',
-            'metadata' => 'nullable|array',
-            'metadata.app_id' => 'nullable|string|max:255',
+            'metadata' => 'required|array',
+            'metadata.app_id' => 'required|string|max:255',
             'metadata.app_version' => 'nullable|string|max:50',
             'metadata.platform' => 'nullable|string|max:100',
             'metadata.brand' => 'nullable|string|max:100',

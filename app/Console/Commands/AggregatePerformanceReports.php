@@ -39,19 +39,28 @@ class AggregatePerformanceReports extends Command
         $hour = $prevBucket->hour;
 
         // 2. 从 Redis 弹出该桶全部数据
-        $rawRecords = NodePerformanceService::popBucket($bucketKey, $batchSize);
+        $rawPayloads = NodePerformanceService::popBucket($bucketKey, $batchSize);
 
-        if (empty($rawRecords)) {
+        if (empty($rawPayloads)) {
             $this->info("No raw reports in bucket: {$bucketKey}");
             return self::SUCCESS;
         }
 
-        $this->info("Popped " . count($rawRecords) . " raw reports from bucket: {$bucketKey}");
+        $this->info("Popped " . count($rawPayloads) . " raw payloads from bucket: {$bucketKey}");
 
-        // 3. 归档原始数据到 OSS
+        // 3. 解析 payload 为扁平记录（兼容旧格式）
+        $rawRecords = $this->flattenPayloads($rawPayloads);
+
+        if (empty($rawRecords)) {
+            $this->warn("No valid report rows found in payloads: {$bucketKey}");
+            return self::SUCCESS;
+        }
+
+        // 4. 归档原始数据到 OSS
         $this->archiveToOss($rawRecords);
+        $nodeRecords = array_values(array_filter($rawRecords, fn($record) => (int) ($record['node_id'] ?? 0) > 0));
 
-        $grouped = collect($rawRecords)->groupBy(function ($record) {
+        $grouped = collect($nodeRecords)->groupBy(function ($record) {
             return implode('|', [
                 $record['node_id'] ?? 0,
                 $record['client_country'] ?? '',
@@ -87,7 +96,7 @@ class AggregatePerformanceReports extends Command
             ];
         }
 
-        // 4. 写入 DB（upsert：同维度累加）
+        // 5. 写入 DB（upsert：同维度累加）
         foreach ($upsertData as $row) {
             DB::table('v2_node_performance_aggregated')->updateOrInsert(
                 [
@@ -122,10 +131,10 @@ class AggregatePerformanceReports extends Command
 
         $this->info("Aggregated " . count($upsertData) . " dimension groups into DB.");
 
-        // 5. 用户上报次数统计
+        // 6. 用户上报次数统计
         $this->aggregateUserReportCount($rawRecords, $date, $hour, $minute);
 
-        // 6. 清理 2 周前的旧数据
+        // 7. 清理 2 周前的旧数据
         $this->pruneOldData();
 
         Log::info('perf:aggregate completed', [
@@ -141,6 +150,81 @@ class AggregatePerformanceReports extends Command
     }
 
     /**
+     * 将 Redis 中的 payload 展平为可聚合记录
+     */
+    private function flattenPayloads(array $payloads): array
+    {
+        $flattened = [];
+
+        foreach ($payloads as $payload) {
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            // 兼容旧格式：单条记录直接入列
+            if (array_key_exists('node_id', $payload)) {
+                $flattened[] = $payload;
+                continue;
+            }
+
+            $metadata = $payload['metadata'] ?? [];
+            $reports = is_array($payload['reports'] ?? null) ? $payload['reports'] : [];
+            $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? 0);
+            $clientIp = $payload['clientIp'] ?? $payload['client_ip'] ?? null;
+            $reportedAt = $payload['reported_at'] ?? ($metadata['timestamp'] ?? now()->getTimestampMs());
+            $createdAt = $payload['created_at'] ?? now()->toDateTimeString();
+
+            // reports 为空时也保留一条，用于用户上报次数统计
+            if (empty($reports)) {
+                $flattened[] = [
+                    'user_id' => $userId,
+                    'node_id' => 0,
+                    'delay' => 0,
+                    'success_rate' => 0,
+                    'client_ip' => $clientIp,
+                    'client_country' => $metadata['country'] ?? null,
+                    'client_city' => $metadata['city'] ?? null,
+                    'client_isp' => $metadata['isp'] ?? null,
+                    'platform' => $metadata['platform'] ?? null,
+                    'brand' => $metadata['brand'] ?? null,
+                    'app_id' => $metadata['app_id'] ?? null,
+                    'app_version' => $metadata['app_version'] ?? null,
+                    'connect_country' => $metadata['connect_country'] ?? null,
+                    'reported_at' => $reportedAt,
+                    'created_at' => $createdAt,
+                ];
+                continue;
+            }
+
+            foreach ($reports as $report) {
+                if (!is_array($report)) {
+                    continue;
+                }
+
+                $flattened[] = [
+                    'user_id' => $userId,
+                    'node_id' => (int) ($report['node_id'] ?? 0),
+                    'delay' => (int) ($report['delay'] ?? 0),
+                    'success_rate' => (int) ($report['success_rate'] ?? 0),
+                    'client_ip' => $clientIp,
+                    'client_country' => $metadata['country'] ?? null,
+                    'client_city' => $metadata['city'] ?? null,
+                    'client_isp' => $metadata['isp'] ?? null,
+                    'platform' => $metadata['platform'] ?? null,
+                    'brand' => $metadata['brand'] ?? null,
+                    'app_id' => $metadata['app_id'] ?? null,
+                    'app_version' => $metadata['app_version'] ?? null,
+                    'connect_country' => $metadata['connect_country'] ?? null,
+                    'reported_at' => $reportedAt,
+                    'created_at' => $createdAt,
+                ];
+            }
+        }
+
+        return $flattened;
+    }
+
+    /**
      * 按用户聚合上报次数，写入 v3_user_report_count
      */
     private function aggregateUserReportCount(array $rawRecords, string $date, int $hour, int $minute): void
@@ -148,7 +232,7 @@ class AggregatePerformanceReports extends Command
         $userGrouped = collect($rawRecords)->groupBy('user_id');
 
         foreach ($userGrouped as $userId => $items) {
-            $nodeCount = $items->pluck('node_id')->unique()->count();
+            $nodeCount = $items->pluck('node_id')->filter(fn($id) => (int) $id > 0)->unique()->count();
             $last = $items->last();
 
             DB::table('v3_user_report_count')->updateOrInsert(

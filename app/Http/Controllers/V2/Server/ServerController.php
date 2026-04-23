@@ -44,7 +44,7 @@ class ServerController extends Controller
 
     /**
      * node report api - merge traffic + alive + status
-     * POST /api/v2/server/node/report
+     * POST /api/v2/server/report
      */
     public function report(Request $request): JsonResponse
     {
@@ -130,12 +130,12 @@ class ServerController extends Controller
            ServerService::updateMetrics($node, $metrics);
         }
 
-        Log::info("Received report from node {$nodeId} (type: {$nodeType})", [
-            'traffic_count' => is_array($traffic) ? count($traffic) : 0,
-            'alive_count' => is_array($alive) ? count($alive) : 0,
-            'online_count' => is_array($online) ? count($online) : 0,
-            'status' => $status,
-        ]);
+        // Log::info("Received report from node {$nodeId} (type: {$nodeType})", [
+        //     'traffic_count' => is_array($traffic) ? count($traffic) : 0,
+        //     'alive_count' => is_array($alive) ? count($alive) : 0,
+        //     'online_count' => is_array($online) ? count($online) : 0,
+        //     'status' => $status,
+        // ]);
 
         return response()->json(['data' => true]);
     }

@@ -20,21 +20,22 @@ class UserReportController extends Controller
      */
     public function report(PerformanceReport $request)
     {
-        $validated = $request->validated();
-        try {
-            NodePerformanceService::reportPerformance(
-                $request->user()->id,
-                $validated['node_id'],
-                $validated,
-                $request->getClientIp(),
-                $request
-            );
+        // $validated = $request->validated();
+        // try {
+        //     NodePerformanceService::reportPerformance(
+        //         $request->user()->id,
+        //         $validated['node_id'],
+        //         $validated,
+        //         $request->getClientIp(),
+        //         $request
+        //     );
             
-            return $this->ok();
-        } catch (\Exception $e) {
-            Log::error('Performance report error', ['error' => $e->getMessage()]);
-            return $this->error([500, '上报失败，请稍后重试']);
-        }
+        //     return $this->ok();
+        // } catch (\Exception $e) {
+        //     Log::error('Performance report error', ['error' => $e->getMessage()]);
+        //     return $this->error([500, '上报失败，请稍后重试']);
+        // }
+         return $this->error([500, 'use batch report instead']);
     }
 
     /**

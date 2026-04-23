@@ -42,26 +42,21 @@ class NodePerformanceService
     {
         $metadata = $data['metadata'] ?? [];
 
-        $record = [
-            'user_id'         => $userId,
-            'node_id'         => $nodeId,
-            'delay'           => (int) ($data['delay'] ?? 0),
-            'success_rate'    => (int) ($data['success_rate'] ?? 0),
-            'client_ip'       => $clientIp,
-            'client_country'  => $metadata['country'] ?? null,
-            'client_city'     => $metadata['city'] ?? null,
-            'client_isp'      => $metadata['isp'] ?? null,
-            'platform'        => $metadata['platform'] ?? null,
-            'brand'           => $metadata['brand'] ?? null,
-            'app_id'          => $metadata['app_id'] ?? null,
-            'app_version'     => $metadata['app_version'] ?? null,
-            'connect_country' => $metadata['connect_country'] ?? null,
-            'reported_at'     => $metadata['timestamp'] ?? now()->getTimestampMs(),
-            'created_at'      => now()->toDateTimeString(),
+        $data = [
+            'metadata' => $metadata,
+            'reports' => [[
+                'node_id' => (int) $nodeId,
+                'delay' => (int) ($data['delay'] ?? 0),
+                'success_rate' => (int) ($data['success_rate'] ?? 0),
+            ]],
+            'userId' => $userId,
+            'clientIp' => $clientIp,
+            'reported_at' => $metadata['timestamp'] ?? now()->getTimestampMs(),
+            'created_at' => now()->toDateTimeString(),
         ];
 
         $key = self::currentBucketKey();
-        Redis::rpush($key, json_encode($record, JSON_UNESCAPED_UNICODE));
+        Redis::rpush($key, json_encode($data, JSON_UNESCAPED_UNICODE));
         // 桶 key 设置 30 分钟过期，防止残留
         Redis::expire($key, 1800);
     }
@@ -71,45 +66,27 @@ class NodePerformanceService
      */
     public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, string $clientIp, $request): void
     {
-        $records = [];
         $now = now()->toDateTimeString();
-
-        foreach ($nodeReports as $report) {
-            $record = [
-                'user_id'         => $userId,
-                'node_id'         => (int) $report['node_id'],
-                'delay'           => (int) ($report['delay'] ?? 0),
-                'success_rate'    => (int) ($report['success_rate'] ?? 0),
-                'client_ip'       => $clientIp,
-                'client_country'  => $metadata['country'] ?? null,
-                'client_city'     => $metadata['city'] ?? null,
-                'client_isp'      => $metadata['isp'] ?? null,
-                'platform'        => $metadata['platform'] ?? null,
-                'brand'           => $metadata['brand'] ?? null,
-                'app_id'          => $metadata['app_id'] ?? null,
-                'app_version'     => $metadata['app_version'] ?? null,
-                'connect_country' => $metadata['connect_country'] ?? null,
-                'reported_at'     => $metadata['timestamp'] ?? now()->getTimestampMs(),
-                'created_at'      => $now,
-            ];
-
-            $records[] = $record;
-        }
+        $data = [
+            'metadata' => $metadata,
+            'reports' => $nodeReports,
+            'userId' => $userId,
+            'clientIp' => $clientIp,
+            'reported_at' => $metadata['timestamp'] ?? now()->getTimestampMs(),
+            'created_at' => $now,
+        ];
 
         $key = self::currentBucketKey();
-
-        Redis::pipeline(function ($pipe) use ($key, $records) {
-            foreach ($records as $record) {
-                $pipe->rpush($key, json_encode($record, JSON_UNESCAPED_UNICODE));
-            }
+        
+        Redis::pipeline(function ($pipe) use ($key, $data) {
+            $pipe->rpush($key, json_encode($data, JSON_UNESCAPED_UNICODE));
             $pipe->expire($key, 1800);
         });
 
         Log::info('Batch performance buffered to Redis', [
             'user_id' => $userId,
-            'count'   => count($records),
+            'node_count' => count($nodeReports),
             'bucket'  => $key,
-            // 'records' => count($records) > 0 ? $records[0] : null, // 仅记录第一条示例
         ]);
     }
 
