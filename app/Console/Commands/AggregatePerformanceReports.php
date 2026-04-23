@@ -204,7 +204,7 @@ class AggregatePerformanceReports extends Command
                 $flattened[] = [
                     'user_id' => $userId,
                     'node_id' => (int) ($report['node_id'] ?? 0),
-                    'delay' => (int) ($report['delay'] ?? 0),
+                    'delay' => (int) ($report['delay'] ?? 0) < 0 ? 0 : (int) ($report['delay'] ?? 0),
                     'success_rate' => (int) ($report['success_rate'] ?? 0),
                     'client_ip' => $clientIp,
                     'client_country' => $metadata['country'] ?? null,

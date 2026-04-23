@@ -11,7 +11,7 @@ class PerformanceBatchReport extends FormRequest
         return [
             'reports'                    => 'nullable|array|min:0|max:100',
             'reports.*.node_id'          => 'required|integer',
-            'reports.*.delay'            => 'required|integer|min:0|max:60000',
+            'reports.*.delay'            => 'required|integer',
             'reports.*.success_rate'     => 'required|integer|min:0|max:100',
             'metadata'                   => 'required|array',
             'metadata.app_id'            => 'required|string|max:255',
@@ -37,8 +37,6 @@ class PerformanceBatchReport extends FormRequest
             'reports.*.node_id.integer'           => 'node_id必须为数字',
             'reports.*.delay.required'            => 'delay不能为空',
             'reports.*.delay.integer'             => 'delay必须为数字',
-            'reports.*.delay.min'                 => 'delay最小为0',
-            'reports.*.delay.max'                 => 'delay最大为60000',
             'reports.*.success_rate.required'     => 'success_rate不能为空',
             'reports.*.success_rate.integer'      => 'success_rate必须为数字',
             'reports.*.success_rate.min'          => 'success_rate最小为0',

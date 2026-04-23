@@ -13,12 +13,15 @@ class AdAccountUpsert extends FormRequest
 
     public function rules(): array
     {
+        // 编辑时 credentials_json 不会返回前端，允许不传（保留原值）
+        $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
+
         return [
             'source_platform'    => 'required|string|max:32',
             'account_name'       => 'required|string|max:128',
             'account_label'      => 'nullable|string|max:128',
             'auth_type'          => 'required|string|in:oauth,service_key',
-            'credentials_json'   => 'required|array',
+            'credentials_json'   => ($isUpdate ? 'nullable' : 'required') . '|array',
             'status'             => 'required|string|in:enabled,disabled',
             'tags'               => 'nullable|array',
             'tags.*'             => 'string|max:64',

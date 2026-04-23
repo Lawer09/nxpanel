@@ -90,7 +90,7 @@ class AdAccountController extends Controller
 
             $account = AdPlatformAccount::create($params);
 
-            return $this->ok($account, [201, '创建成功']);
+            return $this->ok($account);
         } catch (\Exception $e) {
             Log::error('AdAccount save error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -110,6 +110,11 @@ class AdAccountController extends Controller
             }
 
             $params = $request->validated();
+
+            // 前端未传 credentials_json 时不覆盖原值
+            if (!$request->has('credentials_json')) {
+                unset($params['credentials_json']);
+            }
 
             // 唯一性校验（排除自身）
             $exists = AdPlatformAccount::where('source_platform', $params['source_platform'])
