@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AdRevenueAggregate;
+use App\Http\Requests\Admin\AdRevenueFetch;
+use App\Http\Requests\Admin\AdRevenueSummary;
+use App\Http\Requests\Admin\AdRevenueTopRank;
+use App\Http\Requests\Admin\AdRevenueTrend;
 use App\Models\AdRevenueDaily;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdRevenueController extends Controller
@@ -27,71 +31,36 @@ class AdRevenueController extends Controller
     /**
      * 明细查询（分页）
      */
-    public function fetch(Request $request): JsonResponse
+    public function fetch(AdRevenueFetch $request): JsonResponse
     {
-        $request->validate([
-            'source_platform'    => 'nullable|string|max:32',
-            'account_id'         => 'nullable|integer',
-            'project_id'         => 'nullable|integer',
-            'provider_app_id'    => 'nullable|string|max:128',
-            'provider_ad_unit_id'=> 'nullable|string|max:128',
-            'country_code'       => 'nullable|string|max:16',
-            'device_platform'    => 'nullable|string|max:32',
-            'ad_format'          => 'nullable|string|max:64',
-            'report_type'        => 'nullable|string|max:32',
-            'date_from'          => 'nullable|date',
-            'date_to'            => 'nullable|date',
-            'page'               => 'nullable|integer|min:1',
-            'size'               => 'nullable|integer|min:1|max:200',
-            'order_by'           => 'nullable|string',
-            'order_dir'          => 'nullable|in:asc,desc',
-        ]);
-
-        $page = (int) $request->input('page', 1);
-        $size = (int) $request->input('size', 20);
+        $params = $request->validated();
 
         $query = AdRevenueDaily::query();
-        $this->applyFilters($request, $query);
+        $this->applyFilters($params, $query);
 
-        $orderBy  = in_array($request->input('order_by'), self::ALLOWED_ORDER_FIELDS)
-            ? $request->input('order_by') : 'report_date';
-        $orderDir = $request->input('order_dir', 'desc');
+        $orderBy  = in_array($params['orderBy'] ?? null, self::ALLOWED_ORDER_FIELDS)
+            ? $params['orderBy'] : 'report_date';
+        $orderDir = $params['orderDir'] ?? 'desc';
 
-        $total = $query->count();
-        $items = $query->orderBy($orderBy, $orderDir)
-            ->offset(($page - 1) * $size)
-            ->limit($size)
-            ->get();
+        $pageSize = $params['pageSize'] ?? 20;
+        $data = $query->orderBy($orderBy, $orderDir)->paginate($pageSize);
 
-        return $this->ok(compact('page', 'size', 'total', 'items'));
+        return $this->ok([
+            'data'     => $data->items(),
+            'total'    => $data->total(),
+            'page'     => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+        ]);
     }
 
     /**
      * 多维度聚合查询
      */
-    public function aggregate(Request $request): JsonResponse
+    public function aggregate(AdRevenueAggregate $request): JsonResponse
     {
-        $request->validate([
-            'group_by'           => 'required|array|min:1',
-            'group_by.*'         => 'string|in:' . implode(',', self::ALLOWED_DIMENSIONS),
-            'source_platform'    => 'nullable|string|max:32',
-            'account_id'         => 'nullable|integer',
-            'project_id'         => 'nullable|integer',
-            'provider_app_id'    => 'nullable|string|max:128',
-            'country_code'       => 'nullable|string|max:16',
-            'device_platform'    => 'nullable|string|max:32',
-            'ad_format'          => 'nullable|string|max:64',
-            'date_from'          => 'nullable|date',
-            'date_to'            => 'nullable|date',
-            'page'               => 'nullable|integer|min:1',
-            'size'               => 'nullable|integer|min:1|max:200',
-            'order_by'           => 'nullable|string',
-            'order_dir'          => 'nullable|in:asc,desc',
-        ]);
-
-        $groupBy = $request->input('group_by');
-        $page    = (int) $request->input('page', 1);
-        $size    = (int) $request->input('size', 20);
+        $params  = $request->validated();
+        $groupBy = $params['groupBy'];
+        $pageSize = $params['pageSize'] ?? 20;
 
         $selectParts = array_merge($groupBy, [
             'SUM(ad_requests)        as ad_requests',
@@ -109,40 +78,34 @@ class AdRevenueController extends Controller
             ->selectRaw(implode(', ', $selectParts))
             ->groupBy($groupBy);
 
-        $this->applyFilters($request, $query);
+        $this->applyFilters($params, $query);
 
-        $orderBy = in_array($request->input('order_by'), array_merge(self::ALLOWED_ORDER_FIELDS, $groupBy))
-            ? $request->input('order_by') : 'estimated_earnings';
-        $orderDir = $request->input('order_dir', 'desc');
+        $orderBy = in_array($params['orderBy'] ?? null, array_merge(self::ALLOWED_ORDER_FIELDS, $groupBy))
+            ? $params['orderBy'] : 'estimated_earnings';
+        $orderDir = $params['orderDir'] ?? 'desc';
         $query->orderBy($orderBy, $orderDir);
 
         $countQuery = DB::table(DB::raw("({$query->toSql()}) as sub"))
             ->mergeBindings($query->getQuery());
         $total = $countQuery->count();
 
-        $items = $query->offset(($page - 1) * $size)->limit($size)->get();
+        $page = $params['page'] ?? 1;
+        $items = $query->offset(($page - 1) * $pageSize)->limit($pageSize)->get();
 
-        return $this->ok(compact('page', 'size', 'total', 'items'));
+        return $this->ok([
+            'data'     => $items,
+            'total'    => $total,
+            'page'     => $page,
+            'pageSize' => $pageSize,
+        ]);
     }
 
     /**
      * 日期趋势（折线图）
      */
-    public function trend(Request $request): JsonResponse
+    public function trend(AdRevenueTrend $request): JsonResponse
     {
-        $request->validate([
-            'source_platform'    => 'nullable|string|max:32',
-            'account_id'         => 'nullable|integer',
-            'project_id'         => 'nullable|integer',
-            'provider_app_id'    => 'nullable|string|max:128',
-            'country_code'       => 'nullable|string|max:16',
-            'device_platform'    => 'nullable|string|max:32',
-            'ad_format'          => 'nullable|string|max:64',
-            'date_from'          => 'nullable|date',
-            'date_to'            => 'nullable|date',
-            'compare_date_from'  => 'nullable|date',
-            'compare_date_to'    => 'nullable|date',
-        ]);
+        $params = $request->validated();
 
         $query = AdRevenueDaily::query()
             ->selectRaw(implode(', ', [
@@ -158,12 +121,12 @@ class AdRevenueController extends Controller
             ->groupBy('report_date')
             ->orderBy('report_date');
 
-        $this->applyFilters($request, $query);
+        $this->applyFilters($params, $query);
         $current = $query->get();
 
         // 对比周期
         $compare = null;
-        if ($request->filled('compare_date_from') && $request->filled('compare_date_to')) {
+        if (!empty($params['compareDateFrom']) && !empty($params['compareDateTo'])) {
             $cmpQuery = AdRevenueDaily::query()
                 ->selectRaw(implode(', ', [
                     'report_date',
@@ -175,10 +138,10 @@ class AdRevenueController extends Controller
                 ]))
                 ->groupBy('report_date')
                 ->orderBy('report_date')
-                ->where('report_date', '>=', $request->input('compare_date_from'))
-                ->where('report_date', '<=', $request->input('compare_date_to'));
+                ->where('report_date', '>=', $params['compareDateFrom'])
+                ->where('report_date', '<=', $params['compareDateTo']);
 
-            $this->applyFiltersExceptDate($request, $cmpQuery);
+            $this->applyFiltersExceptDate($params, $cmpQuery);
             $compare = $cmpQuery->get();
         }
 
@@ -191,15 +154,9 @@ class AdRevenueController extends Controller
     /**
      * 汇总概览（卡片数据）
      */
-    public function summary(Request $request): JsonResponse
+    public function summary(AdRevenueSummary $request): JsonResponse
     {
-        $request->validate([
-            'source_platform' => 'nullable|string|max:32',
-            'account_id'      => 'nullable|integer',
-            'project_id'      => 'nullable|integer',
-            'date_from'       => 'nullable|date',
-            'date_to'         => 'nullable|date',
-        ]);
+        $params = $request->validated();
 
         $query = AdRevenueDaily::query()
             ->selectRaw(implode(', ', [
@@ -216,7 +173,7 @@ class AdRevenueController extends Controller
                 'COUNT(DISTINCT report_date)      as day_count',
             ]));
 
-        $this->applyFilters($request, $query);
+        $this->applyFilters($params, $query);
         $data = $query->first();
 
         return $this->ok($data);
@@ -225,22 +182,13 @@ class AdRevenueController extends Controller
     /**
      * Top 排行榜
      */
-    public function topRank(Request $request): JsonResponse
+    public function topRank(AdRevenueTopRank $request): JsonResponse
     {
-        $request->validate([
-            'rank_by'         => 'required|in:app,ad_unit,country,account,platform',
-            'metric'          => 'nullable|in:estimated_earnings,impressions,clicks,ecpm',
-            'date_from'       => 'nullable|date',
-            'date_to'         => 'nullable|date',
-            'source_platform' => 'nullable|string|max:32',
-            'account_id'      => 'nullable|integer',
-            'project_id'      => 'nullable|integer',
-            'limit'           => 'nullable|integer|min:1|max:100',
-        ]);
+        $params = $request->validated();
 
-        $rankBy = $request->input('rank_by');
-        $metric = $request->input('metric', 'estimated_earnings');
-        $limit  = (int) $request->input('limit', 20);
+        $rankBy = $params['rankBy'];
+        $metric = $params['metric'] ?? 'estimated_earnings';
+        $limit  = (int) ($params['limit'] ?? 20);
 
         $dimMap = [
             'app'      => ['provider_app_id', 'provider_app_name'],
@@ -268,41 +216,42 @@ class AdRevenueController extends Controller
             ->orderByDesc($metric)
             ->limit($limit);
 
-        $this->applyFilters($request, $query);
+        $this->applyFilters($params, $query);
 
         return $this->ok($query->get());
     }
 
-    // ── 私有：通用筛选 ──────────────────────────
-    private function applyFilters(Request $request, $query): void
-    {
-        $this->applyFiltersExceptDate($request, $query);
+    // ── camelCase 请求参数 → snake_case 数据库列 映射 ──
+    private const PARAM_COLUMN_MAP = [
+        'sourcePlatform'   => 'source_platform',
+        'accountId'        => 'account_id',
+        'projectId'        => 'project_id',
+        'providerAppId'    => 'provider_app_id',
+        'providerAdUnitId' => 'provider_ad_unit_id',
+        'countryCode'      => 'country_code',
+        'devicePlatform'   => 'device_platform',
+        'adFormat'         => 'ad_format',
+        'reportType'       => 'report_type',
+    ];
 
-        if ($request->filled('date_from')) {
-            $query->where('report_date', '>=', $request->input('date_from'));
+    // ── 私有：通用筛选 ──────────────────────────
+    private function applyFilters(array $params, $query): void
+    {
+        $this->applyFiltersExceptDate($params, $query);
+
+        if (!empty($params['dateFrom'])) {
+            $query->where('report_date', '>=', $params['dateFrom']);
         }
-        if ($request->filled('date_to')) {
-            $query->where('report_date', '<=', $request->input('date_to'));
+        if (!empty($params['dateTo'])) {
+            $query->where('report_date', '<=', $params['dateTo']);
         }
     }
 
-    private function applyFiltersExceptDate(Request $request, $query): void
+    private function applyFiltersExceptDate(array $params, $query): void
     {
-        $filters = [
-            'source_platform'     => '=',
-            'account_id'          => '=',
-            'project_id'          => '=',
-            'provider_app_id'     => '=',
-            'provider_ad_unit_id' => '=',
-            'country_code'        => '=',
-            'device_platform'     => '=',
-            'ad_format'           => '=',
-            'report_type'         => '=',
-        ];
-
-        foreach ($filters as $field => $op) {
-            if ($request->filled($field)) {
-                $query->where($field, $op, $request->input($field));
+        foreach (self::PARAM_COLUMN_MAP as $camel => $column) {
+            if (!empty($params[$camel])) {
+                $query->where($column, '=', $params[$camel]);
             }
         }
     }

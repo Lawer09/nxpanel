@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AdAccountFetch;
 use App\Http\Requests\Admin\AdAccountUpsert;
 use App\Http\Requests\Admin\AdAccountBatchAssign;
 use App\Models\AdPlatformAccount;
@@ -17,28 +18,26 @@ class AdAccountController extends Controller
      * 查询广告账号列表
      * GET /admin/ad-accounts
      */
-    public function fetch(Request $request)
+    public function fetch(AdAccountFetch $request)
     {
         try {
-            $page     = (int) $request->query('page', 1);
-            $size     = (int) $request->query('pageSize', 20);
-            $platform = $request->query('sourcePlatform');
-            $status   = $request->query('status');
-            $serverId = $request->query('assignedServerId');
-            $keyword  = $request->query('keyword');
+            $params   = $request->validated();
+            $page     = (int) ($params['page'] ?? 1);
+            $pageSize = (int) ($params['pageSize'] ?? 20);
 
             $query = AdPlatformAccount::query();
 
-            if ($platform) {
-                $query->where('source_platform', $platform);
+            if (!empty($params['sourcePlatform'])) {
+                $query->where('source_platform', $params['sourcePlatform']);
             }
-            if ($status) {
-                $query->where('status', $status);
+            if (!empty($params['status'])) {
+                $query->where('status', $params['status']);
             }
-            if ($serverId) {
-                $query->where('assigned_server_id', $serverId);
+            if (!empty($params['assignedServerId'])) {
+                $query->where('assigned_server_id', $params['assignedServerId']);
             }
-            if ($keyword) {
+            if (!empty($params['keyword'])) {
+                $keyword = $params['keyword'];
                 $query->where(function ($q) use ($keyword) {
                     $q->where('account_name', 'like', "%{$keyword}%")
                       ->orWhere('account_label', 'like', "%{$keyword}%")
@@ -48,15 +47,15 @@ class AdAccountController extends Controller
 
             $total = $query->count();
             $items = $query->orderByDesc('id')
-                ->offset(($page - 1) * $size)
-                ->limit($size)
+                ->offset(($page - 1) * $pageSize)
+                ->limit($pageSize)
                 ->get();
 
             return $this->ok([
-                'page'  => $page,
-                'size'  => $size,
-                'total' => $total,
-                'items' => $items,
+                'page'     => $page,
+                'pageSize' => $pageSize,
+                'total'    => $total,
+                'items'    => $items,
             ]);
         } catch (\Exception $e) {
             Log::error('AdAccount fetch error: ' . $e->getMessage());
