@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProjectMappingFetch;
 use App\Http\Requests\Admin\ProjectMappingUpsert;
+use App\Http\Resources\ProjectPlatformAppMapResource;
 use App\Models\ProjectPlatformAppMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -39,7 +40,7 @@ class ProjectMappingController extends Controller
             $data = $query->orderByDesc('id')->paginate($pageSize);
 
             return $this->ok([
-                'data'     => $data->items(),
+                'data'     => ProjectPlatformAppMapResource::collection($data->items()),
                 'total'    => $data->total(),
                 'page'     => $data->currentPage(),
                 'pageSize' => $data->perPage(),
@@ -78,7 +79,7 @@ class ProjectMappingController extends Controller
             ];
             $mapping = ProjectPlatformAppMap::create($dbData);
 
-            return $this->ok($mapping, [201, '创建成功']);
+            return $this->ok(ProjectPlatformAppMapResource::make($mapping), [201, '创建成功']);
         } catch (\Exception $e) {
             Log::error('ProjectMapping save error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -119,7 +120,7 @@ class ProjectMappingController extends Controller
             ];
             $mapping->update($dbData);
 
-            return $this->ok($mapping->fresh());
+            return $this->ok(ProjectPlatformAppMapResource::make($mapping->fresh()));
         } catch (\Exception $e) {
             Log::error('ProjectMapping update error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);

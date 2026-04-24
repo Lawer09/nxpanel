@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdAccountFetch;
 use App\Http\Requests\Admin\AdAccountUpsert;
 use App\Http\Requests\Admin\AdAccountBatchAssign;
+use App\Http\Resources\AdPlatformAccountResource;
 use App\Models\AdPlatformAccount;
 use App\Models\SyncServer;
 use Illuminate\Http\Request;
@@ -55,7 +56,7 @@ class AdAccountController extends Controller
                 'page'     => $page,
                 'pageSize' => $pageSize,
                 'total'    => $total,
-                'items'    => $items,
+                'data'     => AdPlatformAccountResource::collection($items),
             ]);
         } catch (\Exception $e) {
             Log::error('AdAccount fetch error: ' . $e->getMessage());
@@ -104,7 +105,7 @@ class AdAccountController extends Controller
             ];
             $account = AdPlatformAccount::create($dbData);
 
-            return $this->ok($account);
+            return $this->ok(AdPlatformAccountResource::make($account));
         } catch (\Exception $e) {
             Log::error('AdAccount save error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -162,7 +163,7 @@ class AdAccountController extends Controller
 
             $account->update($dbData);
 
-            return $this->ok($account->fresh());
+            return $this->ok(AdPlatformAccountResource::make($account->fresh()));
         } catch (\Exception $e) {
             Log::error('AdAccount update error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);

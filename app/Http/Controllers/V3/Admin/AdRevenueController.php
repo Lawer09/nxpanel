@@ -8,6 +8,8 @@ use App\Http\Requests\Admin\AdRevenueFetch;
 use App\Http\Requests\Admin\AdRevenueSummary;
 use App\Http\Requests\Admin\AdRevenueTopRank;
 use App\Http\Requests\Admin\AdRevenueTrend;
+use App\Http\Resources\AdRevenueDailyResource;
+use App\Http\Resources\CamelizeResource;
 use App\Models\AdRevenueDaily;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +48,7 @@ class AdRevenueController extends Controller
         $data = $query->orderBy($orderBy, $orderDir)->paginate($pageSize);
 
         return $this->ok([
-            'data'     => $data->items(),
+            'data'     => AdRevenueDailyResource::collection($data->items()),
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
@@ -93,7 +95,7 @@ class AdRevenueController extends Controller
         $items = $query->offset(($page - 1) * $pageSize)->limit($pageSize)->get();
 
         return $this->ok([
-            'data'     => $items,
+            'data'     => CamelizeResource::collection($items),
             'total'    => $total,
             'page'     => $page,
             'pageSize' => $pageSize,
@@ -146,8 +148,8 @@ class AdRevenueController extends Controller
         }
 
         return $this->ok([
-            'current' => $current,
-            'compare' => $compare,
+            'current' => CamelizeResource::collection($current),
+            'compare' => $compare ? CamelizeResource::collection($compare) : null,
         ]);
     }
 
@@ -176,7 +178,7 @@ class AdRevenueController extends Controller
         $this->applyFilters($params, $query);
         $data = $query->first();
 
-        return $this->ok($data);
+        return $this->ok($data ? CamelizeResource::make($data) : null);
     }
 
     /**
@@ -218,7 +220,7 @@ class AdRevenueController extends Controller
 
         $this->applyFilters($params, $query);
 
-        return $this->ok($query->get());
+        return $this->ok(CamelizeResource::collection($query->get()));
     }
 
     // ── camelCase 请求参数 → snake_case 数据库列 映射 ──
@@ -255,4 +257,5 @@ class AdRevenueController extends Controller
             }
         }
     }
+
 }

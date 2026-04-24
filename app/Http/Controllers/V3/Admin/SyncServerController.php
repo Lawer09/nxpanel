@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SyncServerFetch;
 use App\Http\Requests\Admin\SyncServerSave;
 use App\Http\Requests\Admin\SyncServerUpdate;
+use App\Http\Resources\SyncServerResource;
 use App\Models\SyncServer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -32,7 +33,7 @@ class SyncServerController extends Controller
             $data = $query->orderByDesc('id')->paginate($pageSize);
 
             return $this->ok([
-                'data'     => $data->items(),
+                'data'     => SyncServerResource::collection($data->items()),
                 'total'    => $data->total(),
                 'page'     => $data->currentPage(),
                 'pageSize' => $data->perPage(),
@@ -69,7 +70,7 @@ class SyncServerController extends Controller
             ];
             $server = SyncServer::create($dbData);
 
-            return $this->ok($server, [201, '创建成功']);
+            return $this->ok(SyncServerResource::make($server), [201, '创建成功']);
         } catch (\Exception $e) {
             Log::error('SyncServer save error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -98,7 +99,7 @@ class SyncServerController extends Controller
               ->toArray();
             $server->update($dbData);
 
-            return $this->ok($server->fresh());
+            return $this->ok(SyncServerResource::make($server->fresh()));
         } catch (\Exception $e) {
             Log::error('SyncServer update error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
