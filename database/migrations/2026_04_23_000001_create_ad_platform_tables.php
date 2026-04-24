@@ -8,6 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('ad_platform_account')) return;
+        
         // 1. 广告平台账号表
         Schema::create('ad_platform_account', function (Blueprint $table) {
             $table->bigIncrements('id');
