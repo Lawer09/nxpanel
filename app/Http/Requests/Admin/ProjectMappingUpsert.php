@@ -14,23 +14,23 @@ class ProjectMappingUpsert extends FormRequest
     public function rules(): array
     {
         return [
-            'project_id'      => 'required|integer',
-            'source_platform' => 'required|string|max:32',
-            'account_id'      => 'required|integer|exists:ad_platform_account,id',
-            'provider_app_id' => 'required|string|max:128',
-            'status'          => 'required|string|in:enabled,disabled',
+            'projectId'      => 'required|integer',
+            'sourcePlatform' => 'required|string|max:32',
+            'accountId'      => 'required|integer|exists:ad_platform_account,id',
+            'providerAppId'  => 'required|string|max:128',
+            'status'         => 'required|string|in:enabled,disabled',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'project_id.required'      => '项目ID不能为空',
-            'source_platform.required' => '广告平台不能为空',
-            'account_id.required'      => '账号ID不能为空',
-            'account_id.exists'        => '账号不存在',
-            'provider_app_id.required' => '应用ID不能为空',
-            'status.required'          => '状态不能为空',
+            'projectId.required'      => '项目ID不能为空',
+            'sourcePlatform.required' => '广告平台不能为空',
+            'accountId.required'      => '账号ID不能为空',
+            'accountId.exists'        => '账号不存在',
+            'providerAppId.required'  => '应用ID不能为空',
+            'status.required'         => '状态不能为空',
             'status.in'               => '状态格式有误',
         ];
     }

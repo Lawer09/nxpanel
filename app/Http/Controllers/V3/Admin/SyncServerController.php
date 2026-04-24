@@ -28,7 +28,7 @@ class SyncServerController extends Controller
                 $query->where('status', $params['status']);
             }
 
-            $pageSize = $params['page_size'] ?? 20;
+            $pageSize = $params['pageSize'] ?? 20;
             $data = $query->orderByDesc('id')->paginate($pageSize);
 
             return $this->ok([
@@ -53,12 +53,21 @@ class SyncServerController extends Controller
             $params = $request->validated();
 
             // server_id 唯一校验
-            if (SyncServer::where('server_id', $params['server_id'])->exists()) {
+            if (SyncServer::where('server_id', $params['serverId'])->exists()) {
                 return $this->error([422, '服务器ID已存在']);
             }
 
-            $params['status'] = SyncServer::STATUS_ONLINE;
-            $server = SyncServer::create($params);
+            $dbData = [
+                'server_id'   => $params['serverId'],
+                'server_name' => $params['serverName'],
+                'host_ip'     => $params['hostIp'] ?? '',
+                'secret_key'  => $params['secretKey'] ?? '',
+                'port'        => $params['port'] ?? 8080,
+                'tags'        => $params['tags'] ?? null,
+                'capabilities' => $params['capabilities'] ?? null,
+                'status'      => SyncServer::STATUS_ONLINE,
+            ];
+            $server = SyncServer::create($dbData);
 
             return $this->ok($server, [201, '创建成功']);
         } catch (\Exception $e) {
@@ -80,7 +89,14 @@ class SyncServerController extends Controller
             }
 
             $params = $request->validated();
-            $server->update($params);
+            $dbData = collect([
+                'serverName' => 'server_name',
+                'hostIp'     => 'host_ip',
+                'secretKey'  => 'secret_key',
+            ])->mapWithKeys(fn ($col, $key) => isset($params[$key]) ? [$col => $params[$key]] : [])
+              ->merge(collect($params)->only(['port', 'tags', 'capabilities']))
+              ->toArray();
+            $server->update($dbData);
 
             return $this->ok($server->fresh());
         } catch (\Exception $e) {
@@ -143,45 +159,14 @@ class SyncServerController extends Controller
             ]);
 
             return $this->ok([
-                'url'         => $url,
-                'http_status' => $response->status(),
-                'body'        => $response->json() ?? $response->body(),
+                'url'        => $url,
+                'httpStatus' => $response->status(),
+                'body'       => $response->json() ?? $response->body(),
             ]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             return $this->error([504, '连接超时: ' . $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('SyncServer testSync error: ' . $e->getMessage());
-            return $this->error([500, $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Worker 心跳上报（内部接口）
-     * POST /internal/sync-servers/{server_id}/heartbeat
-     */
-    public function heartbeat(string $serverId)
-    {
-        try {
-            $server = SyncServer::where('server_id', $serverId)->first();
-
-            if (!$server) {
-                // 自动注册
-                $server = SyncServer::create([
-                    'server_id'   => $serverId,
-                    'server_name' => $serverId,
-                    'status'      => SyncServer::STATUS_ONLINE,
-                    'last_heartbeat_at' => now(),
-                ]);
-            } else {
-                $server->update([
-                    'status'            => SyncServer::STATUS_ONLINE,
-                    'last_heartbeat_at' => now(),
-                ]);
-            }
-
-            return $this->ok(true);
-        } catch (\Exception $e) {
-            Log::error('SyncServer heartbeat error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

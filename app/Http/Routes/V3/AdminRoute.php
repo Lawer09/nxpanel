@@ -251,12 +251,5 @@ class AdminRoute
             $router->get('/sync-logs',    [SyncMonitorController::class, 'logs']);
             $router->post('/sync-jobs/trigger', [SyncMonitorController::class, 'trigger']);
         });
-
-        // Internal API（不走 admin 中间件）
-        $router->group([
-            'prefix' => 'internal',
-        ], function ($router) {
-            $router->post('/sync-servers/{server_id}/heartbeat', [SyncServerController::class, 'heartbeat']);
-        });
     }
 }

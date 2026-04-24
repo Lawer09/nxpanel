@@ -21,10 +21,10 @@ class AdAccountController extends Controller
     {
         try {
             $page     = (int) $request->query('page', 1);
-            $size     = (int) $request->query('size', 20);
-            $platform = $request->query('source_platform');
+            $size     = (int) $request->query('pageSize', 20);
+            $platform = $request->query('sourcePlatform');
             $status   = $request->query('status');
-            $serverId = $request->query('assigned_server_id');
+            $serverId = $request->query('assignedServerId');
             $keyword  = $request->query('keyword');
 
             $query = AdPlatformAccount::query();
@@ -74,21 +74,36 @@ class AdAccountController extends Controller
             $params = $request->validated();
 
             // 唯一性校验：source_platform + account_name
-            $exists = AdPlatformAccount::where('source_platform', $params['source_platform'])
-                ->where('account_name', $params['account_name'])
+            $exists = AdPlatformAccount::where('source_platform', $params['sourcePlatform'])
+                ->where('account_name', $params['accountName'])
                 ->exists();
             if ($exists) {
                 return $this->error([422, '该平台下账号名称已存在']);
             }
 
             // assigned_server_id 校验
-            if (!empty($params['assigned_server_id'])) {
-                if (!SyncServer::where('server_id', $params['assigned_server_id'])->exists()) {
+            if (!empty($params['assignedServerId'])) {
+                if (!SyncServer::where('server_id', $params['assignedServerId'])->exists()) {
                     return $this->error([422, '分配的服务器不存在']);
                 }
             }
 
-            $account = AdPlatformAccount::create($params);
+            $dbData = [
+                'source_platform'    => $params['sourcePlatform'],
+                'account_name'       => $params['accountName'],
+                'account_label'      => $params['accountLabel'] ?? '',
+                'auth_type'          => $params['authType'],
+                'credentials_json'   => $params['credentialsJson'],
+                'status'             => $params['status'],
+                'tags'               => $params['tags'] ?? null,
+                'assigned_server_id' => $params['assignedServerId'] ?? '',
+                'backup_server_id'   => $params['backupServerId'] ?? '',
+                'isolation_group'    => $params['isolationGroup'] ?? '',
+                'reporting_timezone' => $params['reportingTimezone'] ?? '',
+                'currency_code'      => $params['currencyCode'] ?? '',
+                'publisher_id'       => $params['publisherId'] ?? '',
+            ];
+            $account = AdPlatformAccount::create($dbData);
 
             return $this->ok($account);
         } catch (\Exception $e) {
@@ -115,8 +130,8 @@ class AdAccountController extends Controller
             $params = array_intersect_key($params, $request->all());
 
             // 唯一性校验（排除自身）
-            $exists = AdPlatformAccount::where('source_platform', $params['source_platform'])
-                ->where('account_name', $params['account_name'])
+            $exists = AdPlatformAccount::where('source_platform', $params['sourcePlatform'])
+                ->where('account_name', $params['accountName'])
                 ->where('id', '!=', $id)
                 ->exists();
             if ($exists) {
@@ -124,13 +139,29 @@ class AdAccountController extends Controller
             }
 
             // assigned_server_id 校验
-            if (!empty($params['assigned_server_id'])) {
-                if (!SyncServer::where('server_id', $params['assigned_server_id'])->exists()) {
+            if (!empty($params['assignedServerId'])) {
+                if (!SyncServer::where('server_id', $params['assignedServerId'])->exists()) {
                     return $this->error([422, '分配的服务器不存在']);
                 }
             }
 
-            $account->update($params);
+            $dbData = collect([
+                'sourcePlatform'    => 'source_platform',
+                'accountName'       => 'account_name',
+                'accountLabel'      => 'account_label',
+                'authType'          => 'auth_type',
+                'credentialsJson'   => 'credentials_json',
+                'assignedServerId'  => 'assigned_server_id',
+                'backupServerId'    => 'backup_server_id',
+                'isolationGroup'    => 'isolation_group',
+                'reportingTimezone' => 'reporting_timezone',
+                'currencyCode'      => 'currency_code',
+                'publisherId'       => 'publisher_id',
+            ])->mapWithKeys(fn ($col, $key) => isset($params[$key]) ? [$col => $params[$key]] : [])
+              ->merge(collect($params)->only(['status', 'tags']))
+              ->toArray();
+
+            $account->update($dbData);
 
             return $this->ok($account->fresh());
         } catch (\Exception $e) {
@@ -205,12 +236,12 @@ class AdAccountController extends Controller
             $params = $request->validated();
 
             // 校验目标服务器存在
-            if (!SyncServer::where('server_id', $params['assigned_server_id'])->exists()) {
+            if (!SyncServer::where('server_id', $params['assignedServerId'])->exists()) {
                 return $this->error([422, '目标服务器不存在']);
             }
 
-            if (!empty($params['backup_server_id'])) {
-                if (!SyncServer::where('server_id', $params['backup_server_id'])->exists()) {
+            if (!empty($params['backupServerId'])) {
+                if (!SyncServer::where('server_id', $params['backupServerId'])->exists()) {
                     return $this->error([422, '备用服务器不存在']);
                 }
             }
@@ -218,16 +249,16 @@ class AdAccountController extends Controller
             DB::beginTransaction();
             try {
                 $updateData = [
-                    'assigned_server_id' => $params['assigned_server_id'],
+                    'assigned_server_id' => $params['assignedServerId'],
                 ];
-                if (isset($params['backup_server_id'])) {
-                    $updateData['backup_server_id'] = $params['backup_server_id'];
+                if (isset($params['backupServerId'])) {
+                    $updateData['backup_server_id'] = $params['backupServerId'];
                 }
-                if (isset($params['isolation_group'])) {
-                    $updateData['isolation_group'] = $params['isolation_group'];
+                if (isset($params['isolationGroup'])) {
+                    $updateData['isolation_group'] = $params['isolationGroup'];
                 }
 
-                AdPlatformAccount::whereIn('id', $params['account_ids'])
+                AdPlatformAccount::whereIn('id', $params['accountIds'])
                     ->update($updateData);
 
                 DB::commit();

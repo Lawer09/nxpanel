@@ -14,34 +14,34 @@ class AdAccountUpsert extends FormRequest
     public function rules(): array
     {
         return [
-            'source_platform'    => 'required|string|max:32',
-            'account_name'       => 'required|string|max:128',
-            'account_label'      => 'nullable|string|max:128',
-            'auth_type'          => 'required|string|in:oauth,service_key',
-            'credentials_json'   => 'required|array',
-            'status'             => 'required|string|in:enabled,disabled',
-            'tags'               => 'nullable|array',
-            'tags.*'             => 'string|max:64',
-            'assigned_server_id' => 'nullable|string|max:64',
-            'backup_server_id'   => 'nullable|string|max:64',
-            'isolation_group'    => 'nullable|string|max:64',
-            'reporting_timezone' => 'nullable|string|max:64',
-            'currency_code'      => 'nullable|string|max:8',
-            'publisher_id'       => 'nullable|string|max:64',
+            'sourcePlatform'    => 'required|string|max:32',
+            'accountName'       => 'required|string|max:128',
+            'accountLabel'      => 'nullable|string|max:128',
+            'authType'          => 'required|string|in:oauth,service_key',
+            'credentialsJson'   => 'required|array',
+            'status'            => 'required|string|in:enabled,disabled',
+            'tags'              => 'nullable|array',
+            'tags.*'            => 'string|max:64',
+            'assignedServerId'  => 'nullable|string|max:64',
+            'backupServerId'    => 'nullable|string|max:64',
+            'isolationGroup'    => 'nullable|string|max:64',
+            'reportingTimezone' => 'nullable|string|max:64',
+            'currencyCode'      => 'nullable|string|max:8',
+            'publisherId'       => 'nullable|string|max:64',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'source_platform.required'  => '广告平台不能为空',
-            'account_name.required'     => '账号名称不能为空',
-            'auth_type.required'        => '认证类型不能为空',
-            'auth_type.in'              => '认证类型格式有误',
-            'credentials_json.required' => '凭据信息不能为空',
-            'credentials_json.array'    => '凭据信息格式有误',
-            'status.required'           => '状态不能为空',
-            'status.in'                 => '状态格式有误',
+            'sourcePlatform.required'  => '广告平台不能为空',
+            'accountName.required'     => '账号名称不能为空',
+            'authType.required'        => '认证类型不能为空',
+            'authType.in'              => '认证类型格式有误',
+            'credentialsJson.required' => '凭据信息不能为空',
+            'credentialsJson.array'    => '凭据信息格式有误',
+            'status.required'          => '状态不能为空',
+            'status.in'                => '状态格式有误',
         ];
     }
 }

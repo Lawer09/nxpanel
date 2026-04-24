@@ -14,9 +14,9 @@ class SyncServerUpdate extends FormRequest
     public function rules(): array
     {
         return [
-            'server_name'  => 'sometimes|string|max:128',
-            'host_ip'      => 'nullable|string|max:64',
-            'secret_key'   => 'nullable|string|max:128',
+            'serverName'   => 'sometimes|string|max:128',
+            'hostIp'       => 'nullable|string|max:64',
+            'secretKey'    => 'nullable|string|max:128',
             'port'         => 'nullable|integer|min:1|max:65535',
             'tags'         => 'nullable|array',
             'tags.*'       => 'string|max:64',
@@ -27,8 +27,8 @@ class SyncServerUpdate extends FormRequest
     public function messages(): array
     {
         return [
-            'server_name.max' => '服务器名称最长128个字符',
-            'host_ip.max'     => 'IP地址最长64个字符',
+            'serverName.max' => '服务器名称最长128个字符',
+            'hostIp.max'     => 'IP地址最长64个字符',
         ];
     }
 }

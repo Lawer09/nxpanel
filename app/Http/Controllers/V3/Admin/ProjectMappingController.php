@@ -22,20 +22,20 @@ class ProjectMappingController extends Controller
 
             $query = ProjectPlatformAppMap::with('account:id,account_name,source_platform');
 
-            if (!empty($params['project_id'])) {
-                $query->where('project_id', $params['project_id']);
+            if (!empty($params['projectId'])) {
+                $query->where('project_id', $params['projectId']);
             }
-            if (!empty($params['source_platform'])) {
-                $query->where('source_platform', $params['source_platform']);
+            if (!empty($params['sourcePlatform'])) {
+                $query->where('source_platform', $params['sourcePlatform']);
             }
-            if (!empty($params['account_id'])) {
-                $query->where('account_id', $params['account_id']);
+            if (!empty($params['accountId'])) {
+                $query->where('account_id', $params['accountId']);
             }
             if (!empty($params['status'])) {
                 $query->where('status', $params['status']);
             }
 
-            $pageSize = $params['page_size'] ?? 20;
+            $pageSize = $params['pageSize'] ?? 20;
             $data = $query->orderByDesc('id')->paginate($pageSize);
 
             return $this->ok([
@@ -60,16 +60,23 @@ class ProjectMappingController extends Controller
             $params = $request->validated();
 
             // 唯一键防重复
-            $exists = ProjectPlatformAppMap::where('project_id', $params['project_id'])
-                ->where('source_platform', $params['source_platform'])
-                ->where('account_id', $params['account_id'])
-                ->where('provider_app_id', $params['provider_app_id'])
+            $exists = ProjectPlatformAppMap::where('project_id', $params['projectId'])
+                ->where('source_platform', $params['sourcePlatform'])
+                ->where('account_id', $params['accountId'])
+                ->where('provider_app_id', $params['providerAppId'])
                 ->exists();
             if ($exists) {
                 return $this->error([422, '该项目映射已存在']);
             }
 
-            $mapping = ProjectPlatformAppMap::create($params);
+            $dbData = [
+                'project_id'      => $params['projectId'],
+                'source_platform' => $params['sourcePlatform'],
+                'account_id'      => $params['accountId'],
+                'provider_app_id' => $params['providerAppId'],
+                'status'          => $params['status'],
+            ];
+            $mapping = ProjectPlatformAppMap::create($dbData);
 
             return $this->ok($mapping, [201, '创建成功']);
         } catch (\Exception $e) {
@@ -93,17 +100,24 @@ class ProjectMappingController extends Controller
             $params = $request->validated();
 
             // 唯一键防重复（排除自身）
-            $exists = ProjectPlatformAppMap::where('project_id', $params['project_id'])
-                ->where('source_platform', $params['source_platform'])
-                ->where('account_id', $params['account_id'])
-                ->where('provider_app_id', $params['provider_app_id'])
+            $exists = ProjectPlatformAppMap::where('project_id', $params['projectId'])
+                ->where('source_platform', $params['sourcePlatform'])
+                ->where('account_id', $params['accountId'])
+                ->where('provider_app_id', $params['providerAppId'])
                 ->where('id', '!=', $id)
                 ->exists();
             if ($exists) {
                 return $this->error([422, '该项目映射已存在']);
             }
 
-            $mapping->update($params);
+            $dbData = [
+                'project_id'      => $params['projectId'],
+                'source_platform' => $params['sourcePlatform'],
+                'account_id'      => $params['accountId'],
+                'provider_app_id' => $params['providerAppId'],
+                'status'          => $params['status'],
+            ];
+            $mapping->update($dbData);
 
             return $this->ok($mapping->fresh());
         } catch (\Exception $e) {

@@ -14,10 +14,10 @@ class SyncJobTrigger extends FormRequest
     public function rules(): array
     {
         return [
-            'scope'              => 'required|string|in:account_meta,apps,ad_units,revenue_daily',
-            'account_ids'        => 'nullable|array',
-            'account_ids.*'      => 'integer|exists:ad_platform_account,id',
-            'assigned_server_id' => 'nullable|string|max:64',
+            'scope'            => 'required|string|in:account_meta,apps,ad_units,revenue_daily',
+            'accountIds'       => 'nullable|array',
+            'accountIds.*'     => 'integer|exists:ad_platform_account,id',
+            'assignedServerId' => 'nullable|string|max:64',
         ];
     }
 

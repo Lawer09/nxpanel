@@ -27,11 +27,11 @@ class SyncMonitorController extends Controller
             if (!empty($params['scope'])) {
                 $query->where('sync_scope', $params['scope']);
             }
-            if (!empty($params['account_id'])) {
-                $query->where('account_id', $params['account_id']);
+            if (!empty($params['accountId'])) {
+                $query->where('account_id', $params['accountId']);
             }
 
-            $pageSize = $params['page_size'] ?? 20;
+            $pageSize = $params['pageSize'] ?? 20;
             $data = $query->orderByDesc('updated_at')->paginate($pageSize);
 
             return $this->ok([
@@ -57,8 +57,8 @@ class SyncMonitorController extends Controller
 
             $query = AdSyncLog::with('account:id,account_name,source_platform');
 
-            if (!empty($params['server_id'])) {
-                $query->where('server_id', $params['server_id']);
+            if (!empty($params['serverId'])) {
+                $query->where('server_id', $params['serverId']);
             }
             if (!empty($params['status'])) {
                 $query->where('status', $params['status']);
@@ -66,14 +66,14 @@ class SyncMonitorController extends Controller
             if (!empty($params['scope'])) {
                 $query->where('sync_scope', $params['scope']);
             }
-            if (!empty($params['started_from'])) {
-                $query->where('started_at', '>=', $params['started_from']);
+            if (!empty($params['startedFrom'])) {
+                $query->where('started_at', '>=', $params['startedFrom']);
             }
-            if (!empty($params['started_to'])) {
-                $query->where('started_at', '<=', $params['started_to']);
+            if (!empty($params['startedTo'])) {
+                $query->where('started_at', '<=', $params['startedTo']);
             }
 
-            $pageSize = $params['page_size'] ?? 20;
+            $pageSize = $params['pageSize'] ?? 20;
             $data = $query->orderByDesc('started_at')->paginate($pageSize);
 
             return $this->ok([

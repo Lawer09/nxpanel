@@ -29,45 +29,45 @@ class PerformanceController extends Controller
     public function getAggregated(Request $request): JsonResponse
     {
         $request->validate([
-            'node_id'        => 'nullable|integer',
-            'date_from'      => 'nullable|date',
-            'date_to'        => 'nullable|date',
-            'client_country' => 'nullable|string|max:2',
-            'client_isp'     => 'nullable|string|max:255',
+            'nodeId'         => 'nullable|integer',
+            'dateFrom'       => 'nullable|date',
+            'dateTo'         => 'nullable|date',
+            'clientCountry'  => 'nullable|string|max:2',
+            'clientIsp'      => 'nullable|string|max:255',
             'platform'       => 'nullable|string|max:100',
-            'app_id'         => 'nullable|string|max:255',
-            'app_version'    => 'nullable|string|max:50',
-            'group_by'       => 'nullable|in:node,country,isp,platform,app_version,date,hour',
-            'page_size'      => 'nullable|integer|min:1|max:200',
+            'appId'          => 'nullable|string|max:255',
+            'appVersion'     => 'nullable|string|max:50',
+            'groupBy'        => 'nullable|in:node,country,isp,platform,app_version,date,hour',
+            'pageSize'       => 'nullable|integer|min:1|max:200',
         ]);
 
-        $groupBy = $request->input('group_by');
+        $groupBy = $request->input('groupBy');
 
         // 公共筛选条件
         $applyFilters = function ($query) use ($request) {
-            if ($request->filled('node_id')) {
-                $query->where('node_id', $request->input('node_id'));
+            if ($request->filled('nodeId')) {
+                $query->where('node_id', $request->input('nodeId'));
             }
-            if ($request->filled('date_from')) {
-                $query->where('date', '>=', $request->input('date_from'));
+            if ($request->filled('dateFrom')) {
+                $query->where('date', '>=', $request->input('dateFrom'));
             }
-            if ($request->filled('date_to')) {
-                $query->where('date', '<=', $request->input('date_to'));
+            if ($request->filled('dateTo')) {
+                $query->where('date', '<=', $request->input('dateTo'));
             }
-            if ($request->filled('client_country')) {
-                $query->where('client_country', $request->input('client_country'));
+            if ($request->filled('clientCountry')) {
+                $query->where('client_country', $request->input('clientCountry'));
             }
-            if ($request->filled('client_isp')) {
-                $query->where('client_isp', $request->input('client_isp'));
+            if ($request->filled('clientIsp')) {
+                $query->where('client_isp', $request->input('clientIsp'));
             }
             if ($request->filled('platform')) {
                 $query->where('platform', $request->input('platform'));
             }
-            if ($request->filled('app_id')) {
-                $query->where('app_id', $request->input('app_id'));
+            if ($request->filled('appId')) {
+                $query->where('app_id', $request->input('appId'));
             }
-            if ($request->filled('app_version')) {
-                $query->where('app_version', $request->input('app_version'));
+            if ($request->filled('appVersion')) {
+                $query->where('app_version', $request->input('appVersion'));
             }
             return $query;
         };
@@ -78,7 +78,7 @@ class PerformanceController extends Controller
                 ->orderByDesc('date')->orderByDesc('hour')->orderByDesc('minute');
             $applyFilters($query);
 
-            $pageSize = $request->input('page_size', 50);
+            $pageSize = $request->input('pageSize', 50);
             $data = $query->paginate($pageSize);
 
             return $this->ok([
@@ -152,7 +152,7 @@ class PerformanceController extends Controller
             $query->orderByDesc($orderBy);
         }
 
-        $pageSize = $request->input('page_size', 50);
+        $pageSize = $request->input('pageSize', 50);
         $data = $query->paginate($pageSize);
 
         return $this->ok([
@@ -160,7 +160,7 @@ class PerformanceController extends Controller
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
-            'group_by' => $groupBy,
+            'groupBy'  => $groupBy,
         ]);
     }
 
@@ -172,48 +172,48 @@ class PerformanceController extends Controller
     public function getUserReportCount(Request $request): JsonResponse
     {
         $request->validate([
-            'user_id'        => 'nullable|integer',
-            'date_from'      => 'nullable|date',
-            'date_to'        => 'nullable|date',
-            'client_country' => 'nullable|string|max:2',
-            'client_isp'     => 'nullable|string|max:255',
+            'userId'         => 'nullable|integer',
+            'dateFrom'       => 'nullable|date',
+            'dateTo'         => 'nullable|date',
+            'clientCountry'  => 'nullable|string|max:2',
+            'clientIsp'      => 'nullable|string|max:255',
             'platform'       => 'nullable|string|max:100',
-            'app_id'         => 'nullable|string|max:255',
-            'app_version'    => 'nullable|string|max:50',
-            'order_by'       => 'nullable|in:report_count,date,user_id',
-            'order_dir'      => 'nullable|in:asc,desc',
-            'page_size'      => 'nullable|integer|min:1|max:200',
+            'appId'          => 'nullable|string|max:255',
+            'appVersion'     => 'nullable|string|max:50',
+            'orderBy'        => 'nullable|in:report_count,date,user_id',
+            'orderDir'       => 'nullable|in:asc,desc',
+            'pageSize'       => 'nullable|integer|min:1|max:200',
         ]);
 
         $query = UserReportCount::query();
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->input('user_id'));
+        if ($request->filled('userId')) {
+            $query->where('user_id', $request->input('userId'));
         }
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
-        if ($request->filled('client_country')) {
-            $query->where('client_country', $request->input('client_country'));
+        if ($request->filled('clientCountry')) {
+            $query->where('client_country', $request->input('clientCountry'));
         }
-        if ($request->filled('client_isp')) {
-            $query->where('client_isp', $request->input('client_isp'));
+        if ($request->filled('clientIsp')) {
+            $query->where('client_isp', $request->input('clientIsp'));
         }
         if ($request->filled('platform')) {
             $query->where('platform', $request->input('platform'));
         }
-        if ($request->filled('app_id')) {
-            $query->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
         }
-        if ($request->filled('app_version')) {
-            $query->where('app_version', $request->input('app_version'));
+        if ($request->filled('appVersion')) {
+            $query->where('app_version', $request->input('appVersion'));
         }
 
-        $orderBy = $request->input('order_by', 'date');
-        $orderDir = $request->input('order_dir', 'desc');
+        $orderBy = $request->input('orderBy', 'date');
+        $orderDir = $request->input('orderDir', 'desc');
 
         if ($orderBy === 'date') {
             $query->orderBy('date', $orderDir)->orderByDesc('hour')->orderByDesc('minute');
@@ -221,7 +221,7 @@ class PerformanceController extends Controller
             $query->orderBy($orderBy, $orderDir);
         }
 
-        $pageSize = $request->input('page_size', 50);
+        $pageSize = $request->input('pageSize', 50);
         $data = $query->paginate($pageSize);
 
         return $this->ok([
@@ -240,10 +240,10 @@ class PerformanceController extends Controller
     public function getUserReportDaily(Request $request): JsonResponse
     {
         $request->validate([
-            'user_id'   => 'nullable|integer',
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'page_size' => 'nullable|integer|min:1|max:200',
+            'userId'   => 'nullable|integer',
+            'dateFrom' => 'nullable|date',
+            'dateTo'   => 'nullable|date',
+            'pageSize' => 'nullable|integer|min:1|max:200',
         ]);
 
         $query = UserReportCount::query()
@@ -251,17 +251,17 @@ class PerformanceController extends Controller
             ->groupBy('date', 'user_id')
             ->orderByDesc('date');
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->input('user_id'));
+        if ($request->filled('userId')) {
+            $query->where('user_id', $request->input('userId'));
         }
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
 
-        $pageSize = $request->input('page_size', 50);
+        $pageSize = $request->input('pageSize', 50);
         $data = $query->paginate($pageSize);
 
         return $this->ok([
@@ -280,10 +280,10 @@ class PerformanceController extends Controller
     public function getVersionDistribution(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'app_id'    => 'nullable|string|max:255',
-            'node_id'   => 'nullable|integer',
+            'dateFrom' => 'nullable|date',
+            'dateTo'   => 'nullable|date',
+            'appId'    => 'nullable|string|max:255',
+            'nodeId'   => 'nullable|integer',
         ]);
 
         $query = NodePerformanceAggregated::query()
@@ -292,22 +292,21 @@ class PerformanceController extends Controller
             ->groupBy('app_id', 'app_version')
             ->orderByDesc('total_reports');
 
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
-        if ($request->filled('app_id')) {
-            $query->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
         }
-        if ($request->filled('node_id')) {
-            $query->where('node_id', $request->input('node_id'));
+        if ($request->filled('nodeId')) {
+            $query->where('node_id', $request->input('nodeId'));
         }
 
         $data = $query->get();
 
-        // 计算总上报数用于百分比
         $totalAll = $data->sum('total_reports');
 
         $items = $data->map(function ($row) use ($totalAll) {
@@ -316,8 +315,8 @@ class PerformanceController extends Controller
         });
 
         return $this->ok([
-            'data'          => $items,
-            'total_reports' => $totalAll,
+            'data'         => $items,
+            'totalReports' => $totalAll,
         ]);
     }
 
@@ -329,10 +328,10 @@ class PerformanceController extends Controller
     public function getPlatformDistribution(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'app_id'    => 'nullable|string|max:255',
-            'node_id'   => 'nullable|integer',
+            'dateFrom' => 'nullable|date',
+            'dateTo'   => 'nullable|date',
+            'appId'    => 'nullable|string|max:255',
+            'nodeId'   => 'nullable|integer',
         ]);
 
         $query = NodePerformanceAggregated::query()
@@ -341,17 +340,17 @@ class PerformanceController extends Controller
             ->groupBy('platform')
             ->orderByDesc('total_reports');
 
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
-        if ($request->filled('app_id')) {
-            $query->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
         }
-        if ($request->filled('node_id')) {
-            $query->where('node_id', $request->input('node_id'));
+        if ($request->filled('nodeId')) {
+            $query->where('node_id', $request->input('nodeId'));
         }
 
         $data = $query->get();
@@ -364,8 +363,8 @@ class PerformanceController extends Controller
         });
 
         return $this->ok([
-            'data'          => $items,
-            'total_reports' => $totalAll,
+            'data'         => $items,
+            'totalReports' => $totalAll,
         ]);
     }
 
@@ -377,10 +376,10 @@ class PerformanceController extends Controller
     public function getCountryDistribution(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'app_id'    => 'nullable|string|max:255',
-            'node_id'   => 'nullable|integer',
+            'dateFrom' => 'nullable|date',
+            'dateTo'   => 'nullable|date',
+            'appId'    => 'nullable|string|max:255',
+            'nodeId'   => 'nullable|integer',
         ]);
 
         $query = NodePerformanceAggregated::query()
@@ -389,17 +388,17 @@ class PerformanceController extends Controller
             ->groupBy('client_country', 'client_isp')
             ->orderByDesc('total_reports');
 
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
-        if ($request->filled('app_id')) {
-            $query->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
         }
-        if ($request->filled('node_id')) {
-            $query->where('node_id', $request->input('node_id'));
+        if ($request->filled('nodeId')) {
+            $query->where('node_id', $request->input('nodeId'));
         }
 
         $data = $query->get();
@@ -412,8 +411,8 @@ class PerformanceController extends Controller
         });
 
         return $this->ok([
-            'data'          => $items,
-            'total_reports' => $totalAll,
+            'data'         => $items,
+            'totalReports' => $totalAll,
         ]);
     }
 
@@ -427,20 +426,20 @@ class PerformanceController extends Controller
     public function getFailedNodes(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from'          => 'nullable|date',
-            'date_to'            => 'nullable|date',
-            'node_id'            => 'nullable|integer',
-            'client_country'     => 'nullable|string|max:2',
-            'client_isp'         => 'nullable|string|max:255',
-            'app_id'             => 'nullable|string|max:255',
-            'max_success_rate'   => 'nullable|numeric|min:0|max:100',
-            'group_by'           => 'nullable|in:country,isp,node,time',
-            'page_size'          => 'nullable|integer|min:1|max:200',
+            'dateFrom'           => 'nullable|date',
+            'dateTo'             => 'nullable|date',
+            'nodeId'             => 'nullable|integer',
+            'clientCountry'      => 'nullable|string|max:2',
+            'clientIsp'          => 'nullable|string|max:255',
+            'appId'              => 'nullable|string|max:255',
+            'maxSuccessRate'     => 'nullable|numeric|min:0|max:100',
+            'groupBy'            => 'nullable|in:country,isp,node,time',
+            'pageSize'           => 'nullable|integer|min:1|max:200',
         ]);
 
         // 默认阈值：成功率 < 50% 视为失败
-        $threshold = $request->input('max_success_rate', 50);
-        $groupBy = $request->input('group_by', 'country');
+        $threshold = $request->input('maxSuccessRate', 50);
+        $groupBy = $request->input('groupBy', 'country');
 
         // 根据 group_by 决定聚合维度
         switch ($groupBy) {
@@ -468,26 +467,26 @@ class PerformanceController extends Controller
             ->groupBy($groupFields)
             ->orderByDesc('total_reports');
 
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->input('date_from'));
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
         }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->input('date_to'));
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
         }
-        if ($request->filled('node_id')) {
-            $query->where('node_id', $request->input('node_id'));
+        if ($request->filled('nodeId')) {
+            $query->where('node_id', $request->input('nodeId'));
         }
-        if ($request->filled('client_country')) {
-            $query->where('client_country', $request->input('client_country'));
+        if ($request->filled('clientCountry')) {
+            $query->where('client_country', $request->input('clientCountry'));
         }
-        if ($request->filled('client_isp')) {
-            $query->where('client_isp', $request->input('client_isp'));
+        if ($request->filled('clientIsp')) {
+            $query->where('client_isp', $request->input('clientIsp'));
         }
-        if ($request->filled('app_id')) {
-            $query->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
         }
 
-        $pageSize = $request->input('page_size', 50);
+        $pageSize = $request->input('pageSize', 50);
         $data = $query->paginate($pageSize);
 
         return $this->ok([
@@ -496,7 +495,7 @@ class PerformanceController extends Controller
             'page'              => $data->currentPage(),
             'pageSize'          => $data->perPage(),
             'threshold'         => $threshold,
-            'group_by'          => $groupBy,
+            'groupBy'           => $groupBy,
         ]);
     }
 
@@ -510,22 +509,22 @@ class PerformanceController extends Controller
     public function getRetention(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'app_id'    => 'nullable|string|max:255',
-            'platform'  => 'nullable|string|max:100',
+            'dateFrom' => 'nullable|date',
+            'dateTo'   => 'nullable|date',
+            'appId'    => 'nullable|string|max:255',
+            'platform' => 'nullable|string|max:100',
         ]);
 
-        $dateFrom = $request->input('date_from', now()->subDays(30)->toDateString());
-        $dateTo = $request->input('date_to', now()->subDay()->toDateString());
+        $dateFrom = $request->input('dateFrom', now()->subDays(30)->toDateString());
+        $dateTo = $request->input('dateTo', now()->subDay()->toDateString());
 
         // 留存天数
         $retentionDays = [1, 3, 7, 14, 30];
 
         // 构建基础查询条件
         $baseConditions = function ($query) use ($request) {
-            if ($request->filled('app_id')) {
-                $query->where('app_id', $request->input('app_id'));
+            if ($request->filled('appId')) {
+                $query->where('app_id', $request->input('appId'));
             }
             if ($request->filled('platform')) {
                 $query->where('platform', $request->input('platform'));
@@ -567,8 +566,8 @@ class PerformanceController extends Controller
                     ->where('a.date', $cohortDate)
                     ->where('b.date', $targetDate)
                     ->where(function ($q) use ($request) {
-                        if ($request->filled('app_id')) {
-                            $q->where('a.app_id', $request->input('app_id'));
+                        if ($request->filled('appId')) {
+                            $q->where('a.app_id', $request->input('appId'));
                         }
                         if ($request->filled('platform')) {
                             $q->where('a.platform', $request->input('platform'));
@@ -591,10 +590,10 @@ class PerformanceController extends Controller
         }
 
         return $this->ok([
-            'data'           => $result,
-            'date_from'      => $dateFrom,
-            'date_to'        => $dateTo,
-            'retention_days' => $retentionDays,
+            'data'          => $result,
+            'dateFrom'      => $dateFrom,
+            'dateTo'        => $dateTo,
+            'retentionDays' => $retentionDays,
         ]);
     }
 
@@ -606,23 +605,23 @@ class PerformanceController extends Controller
     public function getActiveUsers(Request $request): JsonResponse
     {
         $request->validate([
-            'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date',
-            'app_id'    => 'nullable|string|max:255',
-            'platform'  => 'nullable|string|max:100',
+            'dateFrom'    => 'nullable|date',
+            'dateTo'      => 'nullable|date',
+            'appId'       => 'nullable|string|max:255',
+            'platform'    => 'nullable|string|max:100',
             'granularity' => 'nullable|in:day,week,month',
         ]);
 
-        $dateFrom = $request->input('date_from', now()->subDays(30)->toDateString());
-        $dateTo = $request->input('date_to', now()->toDateString());
+        $dateFrom = $request->input('dateFrom', now()->subDays(30)->toDateString());
+        $dateTo = $request->input('dateTo', now()->toDateString());
         $granularity = $request->input('granularity', 'day');
 
         $baseQuery = DB::table('v3_user_report_count')
             ->where('date', '>=', $dateFrom)
             ->where('date', '<=', $dateTo);
 
-        if ($request->filled('app_id')) {
-            $baseQuery->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $baseQuery->where('app_id', $request->input('appId'));
         }
         if ($request->filled('platform')) {
             $baseQuery->where('platform', $request->input('platform'));
@@ -654,8 +653,8 @@ class PerformanceController extends Controller
 
         return $this->ok([
             'data'        => $data,
-            'date_from'   => $dateFrom,
-            'date_to'     => $dateTo,
+            'dateFrom'    => $dateFrom,
+            'dateTo'      => $dateTo,
             'granularity' => $granularity,
         ]);
     }
@@ -668,7 +667,7 @@ class PerformanceController extends Controller
     public function getActiveUsersSummary(Request $request): JsonResponse
     {
         $request->validate([
-            'app_id'   => 'nullable|string|max:255',
+            'appId'    => 'nullable|string|max:255',
             'platform' => 'nullable|string|max:100',
         ]);
 
@@ -676,8 +675,8 @@ class PerformanceController extends Controller
 
         $baseQuery = DB::table('v3_user_report_count');
 
-        if ($request->filled('app_id')) {
-            $baseQuery->where('app_id', $request->input('app_id'));
+        if ($request->filled('appId')) {
+            $baseQuery->where('app_id', $request->input('appId'));
         }
         if ($request->filled('platform')) {
             $baseQuery->where('platform', $request->input('platform'));
@@ -730,14 +729,14 @@ class PerformanceController extends Controller
                 'change'    => $dauYesterday > 0 ? round(($dau - $dauYesterday) / $dauYesterday * 100, 2) : 0,
             ],
             'wau' => [
-                'count'     => $wau,
-                'last_week' => $wauLastWeek,
-                'change'    => $wauLastWeek > 0 ? round(($wau - $wauLastWeek) / $wauLastWeek * 100, 2) : 0,
+                'count'    => $wau,
+                'lastWeek' => $wauLastWeek,
+                'change'   => $wauLastWeek > 0 ? round(($wau - $wauLastWeek) / $wauLastWeek * 100, 2) : 0,
             ],
             'mau' => [
-                'count'      => $mau,
-                'last_month' => $mauLastMonth,
-                'change'     => $mauLastMonth > 0 ? round(($mau - $mauLastMonth) / $mauLastMonth * 100, 2) : 0,
+                'count'     => $mau,
+                'lastMonth' => $mauLastMonth,
+                'change'    => $mauLastMonth > 0 ? round(($mau - $mauLastMonth) / $mauLastMonth * 100, 2) : 0,
             ],
         ]);
     }
