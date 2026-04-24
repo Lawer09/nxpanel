@@ -55,7 +55,7 @@ class AdAccountController extends Controller
                 'page'     => $page,
                 'pageSize' => $pageSize,
                 'total'    => $total,
-                'items'    => $items,
+                'data'    => $items,
             ]);
         } catch (\Exception $e) {
             Log::error('AdAccount fetch error: ' . $e->getMessage());
