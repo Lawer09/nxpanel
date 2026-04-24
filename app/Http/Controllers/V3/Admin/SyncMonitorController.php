@@ -4,6 +4,8 @@ namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SyncJobTrigger;
+use App\Http\Requests\Admin\SyncLogFetch;
+use App\Http\Requests\Admin\SyncStateFetch;
 use App\Models\AdSyncState;
 use App\Models\AdSyncLog;
 use Illuminate\Http\Request;
@@ -15,24 +17,29 @@ class SyncMonitorController extends Controller
      * 查询同步状态
      * GET /admin/sync-states
      */
-    public function states(Request $request)
+    public function states(SyncStateFetch $request)
     {
         try {
-            $scope     = $request->query('scope');
-            $accountId = $request->query('account_id');
+            $params = $request->validated();
 
             $query = AdSyncState::with('account:id,account_name,source_platform');
 
-            if ($scope) {
-                $query->where('sync_scope', $scope);
+            if (!empty($params['scope'])) {
+                $query->where('sync_scope', $params['scope']);
             }
-            if ($accountId) {
-                $query->where('account_id', $accountId);
+            if (!empty($params['account_id'])) {
+                $query->where('account_id', $params['account_id']);
             }
 
-            $data = $query->orderByDesc('updated_at')->get();
+            $pageSize = $params['page_size'] ?? 20;
+            $data = $query->orderByDesc('updated_at')->paginate($pageSize);
 
-            return $this->ok($data);
+            return $this->ok([
+                'data'     => $data->items(),
+                'total'    => $data->total(),
+                'page'     => $data->currentPage(),
+                'pageSize' => $data->perPage(),
+            ]);
         } catch (\Exception $e) {
             Log::error('SyncState fetch error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -43,46 +50,37 @@ class SyncMonitorController extends Controller
      * 查询同步日志
      * GET /admin/sync-logs
      */
-    public function logs(Request $request)
+    public function logs(SyncLogFetch $request)
     {
         try {
-            $page       = (int) $request->query('page', 1);
-            $size       = (int) $request->query('size', 20);
-            $serverId   = $request->query('server_id');
-            $status     = $request->query('status');
-            $scope      = $request->query('scope');
-            $startedFrom = $request->query('started_from');
-            $startedTo   = $request->query('started_to');
+            $params = $request->validated();
 
             $query = AdSyncLog::with('account:id,account_name,source_platform');
 
-            if ($serverId) {
-                $query->where('server_id', $serverId);
+            if (!empty($params['server_id'])) {
+                $query->where('server_id', $params['server_id']);
             }
-            if ($status) {
-                $query->where('status', $status);
+            if (!empty($params['status'])) {
+                $query->where('status', $params['status']);
             }
-            if ($scope) {
-                $query->where('sync_scope', $scope);
+            if (!empty($params['scope'])) {
+                $query->where('sync_scope', $params['scope']);
             }
-            if ($startedFrom) {
-                $query->where('started_at', '>=', $startedFrom);
+            if (!empty($params['started_from'])) {
+                $query->where('started_at', '>=', $params['started_from']);
             }
-            if ($startedTo) {
-                $query->where('started_at', '<=', $startedTo);
+            if (!empty($params['started_to'])) {
+                $query->where('started_at', '<=', $params['started_to']);
             }
 
-            $total = $query->count();
-            $items = $query->orderByDesc('started_at')
-                ->offset(($page - 1) * $size)
-                ->limit($size)
-                ->get();
+            $pageSize = $params['page_size'] ?? 20;
+            $data = $query->orderByDesc('started_at')->paginate($pageSize);
 
             return $this->ok([
-                'page'  => $page,
-                'size'  => $size,
-                'total' => $total,
-                'items' => $items,
+                'data'     => $data->items(),
+                'total'    => $data->total(),
+                'page'     => $data->currentPage(),
+                'pageSize' => $data->perPage(),
             ]);
         } catch (\Exception $e) {
             Log::error('SyncLog fetch error: ' . $e->getMessage());
@@ -103,7 +101,7 @@ class SyncMonitorController extends Controller
             // 这里仅记录日志，实际需要 dispatch Job
             Log::info('Sync job triggered', $params);
 
-            return $this->ok(['message' => '同步任务已提交'], [202, '已接受']);
+            return $this->ok(['message' => '同步任务已提交']);
         } catch (\Exception $e) {
             Log::error('SyncJob trigger error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);

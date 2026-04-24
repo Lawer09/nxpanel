@@ -6,10 +6,10 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class PerformanceLog
+class RequestDuration
 {
     /**
-     * 记录 Performance 接口的请求耗时日志
+     * 记录接口请求耗时日志
      */
     public function handle(Request $request, Closure $next)
     {
@@ -26,7 +26,7 @@ class PerformanceLog
 
         $level = $duration > 3000 ? 'warning' : 'info';
 
-        Log::channel('performance')->{$level}("Performance API", [
+        Log::channel('request_duration')->{$level}("API Duration", [
             'method'   => $method,
             'uri'      => $uri,
             'status'   => $status,

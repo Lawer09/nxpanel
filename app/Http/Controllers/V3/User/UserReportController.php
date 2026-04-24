@@ -39,7 +39,7 @@ class UserReportController extends Controller
     }
 
     /**
-     * 批量节点性能上报
+     * 用户上报
      */
     public function batchReport(PerformanceBatchReport $request)
     {

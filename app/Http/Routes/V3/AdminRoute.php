@@ -177,7 +177,7 @@ class AdminRoute
             });
 
             // Performance
-            $router->group(['prefix' => 'performance', 'middleware' => ['perf.log']], function ($router) {
+            $router->group(['prefix' => 'performance', 'middleware' => ['duration']], function ($router) {
                 $router->get('/aggregated',            [PerformanceController::class, 'getAggregated']);
                 $router->get('/userReportCount',       [PerformanceController::class, 'getUserReportCount']);
                 $router->get('/userReportDaily',       [PerformanceController::class, 'getUserReportDaily']);

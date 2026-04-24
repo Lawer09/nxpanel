@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\SyncServerFetch;
 use App\Http\Requests\Admin\SyncServerSave;
 use App\Models\SyncServer;
 use Illuminate\Http\Request;
@@ -14,20 +15,26 @@ class SyncServerController extends Controller
      * 查询同步服务器列表
      * GET /admin/sync-servers
      */
-    public function fetch(Request $request)
+    public function fetch(SyncServerFetch $request)
     {
         try {
-            $status = $request->query('status');
+            $params = $request->validated();
 
             $query = SyncServer::query();
 
-            if ($status) {
-                $query->where('status', $status);
+            if (!empty($params['status'])) {
+                $query->where('status', $params['status']);
             }
 
-            $servers = $query->orderByDesc('id')->get();
+            $pageSize = $params['page_size'] ?? 20;
+            $data = $query->orderByDesc('id')->paginate($pageSize);
 
-            return $this->ok($servers);
+            return $this->ok([
+                'data'     => $data->items(),
+                'total'    => $data->total(),
+                'page'     => $data->currentPage(),
+                'pageSize' => $data->perPage(),
+            ]);
         } catch (\Exception $e) {
             Log::error('SyncServer fetch error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);

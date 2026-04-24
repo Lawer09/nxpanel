@@ -60,11 +60,11 @@ return [
             'days' => 14,
         ],
 
-        'performance' => [
+        'request_duration' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/performance.log'),
+            'path' => storage_path('logs/request_duration.log'),
             'level' => 'debug',
-            'days' => 30,
+            'days' => 3,
         ],
     ],
 
