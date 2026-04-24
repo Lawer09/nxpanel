@@ -59,6 +59,13 @@ return [
             'level' => 'debug',
             'days' => 14,
         ],
+
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => 'debug',
+            'days' => 30,
+        ],
     ],
 
 ];
