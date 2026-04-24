@@ -5,8 +5,10 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SyncServerFetch;
 use App\Http\Requests\Admin\SyncServerSave;
+use App\Http\Requests\Admin\SyncServerUpdate;
 use App\Models\SyncServer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SyncServerController extends Controller
@@ -69,7 +71,7 @@ class SyncServerController extends Controller
      * 更新服务器信息
      * PUT /admin/sync-servers/{server_id}
      */
-    public function update(Request $request, string $serverId)
+    public function update(SyncServerUpdate $request, string $serverId)
     {
         try {
             $server = SyncServer::where('server_id', $serverId)->first();
@@ -77,18 +79,10 @@ class SyncServerController extends Controller
                 return $this->error([404, '服务器不存在']);
             }
 
-            $validated = $request->validate([
-                'server_name'  => 'sometimes|string|max:128',
-                'host_ip'      => 'nullable|string|max:64',
-                'tags'         => 'nullable|array',
-                'capabilities' => 'nullable|array',
-            ]);
-
-            $server->update($validated);
+            $params = $request->validated();
+            $server->update($params);
 
             return $this->ok($server->fresh());
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, '数据验证失败']);
         } catch (\Exception $e) {
             Log::error('SyncServer update error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -118,6 +112,45 @@ class SyncServerController extends Controller
             return $this->error([422, '状态格式有误']);
         } catch (\Exception $e) {
             Log::error('SyncServer updateStatus error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 测试拉取：向同步服务器发起 trigger 请求
+     * POST /admin/sync-servers/{server_id}/test-sync
+     */
+    public function testSync(string $serverId)
+    {
+        try {
+            $server = SyncServer::where('server_id', $serverId)->first();
+            if (!$server) {
+                return $this->error([404, '服务器不存在']);
+            }
+
+            if (empty($server->host_ip)) {
+                return $this->error([422, '服务器未配置 host_ip']);
+            }
+            if (empty($server->secret_key)) {
+                return $this->error([422, '服务器未配置 secret_key']);
+            }
+
+            $port = $server->port ?: 8080;
+            $url  = "http://{$server->host_ip}:{$port}/api/sync/trigger";
+
+            $response = Http::timeout(10)->post($url, [
+                'key' => $server->secret_key,
+            ]);
+
+            return $this->ok([
+                'url'         => $url,
+                'http_status' => $response->status(),
+                'body'        => $response->json() ?? $response->body(),
+            ]);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return $this->error([504, '连接超时: ' . $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('SyncServer testSync error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

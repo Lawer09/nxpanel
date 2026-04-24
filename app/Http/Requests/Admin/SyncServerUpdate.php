@@ -16,6 +16,8 @@ class SyncServerUpdate extends FormRequest
         return [
             'server_name'  => 'sometimes|string|max:128',
             'host_ip'      => 'nullable|string|max:64',
+            'secret_key'   => 'nullable|string|max:128',
+            'port'         => 'nullable|integer|min:1|max:65535',
             'tags'         => 'nullable|array',
             'tags.*'       => 'string|max:64',
             'capabilities' => 'nullable|array',

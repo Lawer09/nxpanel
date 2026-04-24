@@ -234,6 +234,7 @@ class AdminRoute
                 $router->post('/',                   [SyncServerController::class, 'save']);
                 $router->put('/{server_id}',         [SyncServerController::class, 'update']);
                 $router->patch('/{server_id}/status', [SyncServerController::class, 'updateStatus']);
+                $router->post('/{server_id}/test-sync', [SyncServerController::class, 'testSync']);
             });
 
             // Ad Revenue Report

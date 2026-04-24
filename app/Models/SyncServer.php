@@ -14,10 +14,13 @@ class SyncServer extends Model
     protected $casts = [
         'tags'              => 'array',
         'capabilities'      => 'array',
+        'port'              => 'integer',
         'last_heartbeat_at' => 'datetime',
         'created_at'        => 'datetime',
         'updated_at'        => 'datetime',
     ];
+
+    protected $hidden = ['secret_key'];
 
     public const STATUS_ONLINE      = 'online';
     public const STATUS_OFFLINE     = 'offline';

@@ -14,11 +14,13 @@ class SyncServerSave extends FormRequest
     public function rules(): array
     {
         return [
-            'server_id'   => 'required|string|max:64',
-            'server_name' => 'required|string|max:128',
-            'host_ip'     => 'nullable|string|max:64',
-            'tags'        => 'nullable|array',
-            'tags.*'      => 'string|max:64',
+            'server_id'    => 'required|string|max:64',
+            'server_name'  => 'required|string|max:128',
+            'host_ip'      => 'nullable|string|max:64',
+            'secret_key'   => 'nullable|string|max:128',
+            'port'         => 'nullable|integer|min:1|max:65535',
+            'tags'         => 'nullable|array',
+            'tags.*'       => 'string|max:64',
             'capabilities' => 'nullable|array',
         ];
     }
