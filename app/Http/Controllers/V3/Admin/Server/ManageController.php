@@ -15,9 +15,36 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\ServerService;
+use App\Models\ServerGroup;
 
 class ManageController extends V2ManageController
 {
+    public function getNodes(Request $request)
+    {
+        $request->validate([
+            'page'     => 'nullable|integer|min:1',
+            'pageSize' => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $page = (int) $request->input('page', 1);
+        $pageSize = (int) $request->input('pageSize', 20);
+
+        $paginator = ServerService::getPagedServers($pageSize, $page);
+
+        $items = $paginator->getCollection()->map(function ($item) {
+            $item['groups'] = ServerGroup::whereIn('id', $item['group_ids'])->get(['name', 'id']);
+            $item['parent'] = $item->parent;
+            return $item;
+        });
+
+        return $this->ok([
+            'data'     => $items,
+            'total'    => $paginator->total(),
+            'page'     => $paginator->currentPage(),
+            'pageSize' => $paginator->perPage(),
+        ]);
+    }
     /**
      * 查看节点当前在线用户（v3）
      *

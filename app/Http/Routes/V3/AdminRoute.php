@@ -113,6 +113,7 @@ class AdminRoute
                 $router->post('/batchSave',       [ManageController::class, 'batchSave']);
                 $router->get('/testPort',               [ManageController::class, 'testPort']);
                 $router->post('/updateNodeConfig',      [ManageController::class, 'updateNodeConfig']);
+                $router->get('/getNodes', [ManageController::class, 'getNodes']);
             });
 
             // Stat
@@ -177,7 +178,10 @@ class AdminRoute
             });
 
             // Performance
-            $router->group(['prefix' => 'performance', 'middleware' => ['duration']], function ($router) {
+            $router->group([
+                'prefix' => 'performance', 
+                'middleware' => ['duration']
+            ], function ($router) {
                 $router->get('/aggregated',            [PerformanceController::class, 'getAggregated']);
                 $router->get('/userReportCount',       [PerformanceController::class, 'getUserReportCount']);
                 $router->get('/userReportDaily',       [PerformanceController::class, 'getUserReportDaily']);
@@ -211,7 +215,10 @@ class AdminRoute
             });
 
             // Ad Platform Accounts
-            $router->group(['prefix' => 'ad-accounts'], function ($router) {
+            $router->group([
+                'prefix' => 'ad-accounts',
+                'middleware' => ['duration']
+            ], function ($router) {
                 $router->get('/',                    [AdAccountController::class, 'fetch']);
                 $router->post('/',                   [AdAccountController::class, 'save']);
                 $router->put('/{id}',                [AdAccountController::class, 'update']);
@@ -219,7 +226,7 @@ class AdminRoute
                 $router->post('/{id}/test-credential', [AdAccountController::class, 'testCredential']);
                 $router->post('/batch-assign-server', [AdAccountController::class, 'batchAssignServer']);
             });
-
+    
             // Project App Mappings
             $router->group(['prefix' => 'project-app-mappings'], function ($router) {
                 $router->get('/',              [ProjectMappingController::class, 'fetch']);
@@ -235,6 +242,7 @@ class AdminRoute
                 $router->put('/{server_id}',         [SyncServerController::class, 'update']);
                 $router->patch('/{server_id}/status', [SyncServerController::class, 'updateStatus']);
                 $router->post('/{server_id}/test-sync', [SyncServerController::class, 'testSync']);
+                $router->post('/{server_id}/sync-revenue', [SyncServerController::class, 'syncRevenueByDate']);
             });
 
             // Ad Revenue Report

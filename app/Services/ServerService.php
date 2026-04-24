@@ -44,6 +44,32 @@ class ServerService
     }
 
     /**
+     * 分页获取服务器列表
+     * @param int $pageSize
+     * @param int $page
+     * @return \Illuminate\Pagination\LengthAwarePaginator
+     */
+    public static function getPagedServers(int $pageSize = 20, int $page = 1)
+    {
+        $paginator = Server::orderBy('sort', 'ASC')
+            ->paginate($pageSize, ['*'], 'page', $page);
+
+        $paginator->getCollection()->each->append([
+            'last_check_at',
+            'last_push_at',
+            'online',
+            'is_online',
+            'available_status',
+            'cache_key',
+            'load_status',
+            'metrics',
+            'online_conn'
+        ]);
+
+        return $paginator;
+    }
+
+    /**
      * 获取指定用户可用的服务器列表
      * @param User $user
      * @return array

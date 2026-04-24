@@ -171,4 +171,54 @@ class SyncServerController extends Controller
             return $this->error([500, $e->getMessage()]);
         }
     }
+
+    /**
+     * 按日期范围同步收入数据
+     * POST /admin/sync-servers/{server_id}/sync-revenue
+     * Query: start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+     */
+    public function syncRevenueByDate(Request $request, string $serverId)
+    {
+        try {
+            $request->validate([
+                'start_date' => 'required|date_format:Y-m-d',
+                'end_date'   => 'required|date_format:Y-m-d|after_or_equal:start_date',
+            ]);
+
+            $server = SyncServer::where('server_id', $serverId)->first();
+            if (!$server) {
+                return $this->error([404, '服务器不存在']);
+            }
+
+            if (empty($server->host_ip)) {
+                return $this->error([422, '服务器未配置 host_ip']);
+            }
+            if (empty($server->secret_key)) {
+                return $this->error([422, '服务器未配置 secret_key']);
+            }
+
+            $port = $server->port ?: 8080;
+            $url  = "http://{$server->host_ip}:{$port}/api/sync/revenue";
+
+            $response = Http::timeout(30)
+                ->withHeaders(['Authorization' => $server->secret_key])
+                ->post($url, [
+                    'start_date' => $request->input('start_date'),
+                    'end_date'   => $request->input('end_date'),
+                ]);
+
+            return $this->ok([
+                'url'        => $url,
+                'httpStatus' => $response->status(),
+                'body'       => $response->json() ?? $response->body(),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, '日期格式有误']);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return $this->error([504, '连接超时: ' . $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('SyncServer syncRevenueByDate error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
 }

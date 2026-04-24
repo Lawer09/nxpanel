@@ -16,14 +16,6 @@ use Illuminate\Support\Facades\DB;
 
 class AdRevenueController extends Controller
 {
-    // 允许的聚合维度白名单
-    private const ALLOWED_DIMENSIONS = [
-        'report_date', 'source_platform', 'account_id',
-        'provider_app_id', 'provider_ad_unit_id',
-        'country_code', 'device_platform', 'ad_format',
-        'report_type', 'ad_source_code',
-    ];
-
     // 允许的排序字段白名单
     private const ALLOWED_ORDER_FIELDS = [
         'report_date', 'impressions', 'clicks', 'estimated_earnings',
@@ -62,9 +54,10 @@ class AdRevenueController extends Controller
     {
         $params  = $request->validated();
         $groupBy = $params['groupBy'];
+        $groupByColumns = $this->mapGroupByColumns($groupBy);
         $pageSize = $params['pageSize'] ?? 20;
 
-        $selectParts = array_merge($groupBy, [
+        $selectParts = array_merge($groupByColumns, [
             'SUM(ad_requests)        as ad_requests',
             'SUM(matched_requests)   as matched_requests',
             'SUM(impressions)        as impressions',
@@ -78,12 +71,13 @@ class AdRevenueController extends Controller
 
         $query = AdRevenueDaily::query()
             ->selectRaw(implode(', ', $selectParts))
-            ->groupBy($groupBy);
+            ->groupBy($groupByColumns);
 
         $this->applyFilters($params, $query);
 
-        $orderBy = in_array($params['orderBy'] ?? null, array_merge(self::ALLOWED_ORDER_FIELDS, $groupBy))
-            ? $params['orderBy'] : 'estimated_earnings';
+        $orderBy = in_array($params['orderBy'] ?? null, array_merge(self::ALLOWED_ORDER_FIELDS, $groupBy), true)
+            ? $this->mapGroupByColumns([$params['orderBy']])[0]
+            : 'estimated_earnings';
         $orderDir = $params['orderDir'] ?? 'desc';
         $query->orderBy($orderBy, $orderDir);
 
@@ -236,6 +230,20 @@ class AdRevenueController extends Controller
         'reportType'       => 'report_type',
     ];
 
+    // ── groupBy 维度 camelCase → snake_case 数据库列 映射 ──
+    private const GROUP_BY_COLUMN_MAP = [
+        'reportDate'       => 'report_date',
+        'sourcePlatform'   => 'source_platform',
+        'accountId'        => 'account_id',
+        'providerAppId'    => 'provider_app_id',
+        'providerAdUnitId' => 'provider_ad_unit_id',
+        'countryCode'      => 'country_code',
+        'devicePlatform'   => 'device_platform',
+        'adFormat'         => 'ad_format',
+        'reportType'       => 'report_type',
+        'adSourceCode'     => 'ad_source_code',
+    ];
+
     // ── 私有：通用筛选 ──────────────────────────
     private function applyFilters(array $params, $query): void
     {
@@ -256,6 +264,16 @@ class AdRevenueController extends Controller
                 $query->where($column, '=', $params[$camel]);
             }
         }
+    }
+
+    private function mapGroupByColumns(array $groupBy): array
+    {
+        $mapped = [];
+        foreach ($groupBy as $dim) {
+            $mapped[] = self::GROUP_BY_COLUMN_MAP[$dim] ?? $dim;
+        }
+
+        return $mapped;
     }
 
 }

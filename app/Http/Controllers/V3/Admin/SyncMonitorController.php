@@ -10,6 +10,7 @@ use App\Models\AdSyncState;
 use App\Models\AdSyncLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Http\Resources\CamelizeResource;
 
 class SyncMonitorController extends Controller
 {
@@ -35,7 +36,7 @@ class SyncMonitorController extends Controller
             $data = $query->orderByDesc('updated_at')->paginate($pageSize);
 
             return $this->ok([
-                'data'     => $data->items(),
+                'data'     => CamelizeResource::collection($data->items()),
                 'total'    => $data->total(),
                 'page'     => $data->currentPage(),
                 'pageSize' => $data->perPage(),
@@ -77,7 +78,7 @@ class SyncMonitorController extends Controller
             $data = $query->orderByDesc('started_at')->paginate($pageSize);
 
             return $this->ok([
-                'data'     => $data->items(),
+                'data'     => CamelizeResource::collection($data->items()),
                 'total'    => $data->total(),
                 'page'     => $data->currentPage(),
                 'pageSize' => $data->perPage(),

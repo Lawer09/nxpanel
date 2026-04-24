@@ -8,6 +8,7 @@ use App\Models\UserReportCount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Http\Resources\CamelizeResource;
 
 class PerformanceController extends Controller
 {
@@ -82,7 +83,7 @@ class PerformanceController extends Controller
             $data = $query->paginate($pageSize);
 
             return $this->ok([
-                'data'     => $data->items(),
+                'data'     => CamelizeResource::collection($data->items()),
                 'total'    => $data->total(),
                 'page'     => $data->currentPage(),
                 'pageSize' => $data->perPage(),
@@ -156,7 +157,7 @@ class PerformanceController extends Controller
         $data = $query->paginate($pageSize);
 
         return $this->ok([
-            'data'     => $data->items(),
+            'data'     =>  CamelizeResource::collection($data->items()),
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
@@ -225,7 +226,7 @@ class PerformanceController extends Controller
         $data = $query->paginate($pageSize);
 
         return $this->ok([
-            'data'     => $data->items(),
+            'data'     => CamelizeResource::collection($data->items()),
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
@@ -265,7 +266,7 @@ class PerformanceController extends Controller
         $data = $query->paginate($pageSize);
 
         return $this->ok([
-            'data'     => $data->items(),
+            'data'     => CamelizeResource::collection($data->items()),
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
@@ -364,7 +365,7 @@ class PerformanceController extends Controller
         }
 
         return $this->ok([
-            'data'          => $result,
+            'data'          => CamelizeResource::collection($result),
             'dateFrom'      => $dateFrom,
             'dateTo'        => $dateTo,
             'retentionDays' => $retentionDays,
@@ -426,7 +427,7 @@ class PerformanceController extends Controller
         }
 
         return $this->ok([
-            'data'        => $data,
+            'data'        => CamelizeResource::collection($data),
             'dateFrom'    => $dateFrom,
             'dateTo'      => $dateTo,
             'granularity' => $granularity,

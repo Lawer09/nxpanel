@@ -89,6 +89,8 @@ class LoginService
         $password = $aid;
 
         $user = User::where('email', $email)->first();
+        $created = false;
+        $duplicateOnCreate = false;
 
         if (!$user) {
             // 用户不存在，自动创建
@@ -102,16 +104,37 @@ class LoginService
                 ]);
 
                 if (!$user->save()) {
-                    return [false, [500, '用户创建失败']];
+                    return [false, [500, 'User creation failed']];
+                }
+
+                $created = true;
+            } catch (\Illuminate\Database\QueryException $e) {
+                $errorCode = $e->errorInfo[1] ?? null;
+                if ($errorCode === 1062) {
+                    \Illuminate\Support\Facades\Log::warning('loginByAid duplicate user on create', [
+                        'aid' => $aid,
+                        'email' => $email,
+                    ]);
+                    $duplicateOnCreate = true;
+                    $user = User::where('email', $email)->first();
+                }
+
+                if (!$user) {
+                    return [false, [500, 'User creation failed']];
                 }
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::error('loginByAid create user failed', [
                     'error' => $e->getMessage(),
                     'aid'   => $aid,
                 ]);
-                return [false, [500, '用户创建失败: ' . $e->getMessage()]];
+                return [false, [500, 'User creation failed']];
             }
-        } else {
+        }
+
+        if (!$created) {
+            if ($duplicateOnCreate) {
+                return [false, [409, 'AID already registered. Please log in or use a different AID.']];
+            }
             // 用户已存在，验证密码
             if (!Helper::multiPasswordVerify(
                 $user->password_algo,

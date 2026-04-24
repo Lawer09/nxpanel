@@ -8,10 +8,10 @@ class AdRevenueAggregate extends FormRequest
 {
     // 允许的聚合维度白名单
     private const ALLOWED_DIMENSIONS = [
-        'report_date', 'source_platform', 'account_id',
-        'provider_app_id', 'provider_ad_unit_id',
-        'country_code', 'device_platform', 'ad_format',
-        'report_type', 'ad_source_code',
+        'reportDate', 'sourcePlatform', 'accountId',
+        'providerAppId', 'providerAdUnitId',
+        'countryCode', 'devicePlatform', 'adFormat',
+        'reportType', 'adSourceCode',
     ];
 
     public function authorize(): bool
