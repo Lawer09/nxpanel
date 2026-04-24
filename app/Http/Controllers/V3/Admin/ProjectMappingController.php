@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ProjectMappingFetch;
 use App\Http\Requests\Admin\ProjectMappingUpsert;
 use App\Models\ProjectPlatformAppMap;
 use Illuminate\Http\Request;
@@ -14,42 +15,34 @@ class ProjectMappingController extends Controller
      * 查询项目映射列表
      * GET /admin/project-app-mappings
      */
-    public function fetch(Request $request)
+    public function fetch(ProjectMappingFetch $request)
     {
         try {
-            $page      = (int) $request->query('page', 1);
-            $size      = (int) $request->query('size', 20);
-            $projectId = $request->query('project_id');
-            $platform  = $request->query('source_platform');
-            $accountId = $request->query('account_id');
-            $status    = $request->query('status');
+            $params = $request->validated();
 
             $query = ProjectPlatformAppMap::with('account:id,account_name,source_platform');
 
-            if ($projectId) {
-                $query->where('project_id', $projectId);
+            if (!empty($params['project_id'])) {
+                $query->where('project_id', $params['project_id']);
             }
-            if ($platform) {
-                $query->where('source_platform', $platform);
+            if (!empty($params['source_platform'])) {
+                $query->where('source_platform', $params['source_platform']);
             }
-            if ($accountId) {
-                $query->where('account_id', $accountId);
+            if (!empty($params['account_id'])) {
+                $query->where('account_id', $params['account_id']);
             }
-            if ($status) {
-                $query->where('status', $status);
+            if (!empty($params['status'])) {
+                $query->where('status', $params['status']);
             }
 
-            $total = $query->count();
-            $items = $query->orderByDesc('id')
-                ->offset(($page - 1) * $size)
-                ->limit($size)
-                ->get();
+            $pageSize = $params['page_size'] ?? 20;
+            $data = $query->orderByDesc('id')->paginate($pageSize);
 
             return $this->ok([
-                'page'  => $page,
-                'size'  => $size,
-                'total' => $total,
-                'items' => $items,
+                'data'     => $data->items(),
+                'total'    => $data->total(),
+                'page'     => $data->currentPage(),
+                'pageSize' => $data->perPage(),
             ]);
         } catch (\Exception $e) {
             Log::error('ProjectMapping fetch error: ' . $e->getMessage());
