@@ -45,6 +45,55 @@ class ManageController extends V2ManageController
             'pageSize' => $paginator->perPage(),
         ]);
     }
+
+    /**
+     * 获取节点历史状态（最近 1 小时）
+     *
+     * GET /admin/server/manage/history
+     */
+    public function getHistory(Request $request): JsonResponse
+    {
+        $request->validate([
+            'id' => 'nullable|integer',
+            'page' => 'nullable|integer|min:1',
+            'pageSize' => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $page = (int) $request->input('page', 1);
+        $pageSize = (int) $request->input('pageSize', 20);
+
+        $query = Server::orderBy('sort', 'ASC');
+
+        if ($request->filled('id')) {
+            $query->where('id', $request->input('id'));
+        }
+
+        $paginator = $query->paginate($pageSize, ['*'], 'page', $page);
+
+        $items = $paginator->getCollection()->map(function ($server) {
+            $server->append([
+                'load_status_history',
+                'metrics_history',
+                'online_conn_history'
+            ]);
+
+            return [
+                'server_id' => $server->id,
+                'server_name' => $server->name,
+                'server_type' => $server->type,
+                'load_status_history' => $server->load_status_history ?? [],
+                'metrics_history' => $server->metrics_history ?? [],
+                'online_conn_history' => $server->online_conn_history ?? [],
+            ];
+        });
+
+        return $this->ok([
+            'data' => $items,
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
+            'pageSize' => $paginator->perPage(),
+        ]);
+    }
     /**
      * 查看节点当前在线用户（v3）
      *

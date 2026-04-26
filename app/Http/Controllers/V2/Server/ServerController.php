@@ -122,6 +122,18 @@ class ServerController extends Controller
                 CacheKey::get('SERVER_' . strtoupper($nodeType) . '_LOAD_STATUS', $nodeId) => $statusData,
                 CacheKey::get('SERVER_' . strtoupper($nodeType) . '_LAST_LOAD_AT', $nodeId) => now()->timestamp,
             ], $cacheTime);
+
+            $historyKey = CacheKey::get('SERVER_' . strtoupper($nodeType) . '_LOAD_STATUS_HISTORY', $nodeId);
+            $history = Cache::get($historyKey, []);
+            if (!is_array($history)) {
+                $history = [];
+            }
+            $history[] = $statusData;
+            $nowTs = now()->timestamp;
+            $history = array_values(array_filter($history, function ($item) use ($nowTs) {
+                return is_array($item) && ($item['updated_at'] ?? 0) >= ($nowTs - 3600);
+            }));
+            Cache::put($historyKey, $history, 3660);
         }
 
         // handle node metrics (Metrics)

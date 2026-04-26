@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\NodePerformanceAggregated;
+use App\Models\Server;
 use App\Models\UserReportCount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -156,8 +157,23 @@ class PerformanceController extends Controller
         $pageSize = $request->input('pageSize', 50);
         $data = $query->paginate($pageSize);
 
+        // 按节点聚合时补充节点名称和类型
+        $items = $data->items();
+        if ($groupBy === 'node' && !empty($items)) {
+            $nodeIds = collect($items)->map(fn($row) => $row->node_id ?? data_get($row, 'node_id'))->unique()->filter()->values();
+            $servers = Server::whereIn('id', $nodeIds)->get(['id', 'name', 'type'])->keyBy('id');
+            $items = collect($items)->map(function ($row) use ($servers) {
+                $nodeId = $row->node_id ?? data_get($row, 'node_id');
+                $server = $servers->get($nodeId);
+                $arr = $row instanceof \Illuminate\Database\Eloquent\Model ? $row->toArray() : (array) $row;
+                $arr['node_name'] = $server?->name ?? "Server {$nodeId}";
+                $arr['node_type'] = $server?->type;
+                return $arr;
+            })->toArray();
+        }
+
         return $this->ok([
-            'data'     =>  CamelizeResource::collection($data->items()),
+            'data'     => CamelizeResource::collection($items),
             'total'    => $data->total(),
             'page'     => $data->currentPage(),
             'pageSize' => $data->perPage(),
@@ -513,6 +529,98 @@ class PerformanceController extends Controller
                 'lastMonth' => $mauLastMonth,
                 'change'    => $mauLastMonth > 0 ? round(($mau - $mauLastMonth) / $mauLastMonth * 100, 2) : 0,
             ],
+        ]);
+    }
+
+    /**
+     * 最近 24 小时用户新增与活跃（按小时）
+     *
+     * GET /performance/userHourlyStats
+     */
+    public function getUserHourlyStats(Request $request): JsonResponse
+    {
+        $request->validate([
+            'appId'    => 'nullable|string|max:255',
+            'platform' => 'nullable|string|max:100',
+            'appVersion' => 'nullable|string|max:50',
+            'clientCountry' => 'nullable|string|max:2',
+        ]);
+
+        $now = now()->startOfHour();
+        $start = (clone $now)->subHours(23);
+
+        $dtExpr = "STR_TO_DATE(CONCAT(date, ' ', LPAD(hour, 2, '0'), ':00:00'), '%Y-%m-%d %H:%i:%s')";
+
+        $applyFilters = function ($query) use ($request) {
+            if ($request->filled('appId')) {
+                $query->where('app_id', $request->input('appId'));
+            }
+            if ($request->filled('platform')) {
+                $query->where('platform', $request->input('platform'));
+            }
+            if ($request->filled('appVersion')) {
+                $query->where('app_version', $request->input('appVersion'));
+            }
+            if ($request->filled('clientCountry')) {
+                $query->where('client_country', $request->input('clientCountry'));
+            }
+            return $query;
+        };
+
+        // 活跃用户（按小时去重）
+        $activeRows = DB::table('v3_user_report_count')
+            ->selectRaw("date, hour, COUNT(DISTINCT user_id) as active_users")
+            ->whereRaw("{$dtExpr} >= ? AND {$dtExpr} <= ?", [
+                $start->format('Y-m-d H:i:s'),
+                $now->format('Y-m-d H:i:s'),
+            ])
+            ->tap($applyFilters)
+            ->groupBy('date', 'hour')
+            ->get();
+
+        // 新增用户：以该用户首次上报时间所在小时计为新增
+        $firstReportSub = DB::table('v3_user_report_count')
+            ->selectRaw("user_id, MIN({$dtExpr}) as first_dt")
+            ->tap($applyFilters)
+            ->groupBy('user_id');
+
+        $newRows = DB::table(DB::raw("({$firstReportSub->toSql()}) as t"))
+            ->mergeBindings($firstReportSub)
+            ->selectRaw("DATE(first_dt) as date, HOUR(first_dt) as hour, COUNT(*) as new_users")
+            ->whereBetween('first_dt', [$start->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s')])
+            ->groupBy('date', 'hour')
+            ->get();
+
+        $activeMap = $activeRows->mapWithKeys(function ($row) {
+            $key = $row->date . '_' . str_pad((string) $row->hour, 2, '0', STR_PAD_LEFT);
+            return [$key => (int) $row->active_users];
+        });
+
+        $newMap = $newRows->mapWithKeys(function ($row) {
+            $key = $row->date . '_' . str_pad((string) $row->hour, 2, '0', STR_PAD_LEFT);
+            return [$key => (int) $row->new_users];
+        });
+
+        $items = [];
+        $cursor = (clone $start);
+        while ($cursor <= $now) {
+            $date = $cursor->toDateString();
+            $hour = (int) $cursor->format('H');
+            $key = $date . '_' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT);
+
+            $items[] = [
+                'time' => $cursor->format('Y-m-d H:00'),
+                'new_users' => $newMap[$key] ?? 0,
+                'active_users' => $activeMap[$key] ?? 0,
+            ];
+
+            $cursor->addHour();
+        }
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($items),
+            'start' => $start->format('Y-m-d H:00'),
+            'end' => $now->format('Y-m-d H:00'),
         ]);
     }
 }

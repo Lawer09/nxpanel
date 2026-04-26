@@ -507,6 +507,20 @@ class Server extends Model
     }
 
     /**
+     * 指标历史访问器（最近 1 小时）
+     */
+    protected function metricsHistory(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $type = strtoupper($this->type);
+                $serverId = $this->parent_id ?: $this->id;
+                return Cache::get(CacheKey::get("SERVER_{$type}_METRICS_HISTORY", $serverId), []);
+            }
+        );
+    }
+
+    /**
      * 在线连接数访问器
      */
     protected function onlineConn(): Attribute
@@ -514,6 +528,28 @@ class Server extends Model
         return Attribute::make(
             get: function () {
                 return $this->metrics['active_connections'] ?? 0;
+            }
+        );
+    }
+
+    /**
+     * 在线连接数历史访问器（最近 1 小时）
+     */
+    protected function onlineConnHistory(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $history = $this->metrics_history ?? [];
+                if (!is_array($history)) {
+                    return [];
+                }
+                return array_values(array_map(function ($item) {
+                    return [
+                        'updated_at' => (int) ($item['updated_at'] ?? 0),
+                        'active_connections' => (int) ($item['active_connections'] ?? 0),
+                        'tcp_connections' => (int) ($item['tcp_connections'] ?? 0),
+                    ];
+                }, $history));
             }
         );
     }
@@ -528,6 +564,20 @@ class Server extends Model
                 $type = strtoupper($this->type);
                 $serverId = $this->parent_id ?: $this->id;
                 return Cache::get(CacheKey::get("SERVER_{$type}_LOAD_STATUS", $serverId));
+            }
+        );
+    }
+
+    /**
+     * 负载状态历史访问器（最近 1 小时）
+     */
+    protected function loadStatusHistory(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $type = strtoupper($this->type);
+                $serverId = $this->parent_id ?: $this->id;
+                return Cache::get(CacheKey::get("SERVER_{$type}_LOAD_STATUS_HISTORY", $serverId), []);
             }
         );
     }

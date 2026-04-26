@@ -146,11 +146,13 @@ class ServerService
         $nodeType = strtoupper($node->type);
         $nodeId = $node->id;
         $cacheTime = max(300, (int) admin_setting('server_push_interval', 60) * 3);
+        $historySeconds = 3600;
 
         $metricsData = [
             'uptime' => (int) ($metrics['uptime'] ?? 0),
             'goroutines' => (int) ($metrics['goroutines'] ?? 0),
             'active_connections' => (int) ($metrics['active_connections'] ?? 0),
+            'tcp_connections' => (int) ($metrics['tcp_connections'] ?? 0),
             'total_connections' => (int) ($metrics['total_connections'] ?? 0),
             'total_users' => (int) ($metrics['total_users'] ?? 0),
             'active_users' => (int) ($metrics['active_users'] ?? 0),
@@ -166,6 +168,20 @@ class ServerService
             'updated_at' => now()->timestamp,
             'kernel_status' => (bool) ($metrics['kernel_status'] ?? false),
         ];
+
+        $nowTs = now()->timestamp;
+        $metricsData['updated_at'] = $nowTs;
+
+        $historyKey = \App\Utils\CacheKey::get('SERVER_' . $nodeType . '_METRICS_HISTORY', $nodeId);
+        $history = \Illuminate\Support\Facades\Cache::get($historyKey, []);
+        if (!is_array($history)) {
+            $history = [];
+        }
+        $history[] = $metricsData;
+        $history = array_values(array_filter($history, function ($item) use ($nowTs, $historySeconds) {
+            return is_array($item) && ($item['updated_at'] ?? 0) >= ($nowTs - $historySeconds);
+        }));
+        \Illuminate\Support\Facades\Cache::put($historyKey, $history, $historySeconds + 60);
 
         \Illuminate\Support\Facades\Cache::put(
             \App\Utils\CacheKey::get('SERVER_' . $nodeType . '_METRICS', $nodeId),

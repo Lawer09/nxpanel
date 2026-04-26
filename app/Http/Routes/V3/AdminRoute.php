@@ -22,6 +22,7 @@ use App\Http\Controllers\V3\Admin\ProjectMappingController;
 use App\Http\Controllers\V3\Admin\SyncServerController;
 use App\Http\Controllers\V3\Admin\SyncMonitorController;
 use App\Http\Controllers\V3\Admin\AdRevenueController;
+use App\Http\Controllers\V3\Admin\EnumController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -33,6 +34,9 @@ class AdminRoute
             'prefix'     => admin_setting('secure_path', admin_setting('frontend_admin_path', hash('crc32b', config('app.key')))),
             'middleware' => ['admin', 'log'],
         ], function ($router) {
+
+            // Enum Options
+            $router->get('/enum/options', [EnumController::class, 'getOptions']);
 
             // Order
             $router->group(['prefix' => 'order'], function ($router) {
@@ -113,7 +117,8 @@ class AdminRoute
                 $router->post('/batchSave',       [ManageController::class, 'batchSave']);
                 $router->get('/testPort',               [ManageController::class, 'testPort']);
                 $router->post('/updateNodeConfig',      [ManageController::class, 'updateNodeConfig']);
-                $router->get('/getNodes', [ManageController::class, 'getNodes']);
+                 $router->get('/getNodes', [ManageController::class, 'getNodes']);
+                 $router->get('/history',   [ManageController::class, 'getHistory']);
             });
 
             // Stat
@@ -192,6 +197,7 @@ class AdminRoute
                 $router->get('/retention',             [PerformanceController::class, 'getRetention']);
                 $router->get('/activeUsers',           [PerformanceController::class, 'getActiveUsers']);
                 $router->get('/activeUsersSummary',    [PerformanceController::class, 'getActiveUsersSummary']);
+                $router->get('/userHourlyStats',       [PerformanceController::class, 'getUserHourlyStats']);
             });
 
             // Version Changelog Management
