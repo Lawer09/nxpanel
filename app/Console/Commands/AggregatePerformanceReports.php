@@ -268,10 +268,12 @@ class AggregatePerformanceReports extends Command
             ->where('date', '<', $cutoff)
             ->delete();
 
-        $deletedUser = DB::table('v3_user_report_count')
-            ->where('date', '<', $cutoff)
-            ->delete();
-
+        // $deletedUser = DB::table('v3_user_report_count')
+        //     ->where('date', '<', $cutoff)
+        //     ->delete();
+    
+        $deletedUser = 0; // 暂不删除用户上报统计数据，保留历史查询能力    
+        
         if ($deletedAgg > 0 || $deletedUser > 0) {
             $this->info("Pruned old data (before {$cutoff}): aggregated={$deletedAgg}, user_report={$deletedUser}");
         }

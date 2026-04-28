@@ -52,6 +52,7 @@ class ServerService
     public static function getPagedServers(int $pageSize = 20, int $page = 1)
     {
         $paginator = Server::orderBy('sort', 'ASC')
+            ->orderBy('id', 'desc')
             ->paginate($pageSize, ['*'], 'page', $page);
 
         $paginator->getCollection()->each->append([

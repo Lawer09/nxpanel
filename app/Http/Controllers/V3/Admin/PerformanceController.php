@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\NodePerformanceAggregated;
 use App\Models\Server;
 use App\Models\UserReportCount;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Http\Resources\CamelizeResource;
 
@@ -414,6 +416,7 @@ class PerformanceController extends Controller
         if ($request->filled('appId')) {
             $baseQuery->where('app_id', $request->input('appId'));
         }
+        
         if ($request->filled('platform')) {
             $baseQuery->where('platform', $request->input('platform'));
         }
@@ -441,6 +444,73 @@ class PerformanceController extends Controller
                     ->get();
                 break;
         }
+
+        $cacheKey = sprintf(
+            'perf:active_users:new_users:%s:%s:%s:%s:%s',
+            $granularity,
+            $dateFrom,
+            $dateTo,
+            $request->input('appId', ''),
+            $request->input('platform', '')
+        );
+
+        $newMap = Cache::remember($cacheKey, 300, function () use ($request, $dateFrom, $dateTo, $granularity) {
+            $firstReportSub = DB::table('v3_user_report_count')
+                ->selectRaw('user_id, MIN(date) as first_date');
+
+            if ($request->filled('appId')) {
+                $firstReportSub->where('app_id', $request->input('appId'));
+            }
+            if ($request->filled('platform')) {
+                $firstReportSub->where('platform', $request->input('platform'));
+            }
+
+            $firstReportSub->groupBy('user_id');
+
+            $newQuery = DB::table(DB::raw("({$firstReportSub->toSql()}) as t"))
+                ->mergeBindings($firstReportSub)
+                ->whereBetween('first_date', [$dateFrom, $dateTo]);
+
+            if ($granularity === 'week') {
+                $rows = $newQuery
+                    ->selectRaw('YEARWEEK(first_date, 1) as period, COUNT(*) as new_users')
+                    ->groupByRaw('YEARWEEK(first_date, 1)')
+                    ->orderBy('period')
+                    ->get();
+            } elseif ($granularity === 'month') {
+                $rows = $newQuery
+                    ->selectRaw('DATE_FORMAT(first_date, "%Y-%m") as period, COUNT(*) as new_users')
+                    ->groupByRaw('DATE_FORMAT(first_date, "%Y-%m")')
+                    ->orderBy('period')
+                    ->get();
+            } else {
+                $rows = $newQuery
+                    ->selectRaw('first_date as period, COUNT(*) as new_users')
+                    ->groupBy('first_date')
+                    ->orderBy('first_date')
+                    ->get();
+            }
+
+            return $rows->mapWithKeys(fn($row) => [(string) $row->period => (int) $row->new_users])->toArray();
+        });
+
+        // 获取注册用户数据（来自 UserService，基于 users 表 created_at）
+        $regMap = app(UserService::class)->getNewUsersByDateRange(
+            $dateFrom,
+            $dateTo,
+            $granularity,
+            [
+                'appId' => $request->input('appId'),
+                'platform' => $request->input('platform'),
+            ]
+        );
+
+        $data = $data->map(function ($row) use ($newMap, $regMap) {
+            $key = (string) $row->period;
+            $row->new_users = $newMap[$key] ?? 0;
+            $row->reg_users = $regMap[$key] ?? 0;
+            return $row;
+        });
 
         return $this->ok([
             'data'        => CamelizeResource::collection($data),
@@ -621,6 +691,99 @@ class PerformanceController extends Controller
             'data' => CamelizeResource::collection($items),
             'start' => $start->format('Y-m-d H:00'),
             'end' => $now->format('Y-m-d H:00'),
+        ]);
+    }
+
+    /**
+     * 新增 + 活跃用户趋势（按天 / 按月）
+     *
+     * GET /performance/userGrowth
+     */
+    public function getUserGrowth(Request $request): JsonResponse
+    {
+        $request->validate([
+            'dateFrom'    => 'nullable|date',
+            'dateTo'      => 'nullable|date',
+            'granularity' => 'nullable|in:day,month',
+            'appId'       => 'nullable|string|max:255',
+            'appVersion'  => 'nullable|string|max:50',
+            'platform'    => 'nullable|string|max:100',
+        ]);
+
+        $dateFrom = $request->input('dateFrom', now()->subDays(30)->toDateString());
+        $dateTo = $request->input('dateTo', now()->toDateString());
+        $granularity = $request->input('granularity', 'day');
+
+        $baseQuery = DB::table('v3_user_report_count')
+            ->where('date', '>=', $dateFrom)
+            ->where('date', '<=', $dateTo);
+
+        if ($request->filled('appId')) {
+            $baseQuery->where('app_id', $request->input('appId'));
+        }
+        if ($request->filled('platform')) {
+            $baseQuery->where('platform', $request->input('platform'));
+        }
+
+        if ($granularity === 'month') {
+            $activeRows = (clone $baseQuery)
+                ->selectRaw('DATE_FORMAT(date, "%Y-%m") as period, COUNT(DISTINCT user_id) as active_users')
+                ->groupByRaw('DATE_FORMAT(date, "%Y-%m")')
+                ->orderBy('period')
+                ->get();
+        } else {
+            $activeRows = (clone $baseQuery)
+                ->selectRaw('date as period, COUNT(DISTINCT user_id) as active_users')
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get();
+        }
+
+        $activeMap = $activeRows->mapWithKeys(fn($row) => [$row->period => (int) $row->active_users]);
+
+        $newMap = app(UserService::class)->getNewUsersByDateRange(
+            $dateFrom,
+            $dateTo,
+            $granularity,
+            [
+                'appId' => $request->input('appId'),
+                'appVersion' => $request->input('appVersion'),
+                'platform' => $request->input('platform'),
+            ]
+        );
+
+        $items = [];
+        if ($granularity === 'month') {
+            $cursor = \Carbon\Carbon::parse($dateFrom)->startOfMonth();
+            $end = \Carbon\Carbon::parse($dateTo)->startOfMonth();
+            while ($cursor <= $end) {
+                $period = $cursor->format('Y-m');
+                $items[] = [
+                    'period' => $period,
+                    'new_users' => $newMap[$period] ?? 0,
+                    'active_users' => $activeMap[$period] ?? 0,
+                ];
+                $cursor->addMonth();
+            }
+        } else {
+            $cursor = \Carbon\Carbon::parse($dateFrom)->startOfDay();
+            $end = \Carbon\Carbon::parse($dateTo)->startOfDay();
+            while ($cursor <= $end) {
+                $period = $cursor->toDateString();
+                $items[] = [
+                    'period' => $period,
+                    'new_users' => $newMap[$period] ?? 0,
+                    'active_users' => $activeMap[$period] ?? 0,
+                ];
+                $cursor->addDay();
+            }
+        }
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($items),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'granularity' => $granularity,
         ]);
     }
 }

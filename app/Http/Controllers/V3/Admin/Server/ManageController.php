@@ -62,7 +62,8 @@ class ManageController extends V2ManageController
         $page = (int) $request->input('page', 1);
         $pageSize = (int) $request->input('pageSize', 20);
 
-        $query = Server::orderBy('sort', 'ASC');
+        $query = Server::orderBy('sort', 'ASC')
+            ->orderBy('id', 'desc');
 
         if ($request->filled('id')) {
             $query->where('id', $request->input('id'));

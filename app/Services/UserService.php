@@ -13,6 +13,8 @@ use App\Services\Plugin\HookManager;
 use App\Services\TrafficResetService;
 use App\Models\TrafficResetLog;
 use App\Utils\Helper;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Support\Facades\Hash;
 
 class UserService
@@ -80,6 +82,49 @@ class UserService
     public function getUsersByIds($ids)
     {
         return User::whereIn('id', $ids)->get();
+    }
+
+    /**
+     * 获取日期范围内新增用户数量（按天/按周/按月）
+     */
+    public function getNewUsersByDateRange(string $dateFrom, string $dateTo, string $granularity = 'day', array $filters = []): array
+    {
+        $start = Carbon::parse($dateFrom)->startOfDay();
+        $end = Carbon::parse($dateTo)->endOfDay();
+
+        $query = User::query()->whereBetween('created_at', [$start, $end]);
+
+        if (!empty($filters['appId'])) {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(register_metadata, '$.app_id')) = ?", [$filters['appId']]);
+        }
+        if (!empty($filters['appVersion'])) {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(register_metadata, '$.app_version')) = ?", [$filters['appVersion']]);
+        }
+        if (!empty($filters['platform'])) {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(register_metadata, '$.platform')) = ?", [$filters['platform']]);
+        }
+
+        if ($granularity === 'month') {
+            $rows = $query
+                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as period, COUNT(*) as new_users')
+                ->groupByRaw('DATE_FORMAT(created_at, "%Y-%m")')
+                ->orderBy('period')
+                ->get();
+        } elseif ($granularity === 'week') {
+            $rows = $query
+                ->selectRaw('YEARWEEK(created_at, 1) as period, COUNT(*) as new_users')
+                ->groupByRaw('YEARWEEK(created_at, 1)')
+                ->orderBy('period')
+                ->get();
+        } else {
+            $rows = $query
+                ->selectRaw('DATE(created_at) as period, COUNT(*) as new_users')
+                ->groupByRaw('DATE(created_at)')
+                ->orderBy('period')
+                ->get();
+        }
+
+        return $rows->mapWithKeys(fn($row) => [$row->period => (int) $row->new_users])->toArray();
     }
 
     public function getAllUsers()

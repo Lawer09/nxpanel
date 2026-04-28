@@ -64,12 +64,13 @@ class NodePerformanceService
     /**
      * 批量上报 → 写入当前 5 分钟桶（pipeline）
      */
-    public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, string $clientIp, $request): void
+    public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, array $userDefault, string $clientIp, $request): void
     {
         $now = now()->toDateTimeString();
         $data = [
             'metadata' => $metadata,
             'reports' => $nodeReports,
+            'user_default' => $userDefault,
             'userId' => $userId,
             'clientIp' => $clientIp,
             'reported_at' => $metadata['timestamp'] ?? now()->getTimestampMs(),

@@ -23,6 +23,11 @@ use App\Http\Controllers\V3\Admin\SyncServerController;
 use App\Http\Controllers\V3\Admin\SyncMonitorController;
 use App\Http\Controllers\V3\Admin\AdRevenueController;
 use App\Http\Controllers\V3\Admin\EnumController;
+use App\Http\Controllers\V3\Admin\UserReportController;
+use App\Http\Controllers\V3\Admin\TrafficPlatformController;
+use App\Http\Controllers\V3\Admin\TrafficPlatformAccountController;
+use App\Http\Controllers\V3\Admin\TrafficPlatformUsageController;
+use App\Http\Controllers\V3\Admin\TrafficPlatformSyncController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -198,6 +203,12 @@ class AdminRoute
                 $router->get('/activeUsers',           [PerformanceController::class, 'getActiveUsers']);
                 $router->get('/activeUsersSummary',    [PerformanceController::class, 'getActiveUsersSummary']);
                 $router->get('/userHourlyStats',       [PerformanceController::class, 'getUserHourlyStats']);
+                $router->get('/userGrowth',            [PerformanceController::class, 'getUserGrowth']);
+            });
+
+            // Realtime User Reports
+            $router->group(['prefix' => 'userReport'], function ($router) {
+                $router->get('/realtime', [UserReportController::class, 'getRealtime']);
             });
 
             // Version Changelog Management
@@ -264,6 +275,42 @@ class AdminRoute
             $router->get('/sync-states',  [SyncMonitorController::class, 'states']);
             $router->get('/sync-logs',    [SyncMonitorController::class, 'logs']);
             $router->post('/sync-jobs/trigger', [SyncMonitorController::class, 'trigger']);
+
+            // Traffic Platform - 三方流量平台
+            $router->group(['prefix' => 'traffic-platform'], function ($router) {
+
+                // 平台配置
+                $router->group(['prefix' => 'platforms'], function ($router) {
+                    $router->get('/',              [TrafficPlatformController::class, 'fetch']);
+                    $router->post('/',             [TrafficPlatformController::class, 'save']);
+                    $router->put('/{id}',          [TrafficPlatformController::class, 'update']);
+                    $router->patch('/{id}/status', [TrafficPlatformController::class, 'updateStatus']);
+                });
+
+                // 平台账号
+                $router->group(['prefix' => 'accounts'], function ($router) {
+                    $router->get('/',              [TrafficPlatformAccountController::class, 'fetch']);
+                    $router->get('/{id}',          [TrafficPlatformAccountController::class, 'detail']);
+                    $router->post('/',             [TrafficPlatformAccountController::class, 'save']);
+                    $router->put('/{id}',          [TrafficPlatformAccountController::class, 'update']);
+                    $router->patch('/{id}/status', [TrafficPlatformAccountController::class, 'updateStatus']);
+                    $router->post('/{id}/test',    [TrafficPlatformAccountController::class, 'test']);
+                });
+
+                // 流量查询
+                $router->group(['prefix' => 'usages'], function ($router) {
+                    $router->get('/hourly',  [TrafficPlatformUsageController::class, 'hourly']);
+                    $router->get('/daily',   [TrafficPlatformUsageController::class, 'daily']);
+                    $router->get('/monthly', [TrafficPlatformUsageController::class, 'monthly']);
+                    $router->get('/trend',   [TrafficPlatformUsageController::class, 'trend']);
+                    $router->get('/ranking', [TrafficPlatformUsageController::class, 'ranking']);
+                });
+
+                // 同步
+                $router->post('/sync',           [TrafficPlatformSyncController::class, 'trigger']);
+                $router->get('/sync-jobs',       [TrafficPlatformSyncController::class, 'fetch']);
+                $router->get('/sync-jobs/{id}',  [TrafficPlatformSyncController::class, 'detail']);
+            });
         });
     }
 }

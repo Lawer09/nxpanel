@@ -11,6 +11,7 @@ use App\Http\Requests\User\PerformanceReport;
 use App\Services\NodePerformanceService;
 use App\Services\IpInfoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class UserReportController extends Controller
@@ -47,11 +48,35 @@ class UserReportController extends Controller
         try {
             NodePerformanceService::batchReportPerformance(
                 $request->user()->id,
-                $validated['reports'],
+                $validated['reports'] ?? [],
                 $validated['metadata'] ?? [],
+                $validated['user_default'] ?? [],
                 $request->getClientIp(),
                 $request
             );
+
+            $cacheKey = 'realtime:user_report:latest';
+            $maxItems = 500;
+            $entry = [
+                'user_id'      => $request->user()->id,
+                'ip'           => $request->getClientIp(),
+                'metadata'     => $validated['metadata'] ?? [],
+                'user_default' => $request->input('user_default') ?? [],
+                'reports'      => $validated['reports'] ?? [],
+                'created_at'   => now()->toDateTimeString(),
+            ];
+
+            // Log::info('========batchReport', $request->all(), $validated['reports'] ?? []);
+
+            $list = Cache::get($cacheKey, []);
+            if (!is_array($list)) {
+                $list = [];
+            }
+            array_unshift($list, $entry);
+            if (count($list) > $maxItems) {
+                $list = array_slice($list, 0, $maxItems);
+            }
+            Cache::put($cacheKey, $list, 3600);
 
             return $this->ok();
         } catch (\Exception $e) {
