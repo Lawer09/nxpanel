@@ -53,7 +53,6 @@ class TrafficPlatformController extends Controller
                 'code'           => 'required|string|max:50',
                 'name'           => 'required|string|max:100',
                 'baseUrl'        => 'nullable|string|max:255',
-                'supportsHourly' => 'nullable|integer|in:0,1',
                 'enabled'        => 'nullable|integer|in:0,1',
                 'remark'         => 'nullable|string|max:255',
             ]);
@@ -66,7 +65,6 @@ class TrafficPlatformController extends Controller
                 'code'            => $request->input('code'),
                 'name'            => $request->input('name'),
                 'base_url'        => $request->input('baseUrl', ''),
-                'supports_hourly' => $request->input('supportsHourly', 0),
                 'enabled'         => $request->input('enabled', 1),
                 'remark'          => $request->input('remark'),
             ]);
@@ -95,7 +93,6 @@ class TrafficPlatformController extends Controller
             $request->validate([
                 'name'           => 'nullable|string|max:100',
                 'baseUrl'        => 'nullable|string|max:255',
-                'supportsHourly' => 'nullable|integer|in:0,1',
                 'enabled'        => 'nullable|integer|in:0,1',
                 'remark'         => 'nullable|string|max:255',
             ]);
@@ -103,7 +100,6 @@ class TrafficPlatformController extends Controller
             $updateData = [];
             if ($request->has('name'))           $updateData['name']            = $request->input('name');
             if ($request->has('baseUrl'))         $updateData['base_url']        = $request->input('baseUrl');
-            if ($request->has('supportsHourly'))  $updateData['supports_hourly'] = $request->input('supportsHourly');
             if ($request->has('enabled'))         $updateData['enabled']         = $request->input('enabled');
             if ($request->has('remark'))          $updateData['remark']          = $request->input('remark');
 

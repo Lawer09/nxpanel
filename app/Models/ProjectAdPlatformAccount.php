@@ -3,11 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class TrafficPlatform extends Model
+class ProjectAdPlatformAccount extends Model
 {
-    protected $table = 'traffic_platform_platforms';
+    protected $table = 'project_ad_platform_accounts';
 
     protected $guarded = ['id'];
 
@@ -17,8 +17,8 @@ class TrafficPlatform extends Model
         'updated_at' => 'datetime',
     ];
 
-    public function accounts(): HasMany
+    public function project(): BelongsTo
     {
-        return $this->hasMany(TrafficPlatformAccount::class, 'platform_id');
+        return $this->belongsTo(Project::class, 'project_id');
     }
 }
