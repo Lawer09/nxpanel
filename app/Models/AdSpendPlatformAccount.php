@@ -19,4 +19,22 @@ class AdSpendPlatformAccount extends Model
     ];
 
     protected $hidden = ['password', 'access_token'];
+
+    public function getPasswordAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        try {
+            return decrypt($value);
+        } catch (\Throwable $e) {
+            return $value;
+        }
+    }
+
+    public function setPasswordAttribute($value): void
+    {
+        $this->attributes['password'] = $value ? encrypt($value) : null;
+    }
 }

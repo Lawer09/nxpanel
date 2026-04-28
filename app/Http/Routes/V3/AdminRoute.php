@@ -18,6 +18,7 @@ use App\Http\Controllers\V3\Admin\VersionController;
 use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\AppTrafficController;
 use App\Http\Controllers\V3\Admin\AdAccountController;
+use App\Http\Controllers\V3\Admin\AdSpendPlatformController;
 use App\Http\Controllers\V3\Admin\ProjectController;
 use App\Http\Controllers\V3\Admin\ProjectTrafficAccountController;
 use App\Http\Controllers\V3\Admin\ProjectAdAccountController;
@@ -246,6 +247,30 @@ class AdminRoute
                 $router->post('/{id}/test-credential', [AdAccountController::class, 'testCredential']);
                 $router->post('/batch-assign-server', [AdAccountController::class, 'batchAssignServer']);
             });
+
+            // Ad Spend Platform
+            $router->group(['prefix' => 'ad-spend-platform'], function ($router) {
+                $router->group(['prefix' => 'accounts'], function ($router) {
+                    $router->get('/',                [AdSpendPlatformController::class, 'fetchAccounts']);
+                    $router->get('/{id}',            [AdSpendPlatformController::class, 'detailAccount']);
+                    $router->post('/',               [AdSpendPlatformController::class, 'saveAccount']);
+                    $router->put('/{id}',            [AdSpendPlatformController::class, 'updateAccount']);
+                    $router->patch('/{id}/status',   [AdSpendPlatformController::class, 'updateAccountStatus']);
+                    $router->post('/{id}/test',      [AdSpendPlatformController::class, 'testAccount']);
+                });
+
+                $router->post('/sync',               [AdSpendPlatformController::class, 'sync']);
+                $router->get('/sync-jobs',           [AdSpendPlatformController::class, 'fetchSyncJobs']);
+                $router->get('/sync-jobs/{id}',      [AdSpendPlatformController::class, 'detailSyncJob']);
+
+                $router->group(['prefix' => 'reports'], function ($router) {
+                    $router->get('/daily',           [AdSpendPlatformController::class, 'daily']);
+                    $router->get('/summary',         [AdSpendPlatformController::class, 'summary']);
+                    $router->get('/trend',           [AdSpendPlatformController::class, 'trend']);
+                });
+
+                $router->get('/project-codes',       [AdSpendPlatformController::class, 'projectCodes']);
+            });
     
             // Project App Mappings
             $router->group(['prefix' => 'project-app-mappings'], function ($router) {
@@ -272,6 +297,8 @@ class AdminRoute
                 $router->post('/{id}/ad-accounts',                        [ProjectAdAccountController::class, 'save']);
                 $router->put('/{id}/ad-accounts/{relationId}',            [ProjectAdAccountController::class, 'update']);
                 $router->delete('/{id}/ad-accounts/{relationId}',         [ProjectAdAccountController::class, 'drop']);
+
+                $router->get('/{projectCode}/ad-spend-daily',              [AdSpendPlatformController::class, 'projectDaily']);
             });
 
             // Sync Servers
