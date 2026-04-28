@@ -19,6 +19,7 @@ use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\AppTrafficController;
 use App\Http\Controllers\V3\Admin\AdAccountController;
 use App\Http\Controllers\V3\Admin\AdSpendPlatformController;
+use App\Http\Controllers\V3\Admin\ProjectAggregateController;
 use App\Http\Controllers\V3\Admin\ProjectController;
 use App\Http\Controllers\V3\Admin\ProjectTrafficAccountController;
 use App\Http\Controllers\V3\Admin\ProjectAdAccountController;
@@ -270,6 +271,13 @@ class AdminRoute
                 });
 
                 $router->get('/project-codes',       [AdSpendPlatformController::class, 'projectCodes']);
+            });
+
+            // Project Aggregates
+            $router->group(['prefix' => 'project-aggregates'], function ($router) {
+                $router->get('/daily',   [ProjectAggregateController::class, 'daily']);
+                $router->get('/summary', [ProjectAggregateController::class, 'summary']);
+                $router->get('/trend',   [ProjectAggregateController::class, 'trend']);
             });
     
             // Project App Mappings
