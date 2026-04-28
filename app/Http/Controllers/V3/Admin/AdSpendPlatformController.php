@@ -317,13 +317,12 @@ class AdSpendPlatformController extends Controller
                     AdSpendDailyReport::updateOrCreate(
                         [
                             'platform_account_id' => $account->id,
-                            'project_id' => $project->id,
+                            'project_code' => $projectCode,
                             'report_date' => $reportDate,
                             'country' => $country,
                         ],
                         [
                             'platform_code' => $account->platform_code,
-                            'project_code' => $projectCode,
                             'impressions' => $impressions,
                             'clicks' => $clicks,
                             'spend' => $spend,

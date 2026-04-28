@@ -32,7 +32,6 @@ return new class extends Migration
                 $table->bigIncrements('id');
                 $table->unsignedBigInteger('platform_account_id')->comment('投放平台账号ID');
                 $table->string('platform_code', 50)->comment('投放平台编码');
-                $table->unsignedBigInteger('project_id')->comment('项目ID');
                 $table->string('project_code', 100)->comment('项目代号');
                 $table->date('report_date')->comment('报表日期');
                 $table->string('country', 50)->default('')->comment('国家或地区');
@@ -46,10 +45,10 @@ return new class extends Migration
                 $table->timestamps();
 
                 $table->unique(
-                    ['platform_account_id', 'project_id', 'report_date', 'country'],
+                    ['platform_account_id', 'project_code', 'report_date', 'country'],
                     'uk_ad_spend_daily'
                 );
-                $table->index(['project_id', 'report_date'], 'idx_aspdr_project_date');
+                $table->index(['project_code', 'report_date'], 'idx_aspdr_project_code_date');
                 $table->index(['platform_code', 'report_date'], 'idx_aspdr_platform_date');
                 $table->index('report_date', 'idx_aspdr_report_date');
             });

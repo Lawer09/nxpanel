@@ -11,7 +11,6 @@ class AdSpendDailyReport extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'project_id'   => 'integer',
         'impressions'  => 'integer',
         'clicks'       => 'integer',
         'spend'        => 'decimal:6',
