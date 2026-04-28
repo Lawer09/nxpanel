@@ -76,11 +76,14 @@ class ProjectAggregateController extends Controller
     public function daily(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
                 'adCountry' => 'nullable|string|max:50',
+                'groupBy' => 'nullable|string|in:detail,dateProject,dateProjectCountry',
                 'page' => 'nullable|integer|min:1',
                 'pageSize' => 'nullable|integer|min:1|max:200',
                 'orderBy' => 'nullable|string|in:reportDate,projectCode,adCountry,revenue,adSpendCost,trafficCost,grossProfit,roi,cpi,updatedAt',
@@ -91,6 +94,7 @@ class ProjectAggregateController extends Controller
             $pageSize = (int) $request->input('pageSize', 50);
             $orderBy = (string) $request->input('orderBy', 'reportDate');
             $orderDir = (string) $request->input('orderDir', 'desc');
+            $groupBy = (string) $request->input('groupBy', 'detail');
 
             $columnMap = [
                 'reportDate' => 'report_date',
@@ -116,12 +120,59 @@ class ProjectAggregateController extends Controller
                 $query->where('ad_country', (string) $request->input('adCountry', ''));
             }
 
-            $total = (clone $query)->count();
-            $rows = $query
-                ->orderBy($columnMap[$orderBy], $orderDir)
-                ->offset(($page - 1) * $pageSize)
-                ->limit($pageSize)
-                ->get();
+            if ($groupBy === 'detail') {
+                $total = (clone $query)->count();
+                $rows = $query
+                    ->orderBy($columnMap[$orderBy], $orderDir)
+                    ->offset(($page - 1) * $pageSize)
+                    ->limit($pageSize)
+                    ->get();
+            } else {
+                $groupQuery = clone $query;
+                $groupQuery
+                    ->selectRaw('report_date')
+                    ->selectRaw('project_code')
+                    ->selectRaw('SUM(report_new_users) as report_new_users')
+                    ->selectRaw('SUM(dau_users) as dau_users')
+                    ->selectRaw('SUM(register_new_users) as register_new_users')
+                    ->selectRaw('SUM(revenue) as revenue')
+                    ->selectRaw('SUM(ad_requests) as ad_requests')
+                    ->selectRaw('SUM(matched_requests) as matched_requests')
+                    ->selectRaw('SUM(impressions) as impressions')
+                    ->selectRaw('SUM(clicks) as clicks')
+                    ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
+                    ->selectRaw('SUM(traffic_usage_gb) as traffic_usage_gb')
+                    ->selectRaw('SUM(traffic_cost) as traffic_cost')
+                    ->selectRaw('SUM(gross_profit) as gross_profit')
+                    ->selectRaw('MAX(updated_at) as updated_at');
+
+                if ($groupBy === 'dateProjectCountry') {
+                    $groupQuery->selectRaw('ad_country')->groupBy('report_date', 'project_code', 'ad_country');
+                } else {
+                    $groupQuery->selectRaw('"" as ad_country')->groupBy('report_date', 'project_code');
+                }
+
+                $groupQuery
+                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(revenue)/SUM(impressions)*1000,6) END as ecpm')
+                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(clicks)/SUM(impressions)*100,6) END as ctr')
+                    ->selectRaw('CASE WHEN SUM(ad_requests)=0 THEN NULL ELSE ROUND(SUM(matched_requests)/SUM(ad_requests)*100,6) END as match_rate')
+                    ->selectRaw('CASE WHEN SUM(matched_requests)=0 THEN NULL ELSE ROUND(SUM(impressions)/SUM(matched_requests)*100,6) END as show_rate')
+                    ->selectRaw('CASE WHEN (SUM(ad_spend_cost)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(gross_profit)/(SUM(ad_spend_cost)+SUM(traffic_cost)),6) END as roi')
+                    ->selectRaw('CASE WHEN SUM(report_new_users)=0 THEN NULL ELSE ROUND(SUM(ad_spend_cost)/SUM(report_new_users),6) END as cpi')
+                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(revenue)/SUM(impressions)*1000,6) END as fb_ecpm');
+
+                $countQuery = DB::table(DB::raw("({$groupQuery->toSql()}) as t"))
+                    ->mergeBindings($groupQuery)
+                    ->selectRaw('COUNT(*) as cnt')
+                    ->first();
+                $total = (int) ($countQuery->cnt ?? 0);
+
+                $rows = $groupQuery
+                    ->orderBy($columnMap[$orderBy], $orderDir)
+                    ->offset(($page - 1) * $pageSize)
+                    ->limit($pageSize)
+                    ->get();
+            }
 
             $list = $rows->map(function ($row) {
                 return [
@@ -169,6 +220,8 @@ class ProjectAggregateController extends Controller
     public function summary(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
@@ -273,6 +326,8 @@ class ProjectAggregateController extends Controller
     public function trend(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
@@ -357,5 +412,30 @@ class ProjectAggregateController extends Controller
         }
 
         return number_format((float) $value, 6, '.', '');
+    }
+
+    private function normalizeQueryParams(Request $request): void
+    {
+        $map = [
+            'startdate' => 'startDate',
+            'enddate' => 'endDate',
+            'projectcode' => 'projectCode',
+            'adcountry' => 'adCountry',
+            'pagesize' => 'pageSize',
+            'orderby' => 'orderBy',
+            'orderdir' => 'orderDir',
+            'groupby' => 'groupBy',
+        ];
+
+        $merged = [];
+        foreach ($map as $from => $to) {
+            if ($request->has($from) && !$request->has($to)) {
+                $merged[$to] = $request->input($from);
+            }
+        }
+
+        if (!empty($merged)) {
+            $request->merge($merged);
+        }
     }
 }

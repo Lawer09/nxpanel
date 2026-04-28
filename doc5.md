@@ -29,10 +29,22 @@
 | endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
 | projectCode | string | 否 | 项目代号 |
 | adCountry | string | 否 | 广告国家 |
+| groupBy | string | 否 | `detail` / `dateProject` / `dateProjectCountry`，默认 `detail` |
 | page | int | 否 | 默认 `1` |
 | pageSize | int | 否 | 默认 `50`，最大 `200` |
 | orderBy | string | 否 | 默认 `reportDate` |
 | orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
+
+`groupBy` 定义：
+
+- `detail`：明细（按 `reportDate + projectCode + adCountry` 原始粒度）
+- `dateProject`：按 `reportDate + projectCode` 聚合
+- `dateProjectCountry`：按 `reportDate + projectCode + adCountry` 聚合（显式聚合模式）
+
+兼容说明：
+
+- 推荐传 `groupBy`
+- 也兼容传小写 `groupby`
 
 ### data 返回
 
@@ -249,7 +261,7 @@
 - `showRate`: 展示率
 - `adSpendCost`: 广告投放成本
 - `trafficUsageGb`: 代理流量使用量（GB）
-- `trafficCost`: 代理流量成本（`trafficUsageGb * 0.16`）
+- `trafficCost`: 代理流量成本（`trafficUsageGb * 1.6`）
 - `grossProfit`: 毛利（`revenue - adSpendCost - trafficCost`）
 - `roi`: ROI（`grossProfit / (adSpendCost + trafficCost)`）
 - `cpi`: CPI（`adSpendCost / reportNewUsers`）
