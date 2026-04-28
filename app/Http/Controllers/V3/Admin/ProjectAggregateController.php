@@ -3,13 +3,76 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\AggregateProjectDailyJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ProjectAggregateController extends Controller
 {
+    public function aggregate(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'startDate' => 'required|date',
+                'endDate' => 'required|date|after_or_equal:startDate',
+            ]);
+
+            $startDate = (string) $request->input('startDate');
+            $endDate = (string) $request->input('endDate');
+
+            $exitCode = Artisan::call('project:aggregate-daily', [
+                '--start-date' => $startDate,
+                '--end-date' => $endDate,
+            ]);
+
+            return $this->ok([
+                'success' => $exitCode === 0,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'exitCode' => $exitCode,
+                'output' => trim(Artisan::output()),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('ProjectAggregate aggregate error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    public function aggregateAsync(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'startDate' => 'required|date',
+                'endDate' => 'required|date|after_or_equal:startDate',
+            ]);
+
+            $startDate = (string) $request->input('startDate');
+            $endDate = (string) $request->input('endDate');
+            $triggerId = (string) Str::uuid();
+
+            AggregateProjectDailyJob::dispatch($startDate, $endDate, $triggerId)->onQueue('default');
+
+            return $this->ok([
+                'accepted' => true,
+                'triggerId' => $triggerId,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'status' => 'queued',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('ProjectAggregate aggregateAsync error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
     public function daily(Request $request): JsonResponse
     {
         try {

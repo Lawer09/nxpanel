@@ -275,6 +275,8 @@ class AdminRoute
 
             // Project Aggregates
             $router->group(['prefix' => 'project-aggregates'], function ($router) {
+                $router->post('/aggregate', [ProjectAggregateController::class, 'aggregate']);
+                $router->post('/aggregate-async', [ProjectAggregateController::class, 'aggregateAsync']);
                 $router->get('/daily',   [ProjectAggregateController::class, 'daily']);
                 $router->get('/summary', [ProjectAggregateController::class, 'summary']);
                 $router->get('/trend',   [ProjectAggregateController::class, 'trend']);

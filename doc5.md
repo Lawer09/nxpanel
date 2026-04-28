@@ -74,6 +74,81 @@
 
 ---
 
+## 2.1 手动触发聚合（日期范围）
+
+`POST /project-aggregates/aggregate`
+
+### Body 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
+| endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
+
+### 示例请求
+
+```json
+{
+  "startDate": "2026-04-01",
+  "endDate": "2026-04-28"
+}
+```
+
+### data 返回
+
+```json
+{
+  "success": true,
+  "startDate": "2026-04-01",
+  "endDate": "2026-04-28",
+  "exitCode": 0,
+  "output": "Start aggregating project daily data..."
+}
+```
+
+说明：该接口会同步调用 `project:aggregate-daily --start-date --end-date`。
+
+---
+
+## 2.2 手动触发聚合（异步）
+
+`POST /project-aggregates/aggregate-async`
+
+### Body 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
+| endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
+
+### 示例请求
+
+```json
+{
+  "startDate": "2026-04-01",
+  "endDate": "2026-04-28"
+}
+```
+
+### data 返回
+
+```json
+{
+  "accepted": true,
+  "triggerId": "7f517a8a-7f56-4d4f-a0cf-1649bc1f4af9",
+  "startDate": "2026-04-01",
+  "endDate": "2026-04-28",
+  "status": "queued"
+}
+```
+
+说明：
+- 该接口仅投递队列任务并立即返回
+- 需确保队列消费者已启动（如 `php artisan queue:work`）
+- 任务执行日志可通过 `triggerId` 在日志中检索
+
+---
+
 ## 3. 汇总查询
 
 `GET /project-aggregates/summary`
