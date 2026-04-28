@@ -237,7 +237,7 @@ class TrafficPlatformAccountController extends Controller
                 return $this->error([404, '账号不存在']);
             }
 
-            $goUrl = 'http://127.0.0.1:8080/internal/traffic-platform/accounts/' . $id . '/test';
+            $goUrl = 'http://47.254.131.223:8080/api/traffic-platform/accounts/' . $id . '/test';
 
             $response = \Illuminate\Support\Facades\Http::timeout(15)->post($goUrl);
 
