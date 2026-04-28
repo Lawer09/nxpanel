@@ -156,17 +156,25 @@ class AggregateProjectDailyData extends Command
 
     private function buildUserMetrics(string $date, string $projectCode, string $adCountry): array
     {
-        $userIds = DB::table('v3_user_report_count as urc')
-            ->join('project_platform_app_map as ppam', 'ppam.provider_app_id', '=', 'urc.app_id')
+        $appStoreIds = DB::table('project_platform_app_map as ppam')
             ->join('project_projects as p', 'p.id', '=', 'ppam.project_id')
-            ->where('urc.date', '=', $date)
+            ->join('ad_platform_app as apa', function ($join) {
+                $join->on('apa.source_platform', '=', 'ppam.source_platform')
+                    ->on('apa.account_id', '=', 'ppam.account_id')
+                    ->on('apa.provider_app_id', '=', 'ppam.provider_app_id');
+            })
             ->where('p.project_code', '=', $projectCode)
             ->where('ppam.status', '=', 'enabled')
-            ->selectRaw('urc.user_id, UPPER(MAX(COALESCE(urc.client_country, ""))) as client_country')
-            ->groupBy('urc.user_id')
-            ->get();
+            ->whereNotNull('apa.app_store_id')
+            ->where('apa.app_store_id', '!=', '')
+            ->pluck('apa.app_store_id')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '')
+            ->unique()
+            ->values()
+            ->all();
 
-        if ($userIds->isEmpty()) {
+        if (empty($appStoreIds)) {
             return [
                 'dau_users' => 0,
                 'report_new_users' => 0,
@@ -174,12 +182,28 @@ class AggregateProjectDailyData extends Command
             ];
         }
 
-        $uids = $userIds->pluck('user_id')->unique()->values()->all();
         $users = DB::table('v2_user')
-            ->whereIn('id', $uids)
+            ->whereNotNull('register_metadata')
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(register_metadata, '$.app_id')) in (" . implode(',', array_fill(0, count($appStoreIds), '?')) . ")", $appStoreIds)
             ->select('id', 'created_at', 'register_metadata')
-            ->get()
-            ->keyBy('id');
+            ->get();
+
+        if ($users->isEmpty()) {
+            return [
+                'dau_users' => 0,
+                'report_new_users' => 0,
+                'register_new_users' => 0,
+            ];
+        }
+
+        $uids = $users->pluck('id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+
+        $dailyReportCountry = DB::table('v3_user_report_count')
+            ->where('date', '=', $date)
+            ->whereIn('user_id', $uids)
+            ->selectRaw('user_id, UPPER(MAX(COALESCE(client_country, ""))) as client_country')
+            ->groupBy('user_id')
+            ->pluck('client_country', 'user_id');
 
         $firstReportDateByUser = DB::table('v3_user_report_count')
             ->whereIn('user_id', $uids)
@@ -187,39 +211,53 @@ class AggregateProjectDailyData extends Command
             ->groupBy('user_id')
             ->pluck('first_date', 'user_id');
 
+        $usersById = $users->keyBy('id');
+
+        $activeUserIds = DB::table('v3_user_report_count')
+            ->where('date', '=', $date)
+            ->whereIn('user_id', $uids)
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+
+        $activeSet = array_flip($activeUserIds);
+
+        $startTs = strtotime($date . ' 00:00:00');
+        $endTs = strtotime($date . ' 23:59:59') + 1;
+
         $dau = 0;
         $reportNew = 0;
         $registerNew = 0;
 
-        foreach ($userIds as $item) {
-            $uid = (int) $item->user_id;
-            $user = $users->get($uid);
-            if (!$user) {
-                continue;
-            }
+        foreach ($usersById as $uid => $user) {
+            $uid = (int) $uid;
+            $meta = $this->parseJson((string) ($user->register_metadata ?? ''));
 
             $metaCountry = '';
-            $meta = $this->parseJson((string) ($user->register_metadata ?? ''));
             if (is_array($meta)) {
-                $metaCountry = strtoupper((string) ($meta['country'] ?? ''));
+                $metaCountry = strtoupper(trim((string) ($meta['country'] ?? '')));
             }
 
-            $fallbackCountry = strtoupper((string) ($item->client_country ?? ''));
-            $userCountry = $metaCountry !== '' ? $metaCountry : $fallbackCountry;
+            $reportCountry = strtoupper(trim((string) ($dailyReportCountry[$uid] ?? '')));
+            $userCountry = $metaCountry !== '' ? $metaCountry : $reportCountry;
 
-            if ($adCountry !== '' && strtoupper($adCountry) !== $userCountry) {
+            if ($adCountry !== '' && $adCountry !== $userCountry) {
                 continue;
             }
 
-            $dau++;
+            if (isset($activeSet[$uid])) {
+                $dau++;
+            }
 
             $firstDate = (string) ($firstReportDateByUser[$uid] ?? '');
-            $isReportNew = ($firstDate !== '' && $firstDate === $date);
-            if ($isReportNew) {
+            if ($firstDate !== '' && $firstDate === $date) {
                 $reportNew++;
             }
 
-            if ((int) $user->created_at >= strtotime($date . ' 00:00:00') && (int) $user->created_at < strtotime($date . ' 23:59:59') + 1) {
+            $createdAt = (int) ($user->created_at ?? 0);
+            if ($createdAt >= $startTs && $createdAt < $endTs) {
                 $registerNew++;
             }
         }
