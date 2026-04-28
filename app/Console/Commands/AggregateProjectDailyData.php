@@ -103,7 +103,7 @@ class AggregateProjectDailyData extends Command
             $userMetrics = $this->buildUserMetrics($date, $projectCode, $adCountry);
             $adSpendCost = $this->queryAdSpendCost($date, $projectCode, $adCountry);
             $trafficUsageGb = $this->queryTrafficUsageGb($date, $projectCode);
-            $trafficCost = round($trafficUsageGb * 1.6, 6);
+            $trafficCost = round($trafficUsageGb * 0.16, 6);
 
             $revenue = $this->decimal($row->revenue);
             $adRequests = (int) ($row->ad_requests ?? 0);

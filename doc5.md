@@ -249,7 +249,7 @@
 - `showRate`: 展示率
 - `adSpendCost`: 广告投放成本
 - `trafficUsageGb`: 代理流量使用量（GB）
-- `trafficCost`: 代理流量成本（`trafficUsageGb * 1.6`）
+- `trafficCost`: 代理流量成本（`trafficUsageGb * 0.16`）
 - `grossProfit`: 毛利（`revenue - adSpendCost - trafficCost`）
 - `roi`: ROI（`grossProfit / (adSpendCost + trafficCost)`）
 - `cpi`: CPI（`adSpendCost / reportNewUsers`）
