@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
-use App\Models\AdSpendUnmatchedReport;
-use App\Models\Project;
 use App\Services\AdSpendPlatformService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -339,49 +337,26 @@ class AdSpendPlatformController extends Controller
 
                 $totalRecords++;
 
-                $project = Project::where('project_code', $projectCode)->first();
-                if ($project) {
-                    AdSpendDailyReport::updateOrCreate(
-                        [
-                            'platform_account_id' => $account->id,
-                            'project_code' => $projectCode,
-                            'report_date' => $reportDate,
-                            'country' => $country,
-                        ],
-                        [
-                            'platform_code' => $account->platform_code,
-                            'impressions' => $impressions,
-                            'clicks' => $clicks,
-                            'spend' => $spend,
-                            'ctr' => $ctr,
-                            'cpm' => $cpm,
-                            'cpc' => $cpc,
-                            'raw_group_name' => $projectCode,
-                        ]
-                    );
-                    $matchedRecords++;
-                    continue;
-                }
-
-                AdSpendUnmatchedReport::updateOrCreate(
+                AdSpendDailyReport::updateOrCreate(
                     [
                         'platform_account_id' => $account->id,
-                        'raw_group_name' => $projectCode,
+                        'project_code' => $projectCode,
                         'report_date' => $reportDate,
                         'country' => $country,
                     ],
                     [
                         'platform_code' => $account->platform_code,
+                        'project_code' => $projectCode,
                         'impressions' => $impressions,
                         'clicks' => $clicks,
                         'spend' => $spend,
                         'ctr' => $ctr,
                         'cpm' => $cpm,
                         'cpc' => $cpc,
-                        'raw_data' => $record,
+                        'raw_group_name' => $projectCode,
                     ]
                 );
-                $unmatchedRecords++;
+                $matchedRecords++;
             }
 
             $job->update([
