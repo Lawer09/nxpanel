@@ -34,7 +34,7 @@ class TrafficPlatformSyncController extends Controller
                 return $this->error([404, '账号不存在']);
             }
 
-            $goUrl = 'http://10.2.0.11:8080/api/traffic-platform/sync';
+            $goUrl = 'http://47.254.131.223:8080/api/traffic-platform/sync';
 
             $response = Http::timeout(15)->post($goUrl, [
                 'account_id'    => $request->input('accountId'),
