@@ -19,18 +19,20 @@ class AdSpendPlatformController extends Controller
     public function fetchAccounts(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
-                'platform_code' => 'nullable|string|max:50',
+                'platformCode' => 'nullable|string|max:50',
                 'enabled' => 'nullable|integer|in:0,1',
                 'keyword' => 'nullable|string|max:100',
                 'page' => 'nullable|integer|min:1',
-                'page_size' => 'nullable|integer|min:1|max:200',
+                'pageSize' => 'nullable|integer|min:1|max:200',
             ]);
 
             $query = AdSpendPlatformAccount::query();
 
-            if ($request->filled('platform_code')) {
-                $query->where('platform_code', $request->input('platform_code'));
+            if ($request->filled('platformCode')) {
+                $query->where('platform_code', $request->input('platformCode'));
             }
             if ($request->filled('enabled')) {
                 $query->where('enabled', (int) $request->input('enabled'));
@@ -44,17 +46,34 @@ class AdSpendPlatformController extends Controller
             }
 
             $page = (int) $request->input('page', 1);
-            $pageSize = (int) $request->input('page_size', 20);
+            $pageSize = (int) $request->input('pageSize', 20);
 
             $total = $query->count();
-            $list = $query->orderByDesc('id')
+            $rows = $query->orderByDesc('id')
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get(['id', 'platform_code', 'account_name', 'base_url', 'username', 'enabled', 'last_sync_at', 'remark', 'created_at', 'updated_at']);
 
+            $list = $rows->map(function ($row) {
+                return [
+                    'id' => (int) $row->id,
+                    'platformCode' => $row->platform_code,
+                    'accountName' => $row->account_name,
+                    'baseUrl' => $row->base_url,
+                    'username' => $row->username,
+                    'enabled' => (int) $row->enabled,
+                    'lastSyncAt' => $row->last_sync_at,
+                    'remark' => $row->remark,
+                    'createdAt' => $row->created_at,
+                    'updatedAt' => $row->updated_at,
+                ];
+            });
+
             return $this->ok([
                 'list' => $list,
                 'total' => $total,
+                'page' => $page,
+                'pageSize' => $pageSize,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->error([422, $e->getMessage()]);
@@ -74,13 +93,13 @@ class AdSpendPlatformController extends Controller
 
             return $this->ok([
                 'id' => $account->id,
-                'platform_code' => $account->platform_code,
-                'account_name' => $account->account_name,
-                'base_url' => $account->base_url,
+                'platformCode' => $account->platform_code,
+                'accountName' => $account->account_name,
+                'baseUrl' => $account->base_url,
                 'username' => $account->username,
-                'password_masked' => '******',
+                'passwordMasked' => '******',
                 'enabled' => (int) $account->enabled,
-                'last_sync_at' => $account->last_sync_at,
+                'lastSyncAt' => $account->last_sync_at,
                 'remark' => $account->remark,
             ]);
         } catch (\Exception $e) {
@@ -92,27 +111,29 @@ class AdSpendPlatformController extends Controller
     public function saveAccount(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
-                'platform_code' => 'required|string|max:50',
-                'account_name' => 'required|string|max:100',
-                'base_url' => 'required|string|max:255',
+                'platformCode' => 'required|string|max:50',
+                'accountName' => 'required|string|max:100',
+                'baseUrl' => 'required|string|max:255',
                 'username' => 'required|string|max:100',
                 'password' => 'required|string|max:255',
                 'enabled' => 'nullable|integer|in:0,1',
                 'remark' => 'nullable|string|max:255',
             ]);
 
-            $exists = AdSpendPlatformAccount::where('platform_code', $request->input('platform_code'))
-                ->where('account_name', $request->input('account_name'))
+            $exists = AdSpendPlatformAccount::where('platform_code', $request->input('platformCode'))
+                ->where('account_name', $request->input('accountName'))
                 ->exists();
             if ($exists) {
                 return $this->error([422, '该平台下账号名称已存在']);
             }
 
             $account = AdSpendPlatformAccount::create([
-                'platform_code' => $request->input('platform_code'),
-                'account_name' => $request->input('account_name'),
-                'base_url' => $request->input('base_url'),
+                'platform_code' => $request->input('platformCode'),
+                'account_name' => $request->input('accountName'),
+                'base_url' => $request->input('baseUrl'),
                 'username' => $request->input('username'),
                 'password' => $request->input('password'),
                 'enabled' => $request->input('enabled', 1),
@@ -131,23 +152,25 @@ class AdSpendPlatformController extends Controller
     public function updateAccount(Request $request, int $id): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $account = AdSpendPlatformAccount::find($id);
             if (!$account) {
                 return $this->error([404, '账号不存在']);
             }
 
             $request->validate([
-                'platform_code' => 'nullable|string|max:50',
-                'account_name' => 'nullable|string|max:100',
-                'base_url' => 'nullable|string|max:255',
+                'platformCode' => 'nullable|string|max:50',
+                'accountName' => 'nullable|string|max:100',
+                'baseUrl' => 'nullable|string|max:255',
                 'username' => 'nullable|string|max:100',
                 'password' => 'nullable|string|max:255',
                 'enabled' => 'nullable|integer|in:0,1',
                 'remark' => 'nullable|string|max:255',
             ]);
 
-            $platformCode = $request->input('platform_code', $account->platform_code);
-            $accountName = $request->input('account_name', $account->account_name);
+            $platformCode = $request->input('platformCode', $account->platform_code);
+            $accountName = $request->input('accountName', $account->account_name);
 
             $exists = AdSpendPlatformAccount::where('platform_code', $platformCode)
                 ->where('account_name', $accountName)
@@ -158,14 +181,14 @@ class AdSpendPlatformController extends Controller
             }
 
             $update = [];
-            if ($request->has('platform_code')) {
-                $update['platform_code'] = $request->input('platform_code');
+            if ($request->has('platformCode')) {
+                $update['platform_code'] = $request->input('platformCode');
             }
-            if ($request->has('account_name')) {
-                $update['account_name'] = $request->input('account_name');
+            if ($request->has('accountName')) {
+                $update['account_name'] = $request->input('accountName');
             }
-            if ($request->has('base_url')) {
-                $update['base_url'] = $request->input('base_url');
+            if ($request->has('baseUrl')) {
+                $update['base_url'] = $request->input('baseUrl');
             }
             if ($request->has('username')) {
                 $update['username'] = $request->input('username');
@@ -202,6 +225,8 @@ class AdSpendPlatformController extends Controller
     public function updateAccountStatus(Request $request, int $id): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'enabled' => 'required|integer|in:0,1',
             ]);
@@ -232,7 +257,7 @@ class AdSpendPlatformController extends Controller
             $service->login($account, true);
 
             return $this->ok([
-                'login_success' => true,
+                'loginSuccess' => true,
             ]);
         } catch (\Exception $e) {
             Log::error('AdSpendPlatform testAccount error: ' . $e->getMessage());
@@ -245,15 +270,17 @@ class AdSpendPlatformController extends Controller
         $job = null;
 
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
-                'account_id' => 'required|integer',
-                'start_date' => 'required|date',
-                'end_date' => 'required|date|after_or_equal:start_date',
+                'accountId' => 'required|integer',
+                'startDate' => 'required|date',
+                'endDate' => 'required|date|after_or_equal:startDate',
             ]);
 
-            $accountId = (int) $request->input('account_id');
-            $startDate = $request->input('start_date');
-            $endDate = $request->input('end_date');
+            $accountId = (int) $request->input('accountId');
+            $startDate = $request->input('startDate');
+            $endDate = $request->input('endDate');
 
             $account = AdSpendPlatformAccount::find($accountId);
             if (!$account) {
@@ -368,7 +395,7 @@ class AdSpendPlatformController extends Controller
             $account->update(['last_sync_at' => now()]);
 
             return $this->ok([
-                'job_id' => $job->id,
+                'jobId' => $job->id,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->error([422, $e->getMessage()]);
@@ -388,6 +415,8 @@ class AdSpendPlatformController extends Controller
     public function fetchSyncJobs(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'account_id' => 'nullable|integer',
                 'platform_code' => 'nullable|string|max:50',
@@ -431,25 +460,27 @@ class AdSpendPlatformController extends Controller
             $list = $items->map(function ($item) use ($accountMap) {
                 return [
                     'id' => $item->id,
-                    'platform_account_id' => $item->platform_account_id,
-                    'platform_code' => $item->platform_code,
-                    'account_name' => $accountMap[$item->platform_account_id] ?? '',
-                    'start_date' => $item->start_date,
-                    'end_date' => $item->end_date,
+                    'platformAccountId' => $item->platform_account_id,
+                    'platformCode' => $item->platform_code,
+                    'accountName' => $accountMap[$item->platform_account_id] ?? '',
+                    'startDate' => $item->start_date,
+                    'endDate' => $item->end_date,
                     'status' => $item->status,
-                    'total_records' => $item->total_records,
-                    'success_records' => $item->matched_records,
-                    'matched_records' => $item->matched_records,
-                    'unmatched_records' => $item->unmatched_records,
-                    'error_message' => $item->error_message,
-                    'created_at' => $item->created_at,
-                    'updated_at' => $item->updated_at,
+                    'totalRecords' => $item->total_records,
+                    'successRecords' => $item->matched_records,
+                    'matchedRecords' => $item->matched_records,
+                    'unmatchedRecords' => $item->unmatched_records,
+                    'errorMessage' => $item->error_message,
+                    'createdAt' => $item->created_at,
+                    'updatedAt' => $item->updated_at,
                 ];
             });
 
             return $this->ok([
                 'list' => $list,
                 'total' => $total,
+                'page' => $page,
+                'pageSize' => $pageSize,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->error([422, $e->getMessage()]);
@@ -471,20 +502,20 @@ class AdSpendPlatformController extends Controller
 
             return $this->ok([
                 'id' => $job->id,
-                'platform_account_id' => $job->platform_account_id,
-                'platform_code' => $job->platform_code,
-                'account_name' => $account?->account_name ?? '',
-                'start_date' => $job->start_date,
-                'end_date' => $job->end_date,
+                'platformAccountId' => $job->platform_account_id,
+                'platformCode' => $job->platform_code,
+                'accountName' => $account?->account_name ?? '',
+                'startDate' => $job->start_date,
+                'endDate' => $job->end_date,
                 'status' => $job->status,
-                'total_records' => $job->total_records,
-                'success_records' => $job->matched_records,
-                'matched_records' => $job->matched_records,
-                'unmatched_records' => $job->unmatched_records,
-                'request_params' => $job->request_params,
-                'error_message' => $job->error_message,
-                'created_at' => $job->created_at,
-                'updated_at' => $job->updated_at,
+                'totalRecords' => $job->total_records,
+                'successRecords' => $job->matched_records,
+                'matchedRecords' => $job->matched_records,
+                'unmatchedRecords' => $job->unmatched_records,
+                'requestParams' => $job->request_params,
+                'errorMessage' => $job->error_message,
+                'createdAt' => $job->created_at,
+                'updatedAt' => $job->updated_at,
             ]);
         } catch (\Exception $e) {
             Log::error('AdSpendPlatform detailSyncJob error: ' . $e->getMessage());
@@ -543,10 +574,10 @@ class AdSpendPlatformController extends Controller
                 ];
 
                 if ($groupBy === 'project') {
-                    $result['project_code'] = $row->dimension_value;
+                    $result['projectCode'] = $row->dimension_value;
                 } elseif ($groupBy === 'account') {
-                    $result['platform_account_id'] = (int) $row->dimension_value;
-                    $result['account_name'] = $row->account_name;
+                    $result['platformAccountId'] = (int) $row->dimension_value;
+                    $result['accountName'] = $row->account_name;
                 } elseif ($groupBy === 'country') {
                     $result['country'] = $row->dimension_value;
                 } else {
@@ -596,7 +627,7 @@ class AdSpendPlatformController extends Controller
 
             $data = $query->orderByDesc('project_code')->get()->map(function ($row) {
                 return [
-                    'project_code' => $row->project_code,
+                    'projectCode' => $row->project_code,
                 ];
             });
 
@@ -618,6 +649,8 @@ class AdSpendPlatformController extends Controller
     private function dailyInternal(Request $request, ?string $projectCode): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'platform_code' => 'nullable|string|max:50',
                 'account_id' => 'nullable|integer',
@@ -662,11 +695,11 @@ class AdSpendPlatformController extends Controller
                 ->map(function ($row) {
                     return [
                         'id' => (int) $row->id,
-                        'report_date' => (string) $row->report_date,
-                        'platform_account_id' => (int) $row->platform_account_id,
-                        'platform_code' => $row->platform_code,
-                        'account_name' => $row->account_name ?? '',
-                        'project_code' => $row->project_code,
+                        'reportDate' => (string) $row->report_date,
+                        'platformAccountId' => (int) $row->platform_account_id,
+                        'platformCode' => $row->platform_code,
+                        'accountName' => $row->account_name ?? '',
+                        'projectCode' => $row->project_code,
                         'country' => $row->country,
                         'impressions' => (int) $row->impressions,
                         'clicks' => (int) $row->clicks,
@@ -674,13 +707,15 @@ class AdSpendPlatformController extends Controller
                         'ctr' => $this->formatDecimal($row->ctr),
                         'cpm' => $this->formatDecimal($row->cpm),
                         'cpc' => $this->formatDecimal($row->cpc),
-                        'updated_at' => $row->updated_at,
+                        'updatedAt' => $row->updated_at,
                     ];
                 });
 
             return $this->ok([
                 'list' => $rows,
                 'total' => $total,
+                'page' => $page,
+                'pageSize' => $pageSize,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->error([422, $e->getMessage()]);
@@ -693,6 +728,8 @@ class AdSpendPlatformController extends Controller
     private function trendInternal(Request $request, ?string $projectCode): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'platform_code' => 'nullable|string|max:50',
                 'account_id' => 'nullable|integer',
@@ -797,6 +834,13 @@ class AdSpendPlatformController extends Controller
             'endDate' => 'end_date',
             'pageSize' => 'page_size',
             'groupBy' => 'group_by',
+            'platform_code' => 'platformCode',
+            'account_id' => 'accountId',
+            'project_code' => 'projectCode',
+            'start_date' => 'startDate',
+            'end_date' => 'endDate',
+            'page_size' => 'pageSize',
+            'group_by' => 'groupBy',
         ];
 
         $merged = [];
