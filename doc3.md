@@ -407,10 +407,9 @@ page_size
   "code": 0,
   "msg": "success",
   "data": {
-    "list": [
+    "data": [
       {
         "report_date": "2026-04-28",
-        "project_id": 1,
         "project_code": "A003",
         "country": "",
         "impressions": 11425,
@@ -425,14 +424,3 @@ page_size
   }
 }
 ```
----
-
-## 4. 未匹配项目列表
-
-```http
-GET /api/ad-spend-platform/unmatched
-```
-
-用于前端发现 groupName 没有对应项目。
-
----

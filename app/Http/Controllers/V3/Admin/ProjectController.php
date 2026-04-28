@@ -20,7 +20,6 @@ class ProjectController extends Controller
         try {
             $request->validate([
                 'keyword'  => 'nullable|string|max:100',
-                'ownerId'  => 'nullable|integer',
                 'status'   => 'nullable|string|in:active,inactive,archived',
                 'page'     => 'nullable|integer|min:1',
                 'pageSize' => 'nullable|integer|min:1|max:200',
@@ -91,7 +90,6 @@ class ProjectController extends Controller
             $request->validate([
                 'projectCode' => 'required|string|max:100',
                 'projectName' => 'required|string|max:100',
-                'ownerId'     => 'nullable|integer',
                 'ownerName'   => 'nullable|string|max:100',
                 'department'  => 'nullable|string|max:100',
                 'status'      => 'nullable|string|in:active,inactive,archived',
@@ -105,7 +103,6 @@ class ProjectController extends Controller
             $project = Project::create([
                 'project_code' => $request->input('projectCode'),
                 'project_name' => $request->input('projectName'),
-                'owner_id'     => $request->input('ownerId'),
                 'owner_name'   => $request->input('ownerName'),
                 'department'   => $request->input('department'),
                 'status'       => $request->input('status', 'active'),
@@ -135,7 +132,6 @@ class ProjectController extends Controller
 
             $request->validate([
                 'projectName' => 'nullable|string|max:100',
-                'ownerId'     => 'nullable|integer',
                 'ownerName'   => 'nullable|string|max:100',
                 'department'  => 'nullable|string|max:100',
                 'status'      => 'nullable|string|in:active,inactive,archived',
@@ -144,7 +140,6 @@ class ProjectController extends Controller
 
             $updateData = [];
             if ($request->has('projectName')) $updateData['project_name'] = $request->input('projectName');
-            if ($request->has('ownerId'))     $updateData['owner_id']     = $request->input('ownerId');
             if ($request->has('ownerName'))   $updateData['owner_name']   = $request->input('ownerName');
             if ($request->has('department'))  $updateData['department']   = $request->input('department');
             if ($request->has('status'))      $updateData['status']       = $request->input('status');

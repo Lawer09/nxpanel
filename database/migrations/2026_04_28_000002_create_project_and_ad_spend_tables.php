@@ -15,14 +15,13 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('project_code', 100)->unique()->comment('项目代号');
             $table->string('project_name', 100)->comment('项目名称');
-            $table->unsignedBigInteger('owner_id')->nullable()->comment('所属人ID');
             $table->string('owner_name', 100)->nullable()->comment('所属人名称');
-            $table->string('department', 100)->nullable()->comment('所属部门');
             $table->string('status', 30)->default('active')->comment('状态：active、inactive、archived');
             $table->string('remark', 255)->nullable()->comment('备注');
             $table->timestamps();
 
-            $table->index('owner_id', 'idx_pp_owner_id');
+            $table->index('owner_name', 'idx_pp_owner_name');
+            $table->index('project_code', 'idx_pp_project_code');
             $table->index('status', 'idx_pp_status');
         });
 
