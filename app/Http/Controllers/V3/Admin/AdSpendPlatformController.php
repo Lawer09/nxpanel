@@ -494,12 +494,15 @@ class AdSpendPlatformController extends Controller
 
     public function daily(Request $request): JsonResponse
     {
+        $this->normalizeQueryParams($request);
         return $this->dailyInternal($request, null);
     }
 
     public function summary(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'platform_code' => 'nullable|string|max:50',
                 'account_id' => 'nullable|integer',
@@ -564,12 +567,15 @@ class AdSpendPlatformController extends Controller
 
     public function trend(Request $request): JsonResponse
     {
+        $this->normalizeQueryParams($request);
         return $this->trendInternal($request, null);
     }
 
     public function projectCodes(Request $request): JsonResponse
     {
         try {
+            $this->normalizeQueryParams($request);
+
             $request->validate([
                 'keyword' => 'nullable|string|max:100',
                 'start_date' => 'nullable|date',
@@ -605,6 +611,7 @@ class AdSpendPlatformController extends Controller
 
     public function projectDaily(Request $request, string $projectCode): JsonResponse
     {
+        $this->normalizeQueryParams($request);
         return $this->dailyInternal($request, $projectCode);
     }
 
@@ -772,8 +779,36 @@ class AdSpendPlatformController extends Controller
             $query->where('ad_spend_platform_daily_reports.country', (string) $request->input('country', ''));
         }
 
-        $query->where('ad_spend_platform_daily_reports.report_date', '>=', $request->input('start_date'));
-        $query->where('ad_spend_platform_daily_reports.report_date', '<=', $request->input('end_date'));
+        if ($request->filled('start_date')) {
+            $query->where('ad_spend_platform_daily_reports.report_date', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->where('ad_spend_platform_daily_reports.report_date', '<=', $request->input('end_date'));
+        }
+    }
+
+    private function normalizeQueryParams(Request $request): void
+    {
+        $map = [
+            'platformCode' => 'platform_code',
+            'accountId' => 'account_id',
+            'projectCode' => 'project_code',
+            'startDate' => 'start_date',
+            'endDate' => 'end_date',
+            'pageSize' => 'page_size',
+            'groupBy' => 'group_by',
+        ];
+
+        $merged = [];
+        foreach ($map as $from => $to) {
+            if ($request->has($from) && !$request->has($to)) {
+                $merged[$to] = $request->input($from);
+            }
+        }
+
+        if (!empty($merged)) {
+            $request->merge($merged);
+        }
     }
 
     private function toDecimal($value, bool $defaultZero)
