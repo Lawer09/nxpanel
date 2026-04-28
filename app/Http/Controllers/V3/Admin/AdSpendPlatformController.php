@@ -68,7 +68,7 @@ class AdSpendPlatformController extends Controller
             });
 
             return $this->ok([
-                'list' => $list,
+                'data' => $list,
                 'total' => $total,
                 'page' => $page,
                 'pageSize' => $pageSize,
@@ -452,7 +452,7 @@ class AdSpendPlatformController extends Controller
             });
 
             return $this->ok([
-                'list' => $list,
+                'data' => $list,
                 'total' => $total,
                 'page' => $page,
                 'pageSize' => $pageSize,
@@ -687,7 +687,7 @@ class AdSpendPlatformController extends Controller
                 });
 
             return $this->ok([
-                'list' => $rows,
+                'data' => $rows,
                 'total' => $total,
                 'page' => $page,
                 'pageSize' => $pageSize,
