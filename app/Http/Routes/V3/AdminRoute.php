@@ -18,6 +18,9 @@ use App\Http\Controllers\V3\Admin\VersionController;
 use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\AppTrafficController;
 use App\Http\Controllers\V3\Admin\AdAccountController;
+use App\Http\Controllers\V3\Admin\ProjectController;
+use App\Http\Controllers\V3\Admin\ProjectTrafficAccountController;
+use App\Http\Controllers\V3\Admin\ProjectAdAccountController;
 use App\Http\Controllers\V3\Admin\ProjectMappingController;
 use App\Http\Controllers\V3\Admin\SyncServerController;
 use App\Http\Controllers\V3\Admin\SyncMonitorController;
@@ -250,6 +253,25 @@ class AdminRoute
                 $router->post('/',             [ProjectMappingController::class, 'save']);
                 $router->put('/{id}',          [ProjectMappingController::class, 'update']);
                 $router->patch('/{id}/status', [ProjectMappingController::class, 'updateStatus']);
+            });
+
+            // Project Management
+            $router->group(['prefix' => 'projects'], function ($router) {
+                $router->get('/',               [ProjectController::class, 'fetch']);
+                $router->get('/{id}',           [ProjectController::class, 'detail']);
+                $router->post('/',              [ProjectController::class, 'save']);
+                $router->put('/{id}',           [ProjectController::class, 'update']);
+                $router->patch('/{id}/status',  [ProjectController::class, 'updateStatus']);
+
+                $router->get('/{id}/traffic-accounts',                    [ProjectTrafficAccountController::class, 'fetch']);
+                $router->post('/{id}/traffic-accounts',                   [ProjectTrafficAccountController::class, 'save']);
+                $router->put('/{id}/traffic-accounts/{relationId}',       [ProjectTrafficAccountController::class, 'update']);
+                $router->delete('/{id}/traffic-accounts/{relationId}',    [ProjectTrafficAccountController::class, 'drop']);
+
+                $router->get('/{id}/ad-accounts',                         [ProjectAdAccountController::class, 'fetch']);
+                $router->post('/{id}/ad-accounts',                        [ProjectAdAccountController::class, 'save']);
+                $router->put('/{id}/ad-accounts/{relationId}',            [ProjectAdAccountController::class, 'update']);
+                $router->delete('/{id}/ad-accounts/{relationId}',         [ProjectAdAccountController::class, 'drop']);
             });
 
             // Sync Servers

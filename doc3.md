@@ -380,24 +380,76 @@ ctr/cpm/cpc null -> NULL
 ---
 
 # 六、PHP 查询 API 建议
+下面只给**前端需要调用的投放平台 API**。
 
-## 1. 投放日报明细
+统一前缀：
+
+```text
+/api/ad-spend-platform
+```
+
+统一返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {}
+}
+```
+
+---
+
+# 1. 投放平台账号配置
+
+## 1.1 账号列表
 
 ```http
-GET /api/ad-spend-platform/reports/daily
+GET /api/ad-spend-platform/accounts
 ```
 
 参数：
 
-```text
-platform_code
-account_id
-project_code
-start_date
-end_date
-country
-page
-page_size
+| 参数            | 类型     | 必填 | 说明           |
+| ------------- | ------ | -: | ------------ |
+| platform_code | string |  否 | 默认 adsmakeup |
+| enabled       | int    |  否 | 1 启用，0 禁用    |
+| keyword       | string |  否 | 账号名称 / 用户名   |
+| page          | int    |  否 | 默认 1         |
+| page_size     | int    |  否 | 默认 20        |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "platform_code": "adsmakeup",
+        "account_name": "AdsMakeup 主账号",
+        "base_url": "http://console.adsmakeup.com",
+        "username": "beilin",
+        "enabled": 1,
+        "last_sync_at": "2026-04-28 10:00:00",
+        "remark": "主投放账号",
+        "created_at": "2026-04-28 10:00:00",
+        "updated_at": "2026-04-28 10:00:00"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+---
+
+## 1.2 账号详情
+
+```http
+GET /api/ad-spend-platform/accounts/{id}
 ```
 
 返回：
@@ -407,9 +459,548 @@ page_size
   "code": 0,
   "msg": "success",
   "data": {
-    "data": [
+    "id": 1,
+    "platform_code": "adsmakeup",
+    "account_name": "AdsMakeup 主账号",
+    "base_url": "http://console.adsmakeup.com",
+    "username": "beilin",
+    "password_masked": "******",
+    "enabled": 1,
+    "last_sync_at": "2026-04-28 10:00:00",
+    "remark": "主投放账号"
+  }
+}
+```
+
+---
+
+## 1.3 新增账号
+
+```http
+POST /api/ad-spend-platform/accounts
+```
+
+参数：
+
+```json
+{
+  "platform_code": "adsmakeup",
+  "account_name": "AdsMakeup 主账号",
+  "base_url": "http://console.adsmakeup.com",
+  "username": "beilin",
+  "password": "Admin@123",
+  "enabled": 1,
+  "remark": "主投放账号"
+}
+```
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 1
+  }
+}
+```
+
+---
+
+## 1.4 修改账号
+
+```http
+PUT /api/ad-spend-platform/accounts/{id}
+```
+
+参数：
+
+```json
+{
+  "account_name": "AdsMakeup 主账号",
+  "base_url": "http://console.adsmakeup.com",
+  "username": "beilin",
+  "password": "",
+  "enabled": 1,
+  "remark": "更新备注"
+}
+```
+
+说明：
+
+```text
+password 为空表示不修改原密码
+password 非空表示更新密码，并清空旧 token
+```
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": true
+}
+```
+
+---
+
+## 1.5 启用 / 禁用账号
+
+```http
+PATCH /api/ad-spend-platform/accounts/{id}/status
+```
+
+参数：
+
+```json
+{
+  "enabled": 0
+}
+```
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": true
+}
+```
+
+---
+
+## 1.6 测试账号登录
+
+```http
+POST /api/ad-spend-platform/accounts/{id}/test
+```
+
+参数：无
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "测试成功",
+  "data": {
+    "login_success": true
+  }
+}
+```
+
+---
+
+# 2. 投放数据同步
+
+## 2.1 手动同步
+
+```http
+POST /api/ad-spend-platform/sync
+```
+
+参数：
+
+```json
+{
+  "account_id": 1,
+  "start_date": "2026-04-28",
+  "end_date": "2026-04-28"
+}
+```
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "同步任务已提交",
+  "data": {
+    "job_id": 1001
+  }
+}
+```
+
+---
+
+## 2.2 同步任务列表
+
+```http
+GET /api/ad-spend-platform/sync-jobs
+```
+
+参数：
+
+| 参数            | 类型     | 必填 | 说明                         |
+| ------------- | ------ | -: | -------------------------- |
+| account_id    | int    |  否 | 投放平台账号 ID                  |
+| platform_code | string |  否 | adsmakeup                  |
+| status        | string |  否 | running / success / failed |
+| start_date    | string |  否 | 同步数据开始日期                   |
+| end_date      | string |  否 | 同步数据结束日期                   |
+| page          | int    |  否 | 默认 1                       |
+| page_size     | int    |  否 | 默认 20                      |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1001,
+        "platform_account_id": 1,
+        "platform_code": "adsmakeup",
+        "account_name": "AdsMakeup 主账号",
+        "start_date": "2026-04-28",
+        "end_date": "2026-04-28",
+        "status": "success",
+        "total_records": 3,
+        "success_records": 3,
+        "error_message": "",
+        "created_at": "2026-04-28 10:00:00",
+        "updated_at": "2026-04-28 10:00:03"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+---
+
+## 2.3 同步任务详情
+
+```http
+GET /api/ad-spend-platform/sync-jobs/{id}
+```
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 1001,
+    "platform_account_id": 1,
+    "platform_code": "adsmakeup",
+    "account_name": "AdsMakeup 主账号",
+    "start_date": "2026-04-28",
+    "end_date": "2026-04-28",
+    "status": "success",
+    "total_records": 3,
+    "success_records": 3,
+    "request_params": {
+      "objectName": "account",
+      "dims": ["date", "group_id", "country"],
+      "startDate": "2026-04-28",
+      "endDate": "2026-04-28",
+      "size": 200
+    },
+    "error_message": "",
+    "created_at": "2026-04-28 10:00:00",
+    "updated_at": "2026-04-28 10:00:03"
+  }
+}
+```
+
+---
+
+# 3. 投放日报查询
+
+## 3.1 日报明细
+
+```http
+GET /api/ad-spend-platform/reports/daily
+```
+
+参数：
+
+| 参数            | 类型     | 必填 | 说明               |
+| ------------- | ------ | -: | ---------------- |
+| platform_code | string |  否 | adsmakeup        |
+| account_id    | int    |  否 | 投放账号 ID          |
+| project_code  | string |  否 | 项目代号，即 groupName |
+| country       | string |  否 | 国家，空字符串表示无国家     |
+| start_date    | string |  是 | 开始日期             |
+| end_date      | string |  是 | 结束日期             |
+| page          | int    |  否 | 默认 1             |
+| page_size     | int    |  否 | 默认 50            |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "report_date": "2026-04-28",
+        "platform_account_id": 1,
+        "platform_code": "adsmakeup",
+        "account_name": "AdsMakeup 主账号",
+        "project_code": "A003",
+        "country": "",
+        "impressions": 11425,
+        "clicks": 1013,
+        "spend": "344.340000",
+        "ctr": "8.866500",
+        "cpm": "30.139200",
+        "cpc": "0.339900",
+        "updated_at": "2026-04-28 10:00:03"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+---
+
+## 3.2 投放汇总
+
+```http
+GET /api/ad-spend-platform/reports/summary
+```
+
+参数：
+
+| 参数            | 类型     | 必填 | 说明                                            |
+| ------------- | ------ | -: | --------------------------------------------- |
+| platform_code | string |  否 | adsmakeup                                     |
+| account_id    | int    |  否 | 投放账号 ID                                       |
+| project_code  | string |  否 | 项目代号                                          |
+| country       | string |  否 | 国家                                            |
+| start_date    | string |  是 | 开始日期                                          |
+| end_date      | string |  是 | 结束日期                                          |
+| group_by      | string |  否 | project / account / country / date，默认 project |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "project_code": "A003",
+      "impressions": 11425,
+      "clicks": 1013,
+      "spend": "344.340000",
+      "ctr": "8.866500",
+      "cpm": "30.139200",
+      "cpc": "0.339900"
+    }
+  ]
+}
+```
+
+说明：汇总接口里的 `ctr/cpm/cpc` 建议后端重新计算：
+
+```text
+ctr = clicks / impressions * 100
+cpm = spend / impressions * 1000
+cpc = spend / clicks
+```
+
+---
+
+## 3.3 投放趋势
+
+```http
+GET /api/ad-spend-platform/reports/trend
+```
+
+参数：
+
+| 参数            | 类型     | 必填 | 说明                 |
+| ------------- | ------ | -: | ------------------ |
+| platform_code | string |  否 | adsmakeup          |
+| account_id    | int    |  否 | 投放账号 ID            |
+| project_code  | string |  否 | 项目代号               |
+| country       | string |  否 | 国家                 |
+| start_date    | string |  是 | 开始日期               |
+| end_date      | string |  是 | 结束日期               |
+| dimension     | string |  否 | day / month，默认 day |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "time": "2026-04-28",
+      "impressions": 11425,
+      "clicks": 1013,
+      "spend": "344.340000",
+      "ctr": "8.866500",
+      "cpm": "30.139200",
+      "cpc": "0.339900"
+    }
+  ]
+}
+```
+
+---
+
+## 3.4 项目代号列表
+
+用于前端筛选。
+
+```http
+GET /api/ad-spend-platform/project-codes
+```
+
+参数：
+
+| 参数         | 类型     | 必填 | 说明     |
+| ---------- | ------ | -: | ------ |
+| keyword    | string |  否 | 项目代号搜索 |
+| start_date | string |  否 | 限定日期范围 |
+| end_date   | string |  否 | 限定日期范围 |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "project_code": "A003"
+    },
+    {
+      "project_code": "A002"
+    }
+  ]
+}
+```
+
+---
+
+# 4. 项目页投放接口
+
+统一使用：
+
+```text
+project_code
+```
+
+---
+
+## 4.1 项目投放汇总
+
+```http
+GET /api/projects/{project_code}/ad-spend-summary
+```
+
+参数：
+
+| 参数         | 类型     | 必填 | 说明      |
+| ---------- | ------ | -: | ------- |
+| start_date | string |  是 | 开始日期    |
+| end_date   | string |  是 | 结束日期    |
+| country    | string |  否 | 国家      |
+| account_id | int    |  否 | 投放账号 ID |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "project_code": "A003",
+    "impressions": 11425,
+    "clicks": 1013,
+    "spend": "344.340000",
+    "ctr": "8.866500",
+    "cpm": "30.139200",
+    "cpc": "0.339900"
+  }
+}
+```
+
+---
+
+## 4.2 项目投放趋势
+
+```http
+GET /api/projects/{project_code}/ad-spend-trend
+```
+
+参数：
+
+| 参数         | 类型     | 必填 | 说明                 |
+| ---------- | ------ | -: | ------------------ |
+| start_date | string |  是 | 开始日期               |
+| end_date   | string |  是 | 结束日期               |
+| dimension  | string |  否 | day / month，默认 day |
+| country    | string |  否 | 国家                 |
+| account_id | int    |  否 | 投放账号 ID            |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "time": "2026-04-28",
+      "impressions": 11425,
+      "clicks": 1013,
+      "spend": "344.340000",
+      "ctr": "8.866500",
+      "cpm": "30.139200",
+      "cpc": "0.339900"
+    }
+  ]
+}
+```
+
+---
+
+## 4.3 项目投放日报明细
+
+```http
+GET /api/projects/{project_code}/ad-spend-daily
+```
+
+参数：
+
+| 参数         | 类型     | 必填 | 说明      |
+| ---------- | ------ | -: | ------- |
+| start_date | string |  是 | 开始日期    |
+| end_date   | string |  是 | 结束日期    |
+| country    | string |  否 | 国家      |
+| account_id | int    |  否 | 投放账号 ID |
+| page       | int    |  否 | 默认 1    |
+| page_size  | int    |  否 | 默认 50   |
+
+返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
       {
         "report_date": "2026-04-28",
+        "platform_account_id": 1,
+        "platform_code": "adsmakeup",
+        "account_name": "AdsMakeup 主账号",
         "project_code": "A003",
         "country": "",
         "impressions": 11425,
@@ -423,4 +1014,33 @@ page_size
     "total": 1
   }
 }
+```
+
+---
+
+# 5. 前端页面对应接口
+
+## 投放账号配置页
+
+```text
+GET    /api/ad-spend-platform/accounts
+GET    /api/ad-spend-platform/accounts/{id}
+POST   /api/ad-spend-platform/accounts
+PUT    /api/ad-spend-platform/accounts/{id}
+PATCH  /api/ad-spend-platform/accounts/{id}/status
+POST   /api/ad-spend-platform/accounts/{id}/test
+```
+
+## 手动同步 / 同步任务页
+
+```text
+POST   /api/ad-spend-platform/sync
+GET    /api/ad-spend-platform/sync-jobs
+GET    /api/ad-spend-platform/sync-jobs/{id}
+```
+
+## 投放日报页面
+
+```text
+GET /api/ad-spend-platform/reports/daily
 ```
