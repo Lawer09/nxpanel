@@ -111,6 +111,15 @@ class ProjectAggregateController extends Controller
                 'updatedAt' => 'updated_at',
             ];
 
+            $aggregateOrderFields = ['revenue', 'adSpendCost', 'trafficCost', 'grossProfit', 'roi', 'cpi', 'updatedAt'];
+            $allowedOrderBy = empty($groupBy)
+                ? array_keys($columnMap)
+                : array_values(array_unique(array_merge($groupBy, $aggregateOrderFields)));
+
+            if (!in_array($orderBy, $allowedOrderBy, true)) {
+                $orderBy = $defaultOrderBy;
+            }
+
             $query = DB::table('project_daily_aggregates')
                 ->where('report_date', '>=', $request->input('startDate'))
                 ->where('report_date', '<=', $request->input('endDate'));
