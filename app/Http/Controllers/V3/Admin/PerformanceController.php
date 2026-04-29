@@ -291,6 +291,360 @@ class PerformanceController extends Controller
         ]);
     }
 
+    /**
+     * 节点探测错误分析
+     *
+     * GET /performance/probeErrors
+     */
+    public function getProbeErrors(Request $request): JsonResponse
+    {
+        $request->validate([
+            'nodeId'        => 'nullable|integer',
+            'dateFrom'      => 'nullable|date',
+            'dateTo'        => 'nullable|date',
+            'clientCountry' => 'nullable|string|max:2',
+            'platform'      => 'nullable|string|max:100',
+            'appId'         => 'nullable|string|max:255',
+            'appVersion'    => 'nullable|string|max:50',
+            'probeStage'    => 'nullable|in:node_connect,post_connect_probe,tunnel_establish',
+            'status'        => 'nullable|in:success,failed,timeout,cancelled',
+            'errorCode'     => 'nullable|string|max:64',
+            'groupBy'       => 'nullable|in:node,error_code,stage,status,stage_error',
+            'includeExternal' => 'nullable|boolean',
+            'pageSize'      => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $groupBy = $request->input('groupBy', 'stage_error');
+        $pageSize = $request->input('pageSize', 50);
+        $includeExternal = $request->boolean('includeExternal', false);
+
+        $query = DB::table('v2_node_probe_aggregated');
+
+        if (!$includeExternal) {
+            $query->where('node_id', '>', 0);
+        }
+
+        if ($request->filled('nodeId')) {
+            $query->where('node_id', $request->input('nodeId'));
+        }
+        if ($request->filled('dateFrom')) {
+            $query->where('date', '>=', $request->input('dateFrom'));
+        }
+        if ($request->filled('dateTo')) {
+            $query->where('date', '<=', $request->input('dateTo'));
+        }
+        if ($request->filled('clientCountry')) {
+            $query->where('client_country', $request->input('clientCountry'));
+        }
+        if ($request->filled('platform')) {
+            $query->where('platform', $request->input('platform'));
+        }
+        if ($request->filled('appId')) {
+            $query->where('app_id', $request->input('appId'));
+        }
+        if ($request->filled('appVersion')) {
+            $query->where('app_version', $request->input('appVersion'));
+        }
+        if ($request->filled('probeStage')) {
+            $probeStage = $request->input('probeStage') === 'tunnel_establish'
+                ? 'node_connect'
+                : $request->input('probeStage');
+            $query->where('probe_stage', $probeStage);
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('errorCode')) {
+            $query->where('error_code', $request->input('errorCode'));
+        }
+
+        $dimensionMap = [
+            'node' => ['node_id'],
+            'error_code' => ['error_code'],
+            'stage' => ['probe_stage'],
+            'status' => ['status'],
+            'stage_error' => ['probe_stage', 'error_code'],
+        ];
+        $dimensions = $dimensionMap[$groupBy] ?? $dimensionMap['stage_error'];
+
+        $selectRaw = implode(', ', $dimensions) . ', SUM(total_count) as total_count';
+        $data = $query->selectRaw($selectRaw)
+            ->groupBy($dimensions)
+            ->orderByDesc('total_count')
+            ->paginate($pageSize);
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($data->items()),
+            'total' => $data->total(),
+            'page' => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+            'groupBy' => $groupBy,
+        ]);
+    }
+
+    /**
+     * 节点失败率排行（success/failed 合并口径）
+     *
+     * GET /performance/nodeFailureRank
+     */
+    public function getNodeFailureRank(Request $request): JsonResponse
+    {
+        $request->validate([
+            'dateFrom'      => 'nullable|date',
+            'dateTo'        => 'nullable|date',
+            'clientCountry' => 'nullable|string|max:2',
+            'platform'      => 'nullable|string|max:100',
+            'appId'         => 'nullable|string|max:255',
+            'appVersion'    => 'nullable|string|max:50',
+            'probeStage'    => 'nullable|in:node_connect,post_connect_probe,tunnel_establish',
+            'minTotal'      => 'nullable|integer|min:1|max:1000000',
+            'includeExternal' => 'nullable|boolean',
+            'pageSize'      => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $pageSize = (int) $request->input('pageSize', 50);
+        $minTotal = (int) $request->input('minTotal', 20);
+        $includeExternal = $request->boolean('includeExternal', false);
+
+        $query = DB::table('v2_node_probe_aggregated as p')
+            ->leftJoin('v2_server as s', 's.id', '=', 'p.node_id')
+            ->whereIn('p.status', ['success', 'failed'])
+            ->selectRaw('p.node_id')
+            ->selectRaw('MAX(p.node_ip) as node_ip')
+            ->selectRaw('COALESCE(MAX(s.name), MAX(p.node_ip), CONCAT("Server ", p.node_id)) as node_name')
+            ->selectRaw("SUM(CASE WHEN p.status = 'success' THEN p.total_count ELSE 0 END) as success_count")
+            ->selectRaw("SUM(CASE WHEN p.status = 'failed' THEN p.total_count ELSE 0 END) as failed_count")
+            ->selectRaw('SUM(p.total_count) as total_count')
+            ->selectRaw('ROUND(100 * SUM(CASE WHEN p.status = \'failed\' THEN p.total_count ELSE 0 END) / NULLIF(SUM(p.total_count), 0), 2) as failure_rate')
+            ->groupBy('p.node_id');
+
+        if (!$includeExternal) {
+            $query->where('p.node_id', '>', 0);
+        }
+
+        if ($request->filled('dateFrom')) {
+            $query->where('p.date', '>=', $request->input('dateFrom'));
+        }
+        if ($request->filled('dateTo')) {
+            $query->where('p.date', '<=', $request->input('dateTo'));
+        }
+        if ($request->filled('clientCountry')) {
+            $query->where('p.client_country', $request->input('clientCountry'));
+        }
+        if ($request->filled('platform')) {
+            $query->where('p.platform', $request->input('platform'));
+        }
+        if ($request->filled('appId')) {
+            $query->where('p.app_id', $request->input('appId'));
+        }
+        if ($request->filled('appVersion')) {
+            $query->where('p.app_version', $request->input('appVersion'));
+        }
+        if ($request->filled('probeStage')) {
+            $probeStage = $request->input('probeStage') === 'tunnel_establish'
+                ? 'node_connect'
+                : $request->input('probeStage');
+            $query->where('p.probe_stage', $probeStage);
+        }
+
+        $query->havingRaw('SUM(p.total_count) >= ?', [$minTotal])
+            ->orderByDesc('failure_rate')
+            ->orderByDesc('failed_count');
+
+        $data = $query->paginate($pageSize);
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($data->items()),
+            'total' => $data->total(),
+            'page' => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+            'minTotal' => $minTotal,
+        ]);
+    }
+
+    /**
+     * 伪成功识别：node_connect 成功，但 post_connect_probe 失败
+     *
+     * GET /performance/pseudoSuccess
+     */
+    public function getPseudoSuccess(Request $request): JsonResponse
+    {
+        $request->validate([
+            'dateFrom'      => 'nullable|date',
+            'dateTo'        => 'nullable|date',
+            'clientCountry' => 'nullable|string|max:2',
+            'platform'      => 'nullable|string|max:100',
+            'appId'         => 'nullable|string|max:255',
+            'appVersion'    => 'nullable|string|max:50',
+            'minConnected'  => 'nullable|integer|min:1|max:1000000',
+            'includeExternal' => 'nullable|boolean',
+            'pageSize'      => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $pageSize = (int) $request->input('pageSize', 50);
+        $minConnected = (int) $request->input('minConnected', 20);
+        $includeExternal = $request->boolean('includeExternal', false);
+
+        $nodeConnectSuccess = DB::table('v2_node_probe_aggregated')
+            ->selectRaw('node_id, MAX(node_ip) as node_ip, SUM(total_count) as node_connect_success_count')
+            ->where('probe_stage', 'node_connect')
+            ->where('status', 'success')
+            ->groupBy('node_id');
+
+        $postConnectFailed = DB::table('v2_node_probe_aggregated')
+            ->selectRaw('node_id, SUM(total_count) as post_connect_failed_count')
+            ->where('probe_stage', 'post_connect_probe')
+            ->where('status', 'failed')
+            ->groupBy('node_id');
+
+        if (!$includeExternal) {
+            $nodeConnectSuccess->where('node_id', '>', 0);
+            $postConnectFailed->where('node_id', '>', 0);
+        }
+
+        $applyFilters = function ($query, string $alias) use ($request) {
+            if ($request->filled('dateFrom')) {
+                $query->where("{$alias}.date", '>=', $request->input('dateFrom'));
+            }
+            if ($request->filled('dateTo')) {
+                $query->where("{$alias}.date", '<=', $request->input('dateTo'));
+            }
+            if ($request->filled('clientCountry')) {
+                $query->where("{$alias}.client_country", $request->input('clientCountry'));
+            }
+            if ($request->filled('platform')) {
+                $query->where("{$alias}.platform", $request->input('platform'));
+            }
+            if ($request->filled('appId')) {
+                $query->where("{$alias}.app_id", $request->input('appId'));
+            }
+            if ($request->filled('appVersion')) {
+                $query->where("{$alias}.app_version", $request->input('appVersion'));
+            }
+            return $query;
+        };
+
+        $nodeConnectSuccess = $applyFilters($nodeConnectSuccess, 'v2_node_probe_aggregated');
+        $postConnectFailed = $applyFilters($postConnectFailed, 'v2_node_probe_aggregated');
+
+        $query = DB::query()
+            ->fromSub($nodeConnectSuccess, 'a')
+            ->leftJoinSub($postConnectFailed, 'b', function ($join) {
+                $join->on('a.node_id', '=', 'b.node_id');
+            })
+            ->leftJoin('v2_server as s', 's.id', '=', 'a.node_id')
+            ->selectRaw('a.node_id, a.node_ip')
+            ->selectRaw('COALESCE(s.name, a.node_ip, CONCAT("Server ", a.node_id)) as node_name')
+            ->selectRaw('a.node_connect_success_count')
+            ->selectRaw('COALESCE(b.post_connect_failed_count, 0) as post_connect_failed_count')
+            ->selectRaw('ROUND(100 * COALESCE(b.post_connect_failed_count, 0) / NULLIF(a.node_connect_success_count, 0), 2) as pseudo_success_rate')
+            ->where('a.node_connect_success_count', '>=', $minConnected)
+            ->orderByDesc('pseudo_success_rate')
+            ->orderByDesc('post_connect_failed_count');
+
+        $data = $query->paginate($pageSize);
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($data->items()),
+            'total' => $data->total(),
+            'page' => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+            'minConnected' => $minConnected,
+        ]);
+    }
+
+    /**
+     * 节点流量报表（客户端上报）
+     *
+     * GET /performance/nodeTraffic
+     */
+    public function getNodeTraffic(Request $request): JsonResponse
+    {
+        $request->validate([
+            'nodeId'        => 'nullable|integer',
+            'dateFrom'      => 'nullable|date',
+            'dateTo'        => 'nullable|date',
+            'clientCountry' => 'nullable|string|max:2',
+            'platform'      => 'nullable|string|max:100',
+            'appId'         => 'nullable|string|max:255',
+            'appVersion'    => 'nullable|string|max:50',
+            'groupBy'       => 'nullable|in:node,date,hour',
+            'includeExternal' => 'nullable|boolean',
+            'pageSize'      => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $groupBy = $request->input('groupBy', 'node');
+        $pageSize = (int) $request->input('pageSize', 50);
+        $includeExternal = $request->boolean('includeExternal', false);
+
+        $query = DB::table('v2_node_traffic_aggregated as t')
+            ->leftJoin('v2_server as s', 's.id', '=', 't.node_id');
+
+        if (!$includeExternal) {
+            $query->where('t.node_id', '>', 0);
+        }
+        if ($request->filled('nodeId')) {
+            $query->where('t.node_id', $request->input('nodeId'));
+        }
+        if ($request->filled('dateFrom')) {
+            $query->where('t.date', '>=', $request->input('dateFrom'));
+        }
+        if ($request->filled('dateTo')) {
+            $query->where('t.date', '<=', $request->input('dateTo'));
+        }
+        if ($request->filled('clientCountry')) {
+            $query->where('t.client_country', $request->input('clientCountry'));
+        }
+        if ($request->filled('platform')) {
+            $query->where('t.platform', $request->input('platform'));
+        }
+        if ($request->filled('appId')) {
+            $query->where('t.app_id', $request->input('appId'));
+        }
+        if ($request->filled('appVersion')) {
+            $query->where('t.app_version', $request->input('appVersion'));
+        }
+
+        if ($groupBy === 'date') {
+            $data = $query
+                ->selectRaw('t.date')
+                ->selectRaw('SUM(t.total_usage_seconds) as total_usage_seconds')
+                ->selectRaw('ROUND(SUM(t.total_usage_mb), 3) as total_usage_mb')
+                ->selectRaw('SUM(t.report_count) as report_count')
+                ->groupBy('t.date')
+                ->orderByDesc('t.date')
+                ->paginate($pageSize);
+        } elseif ($groupBy === 'hour') {
+            $data = $query
+                ->selectRaw('t.date, t.hour')
+                ->selectRaw('SUM(t.total_usage_seconds) as total_usage_seconds')
+                ->selectRaw('ROUND(SUM(t.total_usage_mb), 3) as total_usage_mb')
+                ->selectRaw('SUM(t.report_count) as report_count')
+                ->groupBy('t.date', 't.hour')
+                ->orderByDesc('t.date')
+                ->orderByDesc('t.hour')
+                ->paginate($pageSize);
+        } else {
+            $data = $query
+                ->selectRaw('t.node_id, MAX(t.node_ip) as node_ip')
+                ->selectRaw('COALESCE(MAX(s.name), MAX(t.node_ip), CONCAT("Server ", t.node_id)) as node_name')
+                ->selectRaw('SUM(t.total_usage_seconds) as total_usage_seconds')
+                ->selectRaw('ROUND(SUM(t.total_usage_mb), 3) as total_usage_mb')
+                ->selectRaw('SUM(t.report_count) as report_count')
+                ->groupBy('t.node_id')
+                ->orderByDesc('total_usage_mb')
+                ->paginate($pageSize);
+        }
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($data->items()),
+            'total' => $data->total(),
+            'page' => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+            'groupBy' => $groupBy,
+        ]);
+    }
+
 
     /**
      * 用户留存分析（留存矩阵）

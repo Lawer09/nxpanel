@@ -66,8 +66,6 @@ class UserReportController extends Controller
                 'created_at'   => now()->toDateTimeString(),
             ];
 
-            // Log::info('========batchReport', $request->all(), $validated['reports'] ?? []);
-
             $list = Cache::get($cacheKey, []);
             if (!is_array($list)) {
                 $list = [];

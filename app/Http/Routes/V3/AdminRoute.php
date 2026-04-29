@@ -204,6 +204,10 @@ class AdminRoute
                 $router->get('/platformDistribution',  [PerformanceController::class, 'getPlatformDistribution']);
                 $router->get('/countryDistribution',   [PerformanceController::class, 'getCountryDistribution']);
                 $router->get('/failedNodes',           [PerformanceController::class, 'getFailedNodes']);
+                $router->get('/probeErrors',           [PerformanceController::class, 'getProbeErrors']);
+                $router->get('/nodeFailureRank',       [PerformanceController::class, 'getNodeFailureRank']);
+                $router->get('/pseudoSuccess',         [PerformanceController::class, 'getPseudoSuccess']);
+                $router->get('/nodeTraffic',           [PerformanceController::class, 'getNodeTraffic']);
                 $router->get('/retention',             [PerformanceController::class, 'getRetention']);
                 $router->get('/activeUsers',           [PerformanceController::class, 'getActiveUsers']);
                 $router->get('/activeUsersSummary',    [PerformanceController::class, 'getActiveUsersSummary']);
