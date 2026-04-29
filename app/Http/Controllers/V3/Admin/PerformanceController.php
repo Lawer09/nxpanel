@@ -298,6 +298,8 @@ class PerformanceController extends Controller
      */
     public function getProbeErrors(Request $request): JsonResponse
     {
+        $this->normalizeBooleanQuery($request, 'includeExternal');
+
         $request->validate([
             'nodeId'        => 'nullable|integer',
             'dateFrom'      => 'nullable|date',
@@ -389,6 +391,8 @@ class PerformanceController extends Controller
      */
     public function getNodeFailureRank(Request $request): JsonResponse
     {
+        $this->normalizeBooleanQuery($request, 'includeExternal');
+
         $request->validate([
             'dateFrom'      => 'nullable|date',
             'dateTo'        => 'nullable|date',
@@ -469,6 +473,8 @@ class PerformanceController extends Controller
      */
     public function getPseudoSuccess(Request $request): JsonResponse
     {
+        $this->normalizeBooleanQuery($request, 'includeExternal');
+
         $request->validate([
             'dateFrom'      => 'nullable|date',
             'dateTo'        => 'nullable|date',
@@ -560,6 +566,8 @@ class PerformanceController extends Controller
      */
     public function getNodeTraffic(Request $request): JsonResponse
     {
+        $this->normalizeBooleanQuery($request, 'includeExternal');
+
         $request->validate([
             'nodeId'        => 'nullable|integer',
             'dateFrom'      => 'nullable|date',
@@ -642,6 +650,17 @@ class PerformanceController extends Controller
             'page' => $data->currentPage(),
             'pageSize' => $data->perPage(),
             'groupBy' => $groupBy,
+        ]);
+    }
+
+    private function normalizeBooleanQuery(Request $request, string $key): void
+    {
+        if (!$request->has($key)) {
+            return;
+        }
+
+        $request->merge([
+            $key => $request->boolean($key) ? 1 : 0,
         ]);
     }
 
