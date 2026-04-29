@@ -116,13 +116,23 @@ class AggregateProjectDailyData extends Command
             return;
         }
 
+        $trafficWrittenProjectSet = [];
+
         foreach ($rows as $row) {
             $projectCode = (string) $row->project_code;
             $adCountry = strtoupper(trim((string) ($row->ad_country ?? '')));
 
             $userMetrics = $this->buildUserMetrics($date, $projectCode, $adCountry);
             $adSpendCost = $this->queryAdSpendCost($date, $projectCode, $adCountry);
-            $trafficUsageGb = $this->queryTrafficUsageGb($date, $projectCode);
+            $trafficKey = $date . '|' . $projectCode;
+            $trafficUsageGb = 0.0;
+            if (!isset($trafficWrittenProjectSet[$trafficKey])) {
+                // TODO(next): traffic_usage_gb / traffic_cost should be moved to a dedicated
+                // date+project aggregate source. Hotfix: only write traffic once per date+project
+                // to prevent duplicate summation across finer country/user dimensions.
+                $trafficUsageGb = $this->queryTrafficUsageGb($date, $projectCode);
+                $trafficWrittenProjectSet[$trafficKey] = true;
+            }
             $trafficCost = round($trafficUsageGb * 0.16, 6);
 
             $revenue = $this->decimal($row->revenue);
