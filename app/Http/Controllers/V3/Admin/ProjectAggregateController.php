@@ -222,7 +222,7 @@ class ProjectAggregateController extends Controller
             });
 
             return $this->ok([
-                'list' => $list,
+                'data' => $list,
                 'total' => $total,
                 'page' => $page,
                 'pageSize' => $pageSize,
