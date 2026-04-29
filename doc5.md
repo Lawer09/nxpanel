@@ -29,7 +29,7 @@
 | endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
 | projectCode | string | 否 | 项目代号 |
 | adCountry | string | 否 | 广告国家 |
-| groupBy | string | 否 | `detail` / `dateProject` / `dateProjectCountry`，默认 `detail` |
+| groupBy | string[] | 否 | 按维度聚合，支持 `reportDate` / `projectCode` / `adCountry`，默认明细 |
 | page | int | 否 | 默认 `1` |
 | pageSize | int | 否 | 默认 `50`，最大 `200` |
 | orderBy | string | 否 | 默认 `reportDate` |
@@ -37,20 +37,21 @@
 
 `groupBy` 定义：
 
-- `detail`：明细（按 `reportDate + projectCode + adCountry` 原始粒度）
-- `dateProject`：按 `reportDate + projectCode` 聚合
-- `dateProjectCountry`：按 `reportDate + projectCode + adCountry` 聚合（显式聚合模式）
+- 不传或传空数组：明细（按 `reportDate + projectCode + adCountry` 原始粒度）
+- 传数组：按数组中的维度组合聚合，例如：
+  - `['reportDate', 'projectCode']`
+  - `['reportDate', 'projectCode', 'adCountry']`
 
-兼容说明：
+说明：
 
-- 推荐传 `groupBy`
-- 也兼容传小写 `groupby`
+- 仅支持 `groupBy`（驼峰）参数名
+- 仅支持数组形式 `groupBy`
 
 ### data 返回
 
 ```json
 {
-  "list": [
+  "data": [
     {
       "id": 1,
       "reportDate": "2026-04-28",

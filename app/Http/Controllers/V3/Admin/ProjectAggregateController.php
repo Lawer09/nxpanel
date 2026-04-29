@@ -83,7 +83,8 @@ class ProjectAggregateController extends Controller
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
                 'adCountry' => 'nullable|string|max:50',
-                'groupBy' => 'nullable|string|in:detail,dateProject,dateProjectCountry',
+                'groupBy' => 'nullable|array|min:1',
+                'groupBy.*' => 'string|distinct|in:reportDate,projectCode,adCountry',
                 'page' => 'nullable|integer|min:1',
                 'pageSize' => 'nullable|integer|min:1|max:200',
                 'orderBy' => 'nullable|string|in:reportDate,projectCode,adCountry,revenue,adSpendCost,trafficCost,grossProfit,roi,cpi,updatedAt',
@@ -92,9 +93,10 @@ class ProjectAggregateController extends Controller
 
             $page = (int) $request->input('page', 1);
             $pageSize = (int) $request->input('pageSize', 50);
-            $orderBy = (string) $request->input('orderBy', 'reportDate');
             $orderDir = (string) $request->input('orderDir', 'desc');
-            $groupBy = (string) $request->input('groupBy', 'detail');
+            $groupBy = (array) $request->input('groupBy', []);
+            $defaultOrderBy = !empty($groupBy) ? (string) $groupBy[0] : 'reportDate';
+            $orderBy = (string) $request->input('orderBy', $defaultOrderBy);
 
             $columnMap = [
                 'reportDate' => 'report_date',
@@ -120,7 +122,7 @@ class ProjectAggregateController extends Controller
                 $query->where('ad_country', (string) $request->input('adCountry', ''));
             }
 
-            if ($groupBy === 'detail') {
+            if (empty($groupBy)) {
                 $total = (clone $query)->count();
                 $rows = $query
                     ->orderBy($columnMap[$orderBy], $orderDir)
@@ -128,11 +130,20 @@ class ProjectAggregateController extends Controller
                     ->limit($pageSize)
                     ->get();
             } else {
+                $dimensionMap = [
+                    'reportDate' => 'report_date',
+                    'projectCode' => 'project_code',
+                    'adCountry' => 'ad_country',
+                ];
+
                 $groupQuery = clone $query;
-                $groupQuery
-                    ->selectRaw('report_date')
-                    ->selectRaw('project_code')
-                    ->selectRaw('SUM(report_new_users) as report_new_users')
+                foreach ($groupBy as $dimension) {
+                    $groupColumn = $dimensionMap[$dimension];
+                    $groupQuery->selectRaw($groupColumn);
+                    $groupQuery->groupBy($groupColumn);
+                }
+
+                $groupQuery->selectRaw('SUM(report_new_users) as report_new_users')
                     ->selectRaw('SUM(dau_users) as dau_users')
                     ->selectRaw('SUM(register_new_users) as register_new_users')
                     ->selectRaw('SUM(revenue) as revenue')
@@ -145,12 +156,6 @@ class ProjectAggregateController extends Controller
                     ->selectRaw('SUM(traffic_cost) as traffic_cost')
                     ->selectRaw('SUM(gross_profit) as gross_profit')
                     ->selectRaw('MAX(updated_at) as updated_at');
-
-                if ($groupBy === 'dateProjectCountry') {
-                    $groupQuery->selectRaw('ad_country')->groupBy('report_date', 'project_code', 'ad_country');
-                } else {
-                    $groupQuery->selectRaw('"" as ad_country')->groupBy('report_date', 'project_code');
-                }
 
                 $groupQuery
                     ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(revenue)/SUM(impressions)*1000,6) END as ecpm')
@@ -175,11 +180,15 @@ class ProjectAggregateController extends Controller
             }
 
             $list = $rows->map(function ($row) {
+                $reportDate = $row->report_date ?? null;
+                $projectCode = $row->project_code ?? null;
+                $adCountry = $row->ad_country ?? null;
+
                 return [
-                    'id' => (int) $row->id,
-                    'reportDate' => (string) $row->report_date,
-                    'projectCode' => $row->project_code,
-                    'adCountry' => $row->ad_country,
+                    'id' => isset($row->id) ? (int) $row->id : null,
+                    'reportDate' => $reportDate === null ? null : (string) $reportDate,
+                    'projectCode' => $projectCode,
+                    'adCountry' => $adCountry,
                     'reportNewUsers' => (int) $row->report_new_users,
                     'dauUsers' => (int) $row->dau_users,
                     'registerNewUsers' => (int) $row->register_new_users,
@@ -424,7 +433,6 @@ class ProjectAggregateController extends Controller
             'pagesize' => 'pageSize',
             'orderby' => 'orderBy',
             'orderdir' => 'orderDir',
-            'groupby' => 'groupBy',
         ];
 
         $merged = [];
