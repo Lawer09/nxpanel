@@ -22,13 +22,11 @@ return new class extends Migration {
             $table->string('probe_stage', 32)->comment('探测阶段');
             $table->string('status', 16)->comment('探测状态');
             $table->string('error_code', 64)->nullable()->comment('错误码');
+            $table->char('dimension_hash', 32)->comment('聚合维度哈希');
             $table->unsignedInteger('total_count')->default(0)->comment('总上报数量');
             $table->timestamp('created_at')->useCurrent();
 
-            $table->unique(
-                ['date', 'hour', 'minute', 'node_id', 'node_ip', 'client_country', 'platform', 'client_isp', 'app_id', 'app_version', 'probe_stage', 'status', 'error_code'],
-                'uq_node_probe_agg_dimension'
-            );
+            $table->unique('dimension_hash', 'uq_node_probe_agg_dimension_hash');
 
             $table->index(['date', 'node_id'], 'idx_probe_date_node');
             $table->index(['date', 'node_ip'], 'idx_probe_date_node_ip');

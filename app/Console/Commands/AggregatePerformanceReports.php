@@ -304,8 +304,26 @@ class AggregatePerformanceReports extends Command
 
         foreach ($grouped as $items) {
             $first = $items->first();
+            $dimensionHash = md5(implode('|', [
+                $date,
+                $hour,
+                $minute,
+                (int) ($first['node_id'] ?? 0),
+                (string) ($first['node_ip'] ?? ''),
+                (string) ($first['client_country'] ?? ''),
+                (string) ($first['platform'] ?? ''),
+                (string) ($first['client_isp'] ?? ''),
+                (string) ($first['app_id'] ?? ''),
+                (string) ($first['app_version'] ?? ''),
+                (string) ($first['probe_stage'] ?? 'unknown'),
+                (string) ($first['status'] ?? 'unknown'),
+                (string) ($first['error_code'] ?? ''),
+            ]));
 
             DB::table('v2_node_probe_aggregated')->updateOrInsert(
+                [
+                    'dimension_hash' => $dimensionHash,
+                ],
                 [
                     'date' => $date,
                     'hour' => $hour,
@@ -320,8 +338,6 @@ class AggregatePerformanceReports extends Command
                     'probe_stage' => $first['probe_stage'] ?? 'unknown',
                     'status' => $first['status'] ?? 'unknown',
                     'error_code' => $first['error_code'] ?? null,
-                ],
-                [
                     'total_count' => DB::raw('total_count + ' . $items->count()),
                 ]
             );
@@ -369,8 +385,23 @@ class AggregatePerformanceReports extends Command
             $totalSeconds = (int) $items->sum('vpn_user_time_seconds');
             $totalMb = round((float) $items->sum('vpn_user_traffic_mb'), 3);
             $reportCount = $items->count();
+            $dimensionHash = md5(implode('|', [
+                $bucket['date'],
+                $bucket['hour'],
+                $bucket['minute'],
+                (int) ($first['node_id'] ?? 0),
+                (string) ($first['node_ip'] ?? ''),
+                (string) ($first['client_country'] ?? ''),
+                (string) ($first['platform'] ?? ''),
+                (string) ($first['client_isp'] ?? ''),
+                (string) ($first['app_id'] ?? ''),
+                (string) ($first['app_version'] ?? ''),
+            ]));
 
             DB::table('v2_node_traffic_aggregated')->updateOrInsert(
+                [
+                    'dimension_hash' => $dimensionHash,
+                ],
                 [
                     'date' => $bucket['date'],
                     'hour' => $bucket['hour'],
@@ -382,8 +413,6 @@ class AggregatePerformanceReports extends Command
                     'client_isp' => $first['client_isp'] ?? null,
                     'app_id' => $first['app_id'] ?? null,
                     'app_version' => $first['app_version'] ?? null,
-                ],
-                [
                     'total_usage_seconds' => DB::raw('total_usage_seconds + ' . $totalSeconds),
                     'total_usage_mb' => DB::raw('ROUND(total_usage_mb + ' . $totalMb . ', 3)'),
                     'report_count' => DB::raw('report_count + ' . $reportCount),

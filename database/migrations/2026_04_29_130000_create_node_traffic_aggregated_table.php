@@ -19,15 +19,13 @@ return new class extends Migration {
             $table->string('client_isp', 255)->nullable()->comment('客户端ISP');
             $table->string('app_id', 255)->nullable()->comment('App包名');
             $table->string('app_version', 50)->nullable()->comment('App版本');
+            $table->char('dimension_hash', 32)->comment('聚合维度哈希');
             $table->unsignedBigInteger('total_usage_seconds')->default(0)->comment('总使用时长（秒）');
             $table->decimal('total_usage_mb', 20, 3)->default(0)->comment('总使用流量（MB）');
             $table->unsignedInteger('report_count')->default(0)->comment('上报次数');
             $table->timestamp('created_at')->useCurrent();
 
-            $table->unique(
-                ['date', 'hour', 'minute', 'node_id', 'node_ip', 'client_country', 'platform', 'client_isp', 'app_id', 'app_version'],
-                'uq_node_traffic_agg_dimension'
-            );
+            $table->unique('dimension_hash', 'uq_node_traffic_agg_dimension_hash');
 
             $table->index(['date', 'node_id'], 'idx_traffic_date_node');
             $table->index(['date', 'node_ip'], 'idx_traffic_date_node_ip');
