@@ -14,7 +14,7 @@ class TrafficPlatformDailySnapshot extends Model
 
     protected $casts = [
         'total_bytes'   => 'integer',
-        'total_gb'      => 'decimal:6',
+        'total_mb'      => 'decimal:6',
         'stat_date'     => 'date',
         'snapshot_time' => 'datetime',
         'created_at'    => 'datetime',

@@ -24,7 +24,7 @@ class TrafficPlatformSyncController extends Controller
         try {
             $request->validate([
                 'accountId'    => 'required|integer',
-                'platformCode' => 'required|string|max:50',
+                'platformCode' => 'nullable|string|max:50',
                 'startDate'    => 'required|date',
                 'endDate'      => 'required|date',
             ]);
@@ -34,11 +34,20 @@ class TrafficPlatformSyncController extends Controller
                 return $this->error([404, '账号不存在']);
             }
 
+            // 简化对接：platformCode 可不传，默认按账号绑定的平台编码
+            $platformCode = (string) ($account->platform_code ?? '');
+            if ($request->filled('platformCode')) {
+                $inputPlatformCode = (string) $request->input('platformCode');
+                if ($inputPlatformCode !== $platformCode) {
+                    return $this->error([422, 'platformCode与账号不匹配']);
+                }
+            }
+
             $goUrl = 'http://47.254.131.223:8080/api/traffic-platform/sync';
 
             $response = Http::timeout(15)->post($goUrl, [
                 'account_id'    => $request->input('accountId'),
-                'platform_code' => $request->input('platformCode'),
+                'platform_code' => $platformCode,
                 'start_date'    => $request->input('startDate'),
                 'end_date'      => $request->input('endDate'),
             ]);

@@ -36,13 +36,13 @@ class TrafficPlatformUsageController extends Controller
             $this->applyCommonFilters($query, $request);
 
             if ($request->filled('startTime')) {
-                $query->where('stat_hour', '>=', $request->input('startTime'));
+                $query->where('stat_time', '>=', $request->input('startTime'));
             }
             if ($request->filled('endTime')) {
-                $query->where('stat_hour', '<=', $request->input('endTime'));
+                $query->where('stat_time', '<=', $request->input('endTime'));
             }
 
-            $query->orderByDesc('stat_hour');
+            $query->orderByDesc('stat_time');
 
             $page     = (int) $request->input('page', 1);
             $pageSize = (int) $request->input('pageSize', 50);
@@ -51,6 +51,8 @@ class TrafficPlatformUsageController extends Controller
             $items = $query->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
+
+            $items = $this->normalizeDimensionFields($items);
 
             // 补充 account_name
             $items = $this->attachAccountName($items);
@@ -90,15 +92,15 @@ class TrafficPlatformUsageController extends Controller
                     stat_date,
                     platform_account_id,
                     platform_code,
-                    external_uid,
+                    COALESCE(external_uid, "") AS external_uid,
                     external_username,
-                    geo,
-                    region,
+                    COALESCE(geo, "") AS geo,
+                    COALESCE(region, "") AS region,
                     SUM(traffic_bytes) AS traffic_bytes,
                     SUM(traffic_mb) AS traffic_mb,
-                    SUM(traffic_gb) AS traffic_gb
+                    ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb
                 ')
-                ->groupBy('stat_date', 'platform_account_id', 'platform_code', 'external_uid', 'external_username', 'geo', 'region')
+                ->groupByRaw('stat_date, platform_account_id, platform_code, COALESCE(external_uid, ""), external_username, COALESCE(geo, ""), COALESCE(region, "")')
                 ->orderByDesc('stat_date');
 
             $this->applyCommonFilters($query, $request);
@@ -121,6 +123,8 @@ class TrafficPlatformUsageController extends Controller
             $items = $query->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
+
+            $items = $this->normalizeDimensionFields($items);
 
             $items = $this->attachAccountName($items);
 
@@ -158,13 +162,13 @@ class TrafficPlatformUsageController extends Controller
                     DATE_FORMAT(stat_date, '%Y-%m') AS stat_month,
                     platform_account_id,
                     platform_code,
-                    external_uid,
+                    COALESCE(external_uid, "") AS external_uid,
                     external_username,
                     SUM(traffic_bytes) AS traffic_bytes,
                     SUM(traffic_mb) AS traffic_mb,
-                    SUM(traffic_gb) AS traffic_gb
+                    ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb
                 ")
-                ->groupByRaw("DATE_FORMAT(stat_date, '%Y-%m'), platform_account_id, platform_code, external_uid, external_username")
+                ->groupByRaw("DATE_FORMAT(stat_date, '%Y-%m'), platform_account_id, platform_code, COALESCE(external_uid, ''), external_username")
                 ->orderByDesc('stat_month');
 
             $this->applyCommonFilters($query, $request);
@@ -188,6 +192,8 @@ class TrafficPlatformUsageController extends Controller
             $items = $query->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
+
+            $items = $this->normalizeDimensionFields($items);
 
             $items = $this->attachAccountName($items);
 
@@ -233,17 +239,17 @@ class TrafficPlatformUsageController extends Controller
 
             switch ($dimension) {
                 case 'hour':
-                    $query->selectRaw("stat_hour AS time, SUM(traffic_gb) AS traffic_gb")
-                        ->groupBy('stat_hour')
-                        ->orderBy('stat_hour');
+                    $query->selectRaw("DATE_FORMAT(stat_time, '%Y-%m-%d %H:00:00') AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
+                        ->groupByRaw("DATE_FORMAT(stat_time, '%Y-%m-%d %H:00:00')")
+                        ->orderBy('time');
                     break;
                 case 'month':
-                    $query->selectRaw("DATE_FORMAT(stat_date, '%Y-%m') AS time, SUM(traffic_gb) AS traffic_gb")
+                    $query->selectRaw("DATE_FORMAT(stat_date, '%Y-%m') AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
                         ->groupByRaw("DATE_FORMAT(stat_date, '%Y-%m')")
                         ->orderBy('time');
                     break;
                 default: // day
-                    $query->selectRaw("stat_date AS time, SUM(traffic_gb) AS traffic_gb")
+                    $query->selectRaw("stat_date AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
                         ->groupBy('stat_date')
                         ->orderBy('stat_date');
                     break;
@@ -292,22 +298,24 @@ class TrafficPlatformUsageController extends Controller
 
             switch ($rankBy) {
                 case 'external_uid':
-                    $query->selectRaw('platform_account_id, platform_code, external_uid, external_username, SUM(traffic_gb) AS traffic_gb')
-                        ->groupBy('platform_account_id', 'platform_code', 'external_uid', 'external_username');
+                    $query->selectRaw('platform_account_id, platform_code, COALESCE(external_uid, "") AS external_uid, external_username, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                        ->groupByRaw('platform_account_id, platform_code, COALESCE(external_uid, ""), external_username');
                     break;
                 case 'geo':
-                    $query->selectRaw('geo, region, SUM(traffic_gb) AS traffic_gb')
-                        ->groupBy('geo', 'region');
+                    $query->selectRaw('COALESCE(geo, "") AS geo, COALESCE(region, "") AS region, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                        ->groupByRaw('COALESCE(geo, ""), COALESCE(region, "")');
                     break;
                 default: // account
-                    $query->selectRaw('platform_account_id, platform_code, SUM(traffic_gb) AS traffic_gb')
+                    $query->selectRaw('platform_account_id, platform_code, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
                         ->groupBy('platform_account_id', 'platform_code');
                     break;
             }
 
-            $data = $query->orderByDesc('traffic_gb')
+            $data = $query->orderByDesc('traffic_mb')
                 ->limit($limit)
                 ->get();
+
+            $data = $this->normalizeDimensionFields($data);
 
             // 补充 account_name
             if (in_array($rankBy, ['account', 'external_uid'])) {
@@ -336,12 +344,38 @@ class TrafficPlatformUsageController extends Controller
         if ($request->filled('accountId')) {
             $query->where('platform_account_id', $request->input('accountId'));
         }
-        if ($request->filled('externalUid')) {
-            $query->where('external_uid', $request->input('externalUid'));
+        if ($request->has('externalUid')) {
+            $query->whereRaw('COALESCE(external_uid, "") = ?', [$this->normalizeDimensionValue($request->input('externalUid'))]);
         }
-        if ($request->filled('geo')) {
-            $query->where('geo', $request->input('geo'));
+        if ($request->has('geo')) {
+            $query->whereRaw('COALESCE(geo, "") = ?', [$this->normalizeDimensionValue($request->input('geo'))]);
         }
+    }
+
+    private function normalizeDimensionValue($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return trim((string) $value);
+    }
+
+    private function normalizeDimensionFields($items)
+    {
+        return collect($items)->map(function ($row) {
+            $arr = (array) $row;
+            if (array_key_exists('external_uid', $arr)) {
+                $arr['external_uid'] = $this->normalizeDimensionValue($arr['external_uid']);
+            }
+            if (array_key_exists('geo', $arr)) {
+                $arr['geo'] = $this->normalizeDimensionValue($arr['geo']);
+            }
+            if (array_key_exists('region', $arr)) {
+                $arr['region'] = $this->normalizeDimensionValue($arr['region']);
+            }
+            return (object) $arr;
+        });
     }
 
     /**

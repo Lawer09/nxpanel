@@ -54,7 +54,6 @@ class TrafficPlatformController extends Controller
                 'name'           => 'required|string|max:100',
                 'baseUrl'        => 'nullable|string|max:255',
                 'enabled'        => 'nullable|integer|in:0,1',
-                'remark'         => 'nullable|string|max:255',
             ]);
 
             if (TrafficPlatform::where('code', $request->input('code'))->exists()) {
@@ -66,7 +65,6 @@ class TrafficPlatformController extends Controller
                 'name'            => $request->input('name'),
                 'base_url'        => $request->input('baseUrl', ''),
                 'enabled'         => $request->input('enabled', 1),
-                'remark'          => $request->input('remark'),
             ]);
 
             return $this->ok(CamelizeResource::make($platform));
@@ -94,14 +92,12 @@ class TrafficPlatformController extends Controller
                 'name'           => 'nullable|string|max:100',
                 'baseUrl'        => 'nullable|string|max:255',
                 'enabled'        => 'nullable|integer|in:0,1',
-                'remark'         => 'nullable|string|max:255',
             ]);
 
             $updateData = [];
             if ($request->has('name'))           $updateData['name']            = $request->input('name');
             if ($request->has('baseUrl'))         $updateData['base_url']        = $request->input('baseUrl');
             if ($request->has('enabled'))         $updateData['enabled']         = $request->input('enabled');
-            if ($request->has('remark'))          $updateData['remark']          = $request->input('remark');
 
             $platform->update($updateData);
 

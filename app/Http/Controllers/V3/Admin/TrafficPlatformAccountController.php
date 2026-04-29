@@ -114,7 +114,6 @@ class TrafficPlatformAccountController extends Controller
                 'credential'        => 'required|array',
                 'timezone'          => 'nullable|string|max:64',
                 'enabled'           => 'nullable|integer|in:0,1',
-                'remark'            => 'nullable|string|max:255',
             ]);
 
             $platformCode = $request->input('platformCode');
@@ -131,7 +130,6 @@ class TrafficPlatformAccountController extends Controller
                 'credential_json'     => $request->input('credential'),
                 'timezone'            => $request->input('timezone', 'Asia/Shanghai'),
                 'enabled'             => $request->input('enabled', 1),
-                'remark'              => $request->input('remark'),
             ]);
 
             return $this->ok(CamelizeResource::make($account));
@@ -161,7 +159,6 @@ class TrafficPlatformAccountController extends Controller
                 'credential'        => 'nullable|array',
                 'timezone'          => 'nullable|string|max:64',
                 'enabled'           => 'nullable|integer|in:0,1',
-                'remark'            => 'nullable|string|max:255',
             ]);
 
             $updateData = [];
@@ -169,7 +166,6 @@ class TrafficPlatformAccountController extends Controller
             if ($request->has('externalAccountId')) $updateData['external_account_id'] = $request->input('externalAccountId');
             if ($request->has('timezone'))          $updateData['timezone']            = $request->input('timezone');
             if ($request->has('enabled'))           $updateData['enabled']             = $request->input('enabled');
-            if ($request->has('remark'))            $updateData['remark']              = $request->input('remark');
 
             // credential: 合并更新，空值字段不覆盖
             if ($request->filled('credential')) {

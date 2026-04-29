@@ -318,7 +318,7 @@ class AggregateProjectDailyData extends Command
                 $query->whereIn('external_uid', $uidList);
             }
 
-            $sum += $this->decimal($query->sum('traffic_gb'));
+            $sum += $this->decimal($query->sum('traffic_mb')) / 1024;
         }
 
         return $sum;

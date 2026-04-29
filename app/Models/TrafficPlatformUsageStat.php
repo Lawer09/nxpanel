@@ -14,9 +14,9 @@ class TrafficPlatformUsageStat extends Model
     protected $casts = [
         'traffic_bytes' => 'integer',
         'traffic_mb'    => 'decimal:6',
-        'traffic_gb'    => 'decimal:6',
-        'is_estimated'  => 'integer',
-        'stat_hour'     => 'datetime',
+        'stat_hour'     => 'integer',
+        'stat_minute'   => 'integer',
+        'stat_time'     => 'datetime',
         'stat_date'     => 'date',
         'created_at'    => 'datetime',
         'updated_at'    => 'datetime',
