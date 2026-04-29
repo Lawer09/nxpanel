@@ -162,7 +162,7 @@ class TrafficPlatformUsageController extends Controller
                     DATE_FORMAT(stat_date, '%Y-%m') AS stat_month,
                     platform_account_id,
                     platform_code,
-                    COALESCE(external_uid, "") AS external_uid,
+                    COALESCE(external_uid, '') AS external_uid,
                     external_username,
                     SUM(traffic_bytes) AS traffic_bytes,
                     SUM(traffic_mb) AS traffic_mb,
