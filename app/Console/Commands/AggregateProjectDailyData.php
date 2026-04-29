@@ -189,6 +189,7 @@ class AggregateProjectDailyData extends Command
     private function buildUserMetrics(string $date, string $projectCode, string $adCountry): array
     {
         $targetUserCountry = $this->normalizeCountry($adCountry);
+        $hasAdCountryFilter = trim((string) $adCountry) !== '';
 
         $appStoreIds = DB::table('project_user_app_map')
             ->where('project_code', '=', $projectCode)
@@ -281,7 +282,7 @@ class AggregateProjectDailyData extends Command
 
             $userCountry = $this->normalizeCountry($metaCountry);
 
-            if ($targetUserCountry !== $userCountry) {
+            if ($hasAdCountryFilter && $targetUserCountry !== $userCountry) {
                 continue;
             }
 
