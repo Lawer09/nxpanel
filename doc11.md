@@ -84,8 +84,9 @@
 | endDate | date | 是 | 结束日期（>= startDate） |
 | projectCode | string | 否 | 项目代号过滤 |
 | adCountry | string | 否 | 广告国家过滤 |
+| spendCountry | string | 否 | 投放国家过滤 |
 | userCountry | string | 否 | 用户国家过滤（空值按 `OO` 处理） |
-| groupBy | string[] | 否 | 分组维度数组：`reportDate/projectCode/adCountry/userCountry` |
+| groupBy | string[] | 否 | 分组维度数组：`reportDate/projectCode/adCountry/spendCountry/userCountry` |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 50，最大 200 |
 | orderBy | string | 否 | 排序字段，见下方 |
@@ -93,7 +94,7 @@
 
 `orderBy` 可选值：
 
-- 维度字段：`reportDate`、`projectCode`、`adCountry`、`userCountry`
+- 维度字段：`reportDate`、`projectCode`、`adCountry`、`spendCountry`、`userCountry`
 - 指标字段：`revenue`、`adSpendCost`、`trafficCost`、`grossProfit`、`roi`、`cpi`、`updatedAt`
 
 说明：
@@ -111,6 +112,7 @@
       "reportDate": "2026-04-29",
       "projectCode": "game_001",
       "adCountry": "US",
+      "spendCountry": "US",
       "userCountry": "US",
       "reportNewUsers": 120,
       "dauUsers": 900,
@@ -154,8 +156,9 @@
 | endDate | date | 是 | 结束日期 |
 | projectCode | string | 否 | 项目代号过滤 |
 | adCountry | string | 否 | 广告国家过滤 |
+| spendCountry | string | 否 | 投放国家过滤 |
 | userCountry | string | 否 | 用户国家过滤 |
-| groupBy | string | 否 | `project/country/userCountry/date`，默认 `project` |
+| groupBy | string | 否 | `project/country/spendCountry/userCountry/date`，默认 `project` |
 
 ### 4.2 返回说明
 
@@ -163,6 +166,7 @@
 - 每项包含聚合指标 + 维度字段：
   - `groupBy=project` -> `projectCode`
   - `groupBy=country` -> `adCountry`
+  - `groupBy=spendCountry` -> `spendCountry`
   - `groupBy=userCountry` -> `userCountry`
   - `groupBy=date` -> `date`
 
@@ -207,6 +211,7 @@
 | endDate | date | 是 | 结束日期 |
 | projectCode | string | 否 | 项目代号过滤 |
 | adCountry | string | 否 | 广告国家过滤 |
+| spendCountry | string | 否 | 投放国家过滤 |
 | userCountry | string | 否 | 用户国家过滤 |
 | dimension | string | 否 | `day/month`，默认 `day` |
 
