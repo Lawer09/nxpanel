@@ -83,11 +83,12 @@ class ProjectAggregateController extends Controller
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
                 'adCountry' => 'nullable|string|max:50',
+                'userCountry' => 'nullable|string|max:50',
                 'groupBy' => 'nullable|array|min:1',
-                'groupBy.*' => 'string|distinct|in:reportDate,projectCode,adCountry',
+                'groupBy.*' => 'string|distinct|in:reportDate,projectCode,adCountry,userCountry',
                 'page' => 'nullable|integer|min:1',
                 'pageSize' => 'nullable|integer|min:1|max:200',
-                'orderBy' => 'nullable|string|in:reportDate,projectCode,adCountry,revenue,adSpendCost,trafficCost,grossProfit,roi,cpi,updatedAt',
+                'orderBy' => 'nullable|string|in:reportDate,projectCode,adCountry,userCountry,revenue,adSpendCost,trafficCost,grossProfit,roi,cpi,updatedAt',
                 'orderDir' => 'nullable|string|in:asc,desc',
             ]);
 
@@ -102,6 +103,7 @@ class ProjectAggregateController extends Controller
                 'reportDate' => 'report_date',
                 'projectCode' => 'project_code',
                 'adCountry' => 'ad_country',
+                'userCountry' => 'user_country',
                 'revenue' => 'revenue',
                 'adSpendCost' => 'ad_spend_cost',
                 'trafficCost' => 'traffic_cost',
@@ -130,6 +132,9 @@ class ProjectAggregateController extends Controller
             if ($request->has('adCountry')) {
                 $query->where('ad_country', (string) $request->input('adCountry', ''));
             }
+            if ($request->has('userCountry')) {
+                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
+            }
 
             if (empty($groupBy)) {
                 $total = (clone $query)->count();
@@ -143,6 +148,7 @@ class ProjectAggregateController extends Controller
                     'reportDate' => 'report_date',
                     'projectCode' => 'project_code',
                     'adCountry' => 'ad_country',
+                    'userCountry' => 'user_country',
                 ];
 
                 $groupQuery = clone $query;
@@ -192,12 +198,14 @@ class ProjectAggregateController extends Controller
                 $reportDate = $row->report_date ?? null;
                 $projectCode = $row->project_code ?? null;
                 $adCountry = $row->ad_country ?? null;
+                $userCountry = $row->user_country ?? null;
 
                 return [
                     'id' => isset($row->id) ? (int) $row->id : null,
                     'reportDate' => $reportDate === null ? null : (string) $reportDate,
                     'projectCode' => $projectCode,
                     'adCountry' => $adCountry,
+                    'userCountry' => $userCountry,
                     'reportNewUsers' => (int) $row->report_new_users,
                     'dauUsers' => (int) $row->dau_users,
                     'registerNewUsers' => (int) $row->register_new_users,
@@ -245,7 +253,8 @@ class ProjectAggregateController extends Controller
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
                 'adCountry' => 'nullable|string|max:50',
-                'groupBy' => 'nullable|string|in:project,country,date',
+                'userCountry' => 'nullable|string|max:50',
+                'groupBy' => 'nullable|string|in:project,country,userCountry,date',
             ]);
 
             $groupBy = (string) $request->input('groupBy', 'project');
@@ -260,6 +269,9 @@ class ProjectAggregateController extends Controller
             if ($request->has('adCountry')) {
                 $query->where('ad_country', (string) $request->input('adCountry', ''));
             }
+            if ($request->has('userCountry')) {
+                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
+            }
 
             if ($groupBy === 'project') {
                 $query->selectRaw('project_code as dimension')
@@ -267,6 +279,9 @@ class ProjectAggregateController extends Controller
             } elseif ($groupBy === 'country') {
                 $query->selectRaw('ad_country as dimension')
                     ->groupBy('ad_country');
+            } elseif ($groupBy === 'userCountry') {
+                $query->selectRaw('user_country as dimension')
+                    ->groupBy('user_country');
             } else {
                 $query->selectRaw('report_date as dimension')
                     ->groupBy('report_date');
@@ -325,6 +340,8 @@ class ProjectAggregateController extends Controller
                     $item['projectCode'] = $row->dimension;
                 } elseif ($groupBy === 'country') {
                     $item['adCountry'] = $row->dimension;
+                } elseif ($groupBy === 'userCountry') {
+                    $item['userCountry'] = $row->dimension;
                 } else {
                     $item['date'] = (string) $row->dimension;
                 }
@@ -351,6 +368,7 @@ class ProjectAggregateController extends Controller
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
                 'adCountry' => 'nullable|string|max:50',
+                'userCountry' => 'nullable|string|max:50',
                 'dimension' => 'nullable|string|in:day,month',
             ]);
 
@@ -368,6 +386,9 @@ class ProjectAggregateController extends Controller
             }
             if ($request->has('adCountry')) {
                 $query->where('ad_country', (string) $request->input('adCountry', ''));
+            }
+            if ($request->has('userCountry')) {
+                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
             }
 
             $rows = $query->selectRaw($timeExpr . ' as time')
@@ -439,6 +460,7 @@ class ProjectAggregateController extends Controller
             'enddate' => 'endDate',
             'projectcode' => 'projectCode',
             'adcountry' => 'adCountry',
+            'usercountry' => 'userCountry',
             'pagesize' => 'pageSize',
             'orderby' => 'orderBy',
             'orderdir' => 'orderDir',

@@ -67,6 +67,7 @@ class AdSpendPlatformService
         $queryString = implode('&', [
             'objectName=account',
             'dims=date',
+            'dims=group_name',
             'dims=group_id',
             'dims=country',
             'startDate=' . urlencode($startDate),

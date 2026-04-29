@@ -148,6 +148,7 @@ class AggregateProjectDailyData extends Command
                     'ad_country' => $adCountry,
                 ],
                 [
+                    'user_country' => $userMetrics['user_country'],
                     'report_new_users' => $userMetrics['report_new_users'],
                     'dau_users' => $userMetrics['dau_users'],
                     'register_new_users' => $userMetrics['register_new_users'],
@@ -176,6 +177,8 @@ class AggregateProjectDailyData extends Command
 
     private function buildUserMetrics(string $date, string $projectCode, string $adCountry): array
     {
+        $targetUserCountry = $this->normalizeCountry($adCountry);
+
         $appStoreIds = DB::table('project_user_app_map')
             ->where('project_code', '=', $projectCode)
             ->where('enabled', '=', 1)
@@ -188,20 +191,40 @@ class AggregateProjectDailyData extends Command
 
         if (empty($appStoreIds)) {
             return [
+                'user_country' => $targetUserCountry,
                 'dau_users' => 0,
                 'report_new_users' => 0,
                 'register_new_users' => 0,
             ];
         }
 
-        $users = DB::table('v2_user')
-            ->whereNotNull('register_metadata')
-            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(register_metadata, '$.app_id')) in (" . implode(',', array_fill(0, count($appStoreIds), '?')) . ")", $appStoreIds)
-            ->select('id', 'created_at', 'register_metadata')
+        $placeholders = implode(',', array_fill(0, count($appStoreIds), '?'));
+        $metaAppIdExpr = "JSON_UNQUOTE(JSON_EXTRACT(u.register_metadata, '$.app_id'))";
+
+        $users = DB::table('v2_user as u')
+            ->where(function ($query) use ($appStoreIds, $placeholders, $metaAppIdExpr) {
+                $query->whereRaw("{$metaAppIdExpr} in ({$placeholders})", $appStoreIds)
+                    ->orWhere(function ($fallback) use ($appStoreIds, $metaAppIdExpr) {
+                        $fallback->where(function ($metaEmpty) use ($metaAppIdExpr) {
+                            $metaEmpty->whereNull('u.register_metadata')
+                                ->orWhereRaw("COALESCE({$metaAppIdExpr}, '') = ''");
+                        })
+                        ->whereExists(function ($sub) use ($appStoreIds) {
+                            $sub->select(DB::raw(1))
+                                ->from('v3_user_report_count as urc')
+                                ->whereColumn('urc.user_id', 'u.id')
+                                ->whereNotNull('urc.app_id')
+                                ->where('urc.app_id', '!=', '')
+                                ->whereIn('urc.app_id', $appStoreIds);
+                        });
+                    });
+            })
+            ->select('u.id', 'u.created_at', 'u.register_metadata')
             ->get();
 
         if ($users->isEmpty()) {
             return [
+                'user_country' => $targetUserCountry,
                 'dau_users' => 0,
                 'report_new_users' => 0,
                 'register_new_users' => 0,
@@ -209,13 +232,6 @@ class AggregateProjectDailyData extends Command
         }
 
         $uids = $users->pluck('id')->map(fn ($v) => (int) $v)->unique()->values()->all();
-
-        $dailyReportCountry = DB::table('v3_user_report_count')
-            ->where('date', '=', $date)
-            ->whereIn('user_id', $uids)
-            ->selectRaw('user_id, UPPER(MAX(COALESCE(client_country, ""))) as client_country')
-            ->groupBy('user_id')
-            ->pluck('client_country', 'user_id');
 
         $firstReportDateByUser = DB::table('v3_user_report_count')
             ->whereIn('user_id', $uids)
@@ -252,10 +268,9 @@ class AggregateProjectDailyData extends Command
                 $metaCountry = strtoupper(trim((string) ($meta['country'] ?? '')));
             }
 
-            $reportCountry = strtoupper(trim((string) ($dailyReportCountry[$uid] ?? '')));
-            $userCountry = $metaCountry !== '' ? $metaCountry : $reportCountry;
+            $userCountry = $this->normalizeCountry($metaCountry);
 
-            if ($adCountry !== '' && $adCountry !== $userCountry) {
+            if ($targetUserCountry !== $userCountry) {
                 continue;
             }
 
@@ -275,10 +290,17 @@ class AggregateProjectDailyData extends Command
         }
 
         return [
+            'user_country' => $targetUserCountry,
             'dau_users' => $dau,
             'report_new_users' => $reportNew,
             'register_new_users' => $registerNew,
         ];
+    }
+
+    private function normalizeCountry(?string $country): string
+    {
+        $value = strtoupper(trim((string) ($country ?? '')));
+        return $value === '' ? 'OO' : $value;
     }
 
     private function queryAdSpendCost(string $date, string $projectCode, string $adCountry): float

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
+use App\Models\AdSpendUnmatchedReport;
 use App\Services\AdSpendPlatformService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -290,7 +291,7 @@ class AdSpendPlatformController extends Controller
 
             $requestParams = [
                 'objectName' => 'account',
-                'dims' => ['date', 'group_id', 'country'],
+                'dims' => ['date', 'group_name', 'group_id', 'country'],
                 'startDate' => $startDate,
                 'endDate' => $endDate,
                 'size' => 200,
@@ -319,9 +320,9 @@ class AdSpendPlatformController extends Controller
                     continue;
                 }
 
-                $projectCode = trim((string) ($record['groupName'] ?? $record['group_name'] ?? ''));
+                $projectCode = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
                 $reportDate = (string) ($record['date'] ?? '');
-                if ($projectCode === '' || $reportDate === '') {
+                if ($reportDate === '') {
                     continue;
                 }
 
@@ -336,6 +337,38 @@ class AdSpendPlatformController extends Controller
                 $cpc = $this->toDecimal($record['cpc'] ?? null, false);
 
                 $totalRecords++;
+
+                if ($projectCode === '') {
+                    $unmatchedRecords++;
+                    continue;
+                }
+
+                $projectExists = DB::table('project_projects')
+                    ->where('project_code', $projectCode)
+                    ->exists();
+
+                if (!$projectExists) {
+                    AdSpendUnmatchedReport::updateOrCreate(
+                        [
+                            'platform_account_id' => $account->id,
+                            'raw_group_name' => $projectCode,
+                            'report_date' => $reportDate,
+                            'country' => $country,
+                        ],
+                        [
+                            'platform_code' => $account->platform_code,
+                            'impressions' => $impressions,
+                            'clicks' => $clicks,
+                            'spend' => $spend,
+                            'ctr' => $ctr,
+                            'cpm' => $cpm,
+                            'cpc' => $cpc,
+                            'raw_data' => $record,
+                        ]
+                    );
+                    $unmatchedRecords++;
+                    continue;
+                }
 
                 AdSpendDailyReport::updateOrCreate(
                     [
