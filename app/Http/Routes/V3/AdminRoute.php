@@ -23,7 +23,7 @@ use App\Http\Controllers\V3\Admin\ProjectAggregateController;
 use App\Http\Controllers\V3\Admin\ProjectController;
 use App\Http\Controllers\V3\Admin\ProjectTrafficAccountController;
 use App\Http\Controllers\V3\Admin\ProjectAdAccountController;
-use App\Http\Controllers\V3\Admin\ProjectMappingController;
+use App\Http\Controllers\V3\Admin\ProjectUserAppMapController;
 use App\Http\Controllers\V3\Admin\SyncServerController;
 use App\Http\Controllers\V3\Admin\SyncMonitorController;
 use App\Http\Controllers\V3\Admin\AdRevenueController;
@@ -286,14 +286,6 @@ class AdminRoute
                 $router->get('/trend',   [ProjectAggregateController::class, 'trend']);
             });
     
-            // Project App Mappings
-            $router->group(['prefix' => 'project-app-mappings'], function ($router) {
-                $router->get('/',              [ProjectMappingController::class, 'fetch']);
-                $router->post('/',             [ProjectMappingController::class, 'save']);
-                $router->put('/{id}',          [ProjectMappingController::class, 'update']);
-                $router->patch('/{id}/status', [ProjectMappingController::class, 'updateStatus']);
-            });
-
             // Project Management
             $router->group(['prefix' => 'projects'], function ($router) {
                 $router->get('/',               [ProjectController::class, 'fetch']);
@@ -311,6 +303,11 @@ class AdminRoute
                 $router->post('/{id}/ad-accounts',                        [ProjectAdAccountController::class, 'save']);
                 $router->put('/{id}/ad-accounts/{relationId}',            [ProjectAdAccountController::class, 'update']);
                 $router->delete('/{id}/ad-accounts/{relationId}',         [ProjectAdAccountController::class, 'drop']);
+
+                $router->get('/{id}/user-apps',                           [ProjectUserAppMapController::class, 'fetch']);
+                $router->post('/{id}/user-apps',                          [ProjectUserAppMapController::class, 'save']);
+                $router->put('/{id}/user-apps/{relationId}',              [ProjectUserAppMapController::class, 'update']);
+                $router->delete('/{id}/user-apps/{relationId}',           [ProjectUserAppMapController::class, 'drop']);
 
                 $router->get('/{projectCode}/ad-spend-daily',              [AdSpendPlatformController::class, 'projectDaily']);
             });

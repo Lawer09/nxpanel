@@ -30,4 +30,9 @@ class Project extends Model
     {
         return $this->hasMany(ProjectAdPlatformAccount::class, 'project_id');
     }
+
+    public function userApps(): HasMany
+    {
+        return $this->hasMany(ProjectUserAppMap::class, 'project_code', 'project_code');
+    }
 }

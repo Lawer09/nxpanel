@@ -71,13 +71,33 @@ class AggregateProjectDailyData extends Command
         $this->info("Aggregating {$date}...");
 
         $rows = DB::table('ad_revenue_daily as ar')
-            ->leftJoin('project_platform_app_map as ppam', function ($join) {
-                $join->on('ppam.source_platform', '=', 'ar.source_platform')
-                    ->on('ppam.account_id', '=', 'ar.account_id')
-                    ->on('ppam.provider_app_id', '=', 'ar.provider_app_id')
-                    ->where('ppam.status', '=', 'enabled');
+            ->leftJoin('project_ad_platform_accounts as papa', function ($join) {
+                $join->on('papa.platform_code', '=', 'ar.source_platform')
+                    ->on('papa.ad_platform_account_id', '=', 'ar.account_id')
+                    ->where('papa.enabled', '=', 1)
+                    ->where(function ($query) {
+                        $query->where(function ($appBind) {
+                            $appBind->where('papa.bind_type', '!=', 'account')
+                                ->whereNotNull('papa.external_app_id')
+                                ->where('papa.external_app_id', '!=', '')
+                                ->whereColumn('papa.external_app_id', 'ar.provider_app_id');
+                        })->orWhere(function ($accountBind) {
+                            $accountBind->where('papa.bind_type', '=', 'account')
+                                ->whereNotExists(function ($sub) {
+                                    $sub->select(DB::raw(1))
+                                        ->from('project_ad_platform_accounts as papa2')
+                                        ->whereColumn('papa2.platform_code', 'ar.source_platform')
+                                        ->whereColumn('papa2.ad_platform_account_id', 'ar.account_id')
+                                        ->where('papa2.enabled', '=', 1)
+                                        ->where('papa2.bind_type', '!=', 'account')
+                                        ->whereNotNull('papa2.external_app_id')
+                                        ->where('papa2.external_app_id', '!=', '')
+                                        ->whereColumn('papa2.external_app_id', 'ar.provider_app_id');
+                                });
+                        });
+                    });
             })
-            ->leftJoin('project_projects as p', 'p.id', '=', 'ppam.project_id')
+            ->leftJoin('project_projects as p', 'p.project_code', '=', 'papa.project_code')
             ->where('ar.report_date', '=', $date)
             ->whereNotNull('p.project_code')
             ->selectRaw('ar.report_date as report_date')
@@ -156,18 +176,10 @@ class AggregateProjectDailyData extends Command
 
     private function buildUserMetrics(string $date, string $projectCode, string $adCountry): array
     {
-        $appStoreIds = DB::table('project_platform_app_map as ppam')
-            ->join('project_projects as p', 'p.id', '=', 'ppam.project_id')
-            ->join('ad_platform_app as apa', function ($join) {
-                $join->on('apa.source_platform', '=', 'ppam.source_platform')
-                    ->on('apa.account_id', '=', 'ppam.account_id')
-                    ->on('apa.provider_app_id', '=', 'ppam.provider_app_id');
-            })
-            ->where('p.project_code', '=', $projectCode)
-            ->where('ppam.status', '=', 'enabled')
-            ->whereNotNull('apa.app_store_id')
-            ->where('apa.app_store_id', '!=', '')
-            ->pluck('apa.app_store_id')
+        $appStoreIds = DB::table('project_user_app_map')
+            ->where('project_code', '=', $projectCode)
+            ->where('enabled', '=', 1)
+            ->pluck('app_id')
             ->map(fn ($v) => trim((string) $v))
             ->filter(fn ($v) => $v !== '')
             ->unique()
