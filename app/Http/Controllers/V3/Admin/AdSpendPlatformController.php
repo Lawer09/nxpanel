@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
-use App\Models\AdSpendUnmatchedReport;
 use App\Services\AdSpendPlatformService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -310,17 +309,28 @@ class AdSpendPlatformController extends Controller
             ]);
 
             $records = $service->fetchDailyRecords($account, $startDate, $endDate, 200);
+            $projectCodeLookup = DB::table('project_projects')
+                ->pluck('project_code')
+                ->mapWithKeys(function ($code) {
+                    $value = trim((string) $code);
+                    if ($value === '') {
+                        return [];
+                    }
+                    return [strtoupper($value) => $value];
+                })
+                ->toArray();
 
             $totalRecords = 0;
             $matchedRecords = 0;
-            $unmatchedRecords = 0;
 
             foreach ($records as $record) {
                 if (!is_array($record)) {
                     continue;
                 }
 
-                $projectCode = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
+                $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
+                $mappedProjectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
+                $projectCode = $mappedProjectCode !== '' ? $mappedProjectCode : $rawGroupName;
                 $reportDate = (string) ($record['date'] ?? '');
                 if ($reportDate === '') {
                     continue;
@@ -339,34 +349,6 @@ class AdSpendPlatformController extends Controller
                 $totalRecords++;
 
                 if ($projectCode === '') {
-                    $unmatchedRecords++;
-                    continue;
-                }
-
-                $projectExists = DB::table('project_projects')
-                    ->where('project_code', $projectCode)
-                    ->exists();
-
-                if (!$projectExists) {
-                    AdSpendUnmatchedReport::updateOrCreate(
-                        [
-                            'platform_account_id' => $account->id,
-                            'raw_group_name' => $projectCode,
-                            'report_date' => $reportDate,
-                            'country' => $country,
-                        ],
-                        [
-                            'platform_code' => $account->platform_code,
-                            'impressions' => $impressions,
-                            'clicks' => $clicks,
-                            'spend' => $spend,
-                            'ctr' => $ctr,
-                            'cpm' => $cpm,
-                            'cpc' => $cpc,
-                            'raw_data' => $record,
-                        ]
-                    );
-                    $unmatchedRecords++;
                     continue;
                 }
 
@@ -386,7 +368,7 @@ class AdSpendPlatformController extends Controller
                         'ctr' => $ctr,
                         'cpm' => $cpm,
                         'cpc' => $cpc,
-                        'raw_group_name' => $projectCode,
+                        'raw_group_name' => $rawGroupName,
                     ]
                 );
                 $matchedRecords++;
@@ -396,7 +378,7 @@ class AdSpendPlatformController extends Controller
                 'status' => AdSpendSyncJob::STATUS_SUCCESS,
                 'total_records' => $totalRecords,
                 'matched_records' => $matchedRecords,
-                'unmatched_records' => $unmatchedRecords,
+                'unmatched_records' => 0,
                 'error_message' => null,
             ]);
 
@@ -879,5 +861,29 @@ class AdSpendPlatformController extends Controller
         }
 
         return number_format((float) $value, 6, '.', '');
+    }
+
+    private function resolveProjectCode(string $rawGroupName, array $projectCodeLookup): string
+    {
+        $raw = trim($rawGroupName);
+        if ($raw === '' || empty($projectCodeLookup)) {
+            return '';
+        }
+
+        $upperRaw = strtoupper($raw);
+        if (isset($projectCodeLookup[$upperRaw])) {
+            return $projectCodeLookup[$upperRaw];
+        }
+
+        $keys = array_keys($projectCodeLookup);
+        usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
+
+        foreach ($keys as $upperCode) {
+            if (str_contains($upperRaw, $upperCode)) {
+                return $projectCodeLookup[$upperCode];
+            }
+        }
+
+        return '';
     }
 }

@@ -148,6 +148,7 @@ class AggregateProjectDailyData extends Command
                     'ad_country' => $adCountry,
                 ],
                 [
+                    'spend_country' => $adCountry,
                     'user_country' => $userMetrics['user_country'],
                     'report_new_users' => $userMetrics['report_new_users'],
                     'dau_users' => $userMetrics['dau_users'],
@@ -341,7 +342,7 @@ class AggregateProjectDailyData extends Command
                 return trim((string) ($row->external_uid ?? '')) === '';
             });
 
-            $query = DB::table('traffic_platform_usage_stat')
+            $snapshotQuery = DB::table('traffic_platform_daily_snapshots')
                 ->where('stat_date', '=', $date)
                 ->where('platform_account_id', '=', (int) $accountId);
 
@@ -349,10 +350,42 @@ class AggregateProjectDailyData extends Command
                 if (empty($uidList)) {
                     continue;
                 }
-                $query->whereIn('external_uid', $uidList);
+                $snapshotQuery->whereIn('external_uid', $uidList);
             }
 
-            $sum += $this->decimal($query->sum('traffic_mb')) / 1024;
+            $snapshotRows = $snapshotQuery
+                ->selectRaw('COALESCE(external_uid, "") as external_uid')
+                ->selectRaw('COALESCE(geo, "") as geo')
+                ->selectRaw('COALESCE(region, "") as region')
+                ->selectRaw('MAX(total_mb) as max_total_mb')
+                ->groupByRaw('COALESCE(external_uid, ""), COALESCE(geo, ""), COALESCE(region, "")')
+                ->get();
+
+            if ($snapshotRows->isNotEmpty()) {
+                $sum += $this->decimal($snapshotRows->sum('max_total_mb')) / 1024;
+                continue;
+            }
+
+            $usageQuery = DB::table('traffic_platform_usage_stat')
+                ->where('stat_date', '=', $date)
+                ->where('platform_account_id', '=', (int) $accountId);
+
+            if (!$hasAccountLevel) {
+                if (empty($uidList)) {
+                    continue;
+                }
+                $usageQuery->whereIn('external_uid', $uidList);
+            }
+
+            $usageRows = $usageQuery
+                ->selectRaw('COALESCE(external_uid, "") as external_uid')
+                ->selectRaw('COALESCE(geo, "") as geo')
+                ->selectRaw('COALESCE(region, "") as region')
+                ->selectRaw('MAX(traffic_mb) as max_traffic_mb')
+                ->groupByRaw('COALESCE(external_uid, ""), COALESCE(geo, ""), COALESCE(region, "")')
+                ->get();
+
+            $sum += $this->decimal($usageRows->sum('max_traffic_mb')) / 1024;
         }
 
         return $sum;
