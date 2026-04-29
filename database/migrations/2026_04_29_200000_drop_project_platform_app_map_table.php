@@ -1,22 +1,13 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('project_platform_app_map')) {
-            return;
-        }
-
-        Schema::table('project_platform_app_map', function (Blueprint $table) {
-            $table->dropForeign(['account_id']);
-        });
-
-        Schema::drop('project_platform_app_map');
+        Schema::dropIfExists('project_platform_app_map');
     }
 
     public function down(): void
