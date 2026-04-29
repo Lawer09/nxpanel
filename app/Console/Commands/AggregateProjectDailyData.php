@@ -117,14 +117,30 @@ class AggregateProjectDailyData extends Command
         }
 
         $trafficWrittenProjectSet = [];
+        $userMetricsWrittenProjectSet = [];
 
         foreach ($rows as $row) {
             $projectCode = (string) $row->project_code;
             $adCountry = strtoupper(trim((string) ($row->ad_country ?? '')));
 
-            $userMetrics = $this->buildUserMetrics($date, $projectCode, $adCountry);
+            $projectKey = $date . '|' . $projectCode;
+
+            $userMetrics = [
+                'user_country' => 'OO',
+                'dau_users' => 0,
+                'report_new_users' => 0,
+                'register_new_users' => 0,
+            ];
+            if (!isset($userMetricsWrittenProjectSet[$projectKey])) {
+                // TODO(next): user metrics are project+date granularity, but current table is finer.
+                // Hotfix: write user metrics once per date+project to avoid country mismatch and
+                // duplicate summation when ad revenue has multi-country rows.
+                $userMetrics = $this->buildUserMetrics($date, $projectCode, '');
+                $userMetricsWrittenProjectSet[$projectKey] = true;
+            }
+
             $adSpendCost = $this->queryAdSpendCost($date, $projectCode, $adCountry);
-            $trafficKey = $date . '|' . $projectCode;
+            $trafficKey = $projectKey;
             $trafficUsageGb = 0.0;
             if (!isset($trafficWrittenProjectSet[$trafficKey])) {
                 // TODO(next): traffic_usage_gb / traffic_cost should be moved to a dedicated
@@ -201,6 +217,14 @@ class AggregateProjectDailyData extends Command
             ->values()
             ->all();
 
+        Log::info('project aggregate user-metrics app bindings', [
+            'date' => $date,
+            'projectCode' => $projectCode,
+            'adCountry' => $adCountry,
+            'appStoreIdsCount' => count($appStoreIds),
+            'appStoreIdsSample' => array_slice($appStoreIds, 0, 10),
+        ]);
+
         if (empty($appStoreIds)) {
             return [
                 'user_country' => $targetUserCountry,
@@ -234,6 +258,13 @@ class AggregateProjectDailyData extends Command
             ->select('u.id', 'u.created_at', 'u.register_metadata')
             ->get();
 
+        Log::info('project aggregate user-metrics users selected', [
+            'date' => $date,
+            'projectCode' => $projectCode,
+            'adCountry' => $adCountry,
+            'selectedUsers' => $users->count(),
+        ]);
+
         if ($users->isEmpty()) {
             return [
                 'user_country' => $targetUserCountry,
@@ -263,6 +294,15 @@ class AggregateProjectDailyData extends Command
             ->all();
 
         $activeSet = array_flip($activeUserIds);
+
+        Log::info('project aggregate user-metrics report rows', [
+            'date' => $date,
+            'projectCode' => $projectCode,
+            'adCountry' => $adCountry,
+            'uidsCount' => count($uids),
+            'activeUsersCount' => count($activeUserIds),
+            'firstReportUsersCount' => count($firstReportDateByUser),
+        ]);
 
         $startTs = strtotime($date . ' 00:00:00');
         $endTs = strtotime($date . ' 23:59:59') + 1;
