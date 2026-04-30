@@ -158,6 +158,7 @@ class SyncServerController extends Controller
             $response = Http::timeout(10)->post($url, [
                 'key' => $server->secret_key,
             ]);
+            
 
             return $this->ok([
                 'url'        => $url,

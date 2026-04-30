@@ -328,11 +328,14 @@ class AdSpendPlatformController extends Controller
                     continue;
                 }
 
+                $totalRecords++;
+
                 $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
                 $mappedProjectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
-                $projectCode = $mappedProjectCode !== '' ? $mappedProjectCode : $rawGroupName;
+                $projectCode = $mappedProjectCode;
                 $reportDate = (string) ($record['date'] ?? '');
                 if ($reportDate === '') {
+                    $unmatchedRecords++;
                     continue;
                 }
 
@@ -346,9 +349,8 @@ class AdSpendPlatformController extends Controller
                 $cpm = $this->toDecimal($record['cpm'] ?? null, false);
                 $cpc = $this->toDecimal($record['cpc'] ?? null, false);
 
-                $totalRecords++;
-
                 if ($projectCode === '') {
+                    $unmatchedRecords++;
                     continue;
                 }
 
@@ -879,7 +881,8 @@ class AdSpendPlatformController extends Controller
         usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
 
         foreach ($keys as $upperCode) {
-            if (str_contains($upperRaw, $upperCode)) {
+            $pattern = '/(^|[^A-Z0-9])' . preg_quote($upperCode, '/') . '([^A-Z0-9]|$)/';
+            if (preg_match($pattern, $upperRaw) === 1) {
                 return $projectCodeLookup[$upperCode];
             }
         }

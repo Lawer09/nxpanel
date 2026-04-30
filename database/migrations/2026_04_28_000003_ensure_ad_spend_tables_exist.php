@@ -54,32 +54,6 @@ return new class extends Migration
             });
         }
 
-        if (!Schema::hasTable('ad_spend_platform_unmatched_reports')) {
-            Schema::create('ad_spend_platform_unmatched_reports', function (Blueprint $table) {
-                $table->bigIncrements('id');
-                $table->unsignedBigInteger('platform_account_id')->comment('投放平台账号ID');
-                $table->string('platform_code', 50)->comment('投放平台编码');
-                $table->string('raw_group_name', 100)->comment('接口返回 groupName');
-                $table->date('report_date')->comment('报表日期');
-                $table->string('country', 50)->default('')->comment('国家或地区');
-                $table->bigInteger('impressions')->default(0)->comment('展示数');
-                $table->bigInteger('clicks')->default(0)->comment('点击数');
-                $table->decimal('spend', 20, 6)->default(0)->comment('消耗金额');
-                $table->decimal('ctr', 12, 6)->nullable()->comment('点击率');
-                $table->decimal('cpm', 20, 6)->nullable()->comment('千次展示成本');
-                $table->decimal('cpc', 20, 6)->nullable()->comment('点击成本');
-                $table->json('raw_data')->nullable()->comment('原始数据');
-                $table->timestamps();
-
-                $table->unique(
-                    ['platform_account_id', 'raw_group_name', 'report_date', 'country'],
-                    'uk_unmatched_daily'
-                );
-                $table->index('raw_group_name', 'idx_aspur_raw_group_name');
-                $table->index('report_date', 'idx_aspur_report_date');
-            });
-        }
-
         if (!Schema::hasTable('ad_spend_platform_sync_jobs')) {
             Schema::create('ad_spend_platform_sync_jobs', function (Blueprint $table) {
                 $table->bigIncrements('id');
@@ -104,7 +78,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('ad_spend_platform_sync_jobs');
-        Schema::dropIfExists('ad_spend_platform_unmatched_reports');
         Schema::dropIfExists('ad_spend_platform_daily_reports');
         Schema::dropIfExists('ad_spend_platform_accounts');
     }

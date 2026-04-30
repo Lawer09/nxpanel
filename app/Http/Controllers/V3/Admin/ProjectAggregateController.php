@@ -82,14 +82,12 @@ class ProjectAggregateController extends Controller
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
-                'adCountry' => 'nullable|string|max:50',
-                'spendCountry' => 'nullable|string|max:50',
-                'userCountry' => 'nullable|string|max:50',
+                'country' => 'nullable|string|max:50',
                 'groupBy' => 'nullable|array|min:1',
-                'groupBy.*' => 'string|distinct|in:reportDate,projectCode,adCountry,spendCountry,userCountry',
+                'groupBy.*' => 'string|distinct|in:reportDate,projectCode,country',
                 'page' => 'nullable|integer|min:1',
                 'pageSize' => 'nullable|integer|min:1|max:200',
-                'orderBy' => 'nullable|string|in:reportDate,projectCode,adCountry,spendCountry,userCountry,revenue,adSpendCost,trafficCost,grossProfit,roi,cpi,updatedAt',
+                'orderBy' => 'nullable|string|in:reportDate,projectCode,country,adRevenue,adSpendCost,trafficCost,profit,roi,adSpendCpi,updatedAt',
                 'orderDir' => 'nullable|string|in:asc,desc',
             ]);
 
@@ -103,19 +101,17 @@ class ProjectAggregateController extends Controller
             $columnMap = [
                 'reportDate' => 'report_date',
                 'projectCode' => 'project_code',
-                'adCountry' => 'ad_country',
-                'spendCountry' => 'spend_country',
-                'userCountry' => 'user_country',
-                'revenue' => 'revenue',
+                'country' => 'country',
+                'adRevenue' => 'ad_revenue',
                 'adSpendCost' => 'ad_spend_cost',
                 'trafficCost' => 'traffic_cost',
-                'grossProfit' => 'gross_profit',
+                'profit' => 'profit',
                 'roi' => 'roi',
-                'cpi' => 'cpi',
+                'adSpendCpi' => 'ad_spend_cpi',
                 'updatedAt' => 'updated_at',
             ];
 
-            $aggregateOrderFields = ['revenue', 'adSpendCost', 'trafficCost', 'grossProfit', 'roi', 'cpi', 'updatedAt'];
+            $aggregateOrderFields = ['adRevenue', 'adSpendCost', 'trafficCost', 'profit', 'roi', 'adSpendCpi', 'updatedAt'];
             $allowedOrderBy = empty($groupBy)
                 ? array_keys($columnMap)
                 : array_values(array_unique(array_merge($groupBy, $aggregateOrderFields)));
@@ -131,14 +127,8 @@ class ProjectAggregateController extends Controller
             if ($request->filled('projectCode')) {
                 $query->where('project_code', $request->input('projectCode'));
             }
-            if ($request->has('adCountry')) {
-                $query->where('ad_country', (string) $request->input('adCountry', ''));
-            }
-            if ($request->has('spendCountry')) {
-                $query->where('spend_country', (string) $request->input('spendCountry', ''));
-            }
-            if ($request->has('userCountry')) {
-                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
+            if ($request->has('country')) {
+                $query->where('country', strtoupper((string) $request->input('country', '')));
             }
 
             if (empty($groupBy)) {
@@ -152,9 +142,7 @@ class ProjectAggregateController extends Controller
                 $dimensionMap = [
                     'reportDate' => 'report_date',
                     'projectCode' => 'project_code',
-                    'adCountry' => 'ad_country',
-                    'spendCountry' => 'spend_country',
-                    'userCountry' => 'user_country',
+                    'country' => 'country',
                 ];
 
                 $groupQuery = clone $query;
@@ -164,28 +152,28 @@ class ProjectAggregateController extends Controller
                     $groupQuery->groupBy($groupColumn);
                 }
 
-                $groupQuery->selectRaw('SUM(report_new_users) as report_new_users')
+                $groupQuery->selectRaw('SUM(new_users) as new_users')
                     ->selectRaw('SUM(dau_users) as dau_users')
-                    ->selectRaw('SUM(register_new_users) as register_new_users')
-                    ->selectRaw('SUM(revenue) as revenue')
+                    ->selectRaw('SUM(ad_revenue) as ad_revenue')
                     ->selectRaw('SUM(ad_requests) as ad_requests')
-                    ->selectRaw('SUM(matched_requests) as matched_requests')
-                    ->selectRaw('SUM(impressions) as impressions')
-                    ->selectRaw('SUM(clicks) as clicks')
+                    ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
+                    ->selectRaw('SUM(ad_impressions) as ad_impressions')
+                    ->selectRaw('SUM(ad_clicks) as ad_clicks')
                     ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
-                    ->selectRaw('SUM(traffic_usage_gb) as traffic_usage_gb')
+                    ->selectRaw('SUM(traffic_usage_mb) as traffic_usage_mb')
                     ->selectRaw('SUM(traffic_cost) as traffic_cost')
-                    ->selectRaw('SUM(gross_profit) as gross_profit')
+                    ->selectRaw('SUM(profit) as profit')
                     ->selectRaw('MAX(updated_at) as updated_at');
 
                 $groupQuery
-                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(revenue)/SUM(impressions)*1000,6) END as ecpm')
-                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(clicks)/SUM(impressions)*100,6) END as ctr')
-                    ->selectRaw('CASE WHEN SUM(ad_requests)=0 THEN NULL ELSE ROUND(SUM(matched_requests)/SUM(ad_requests)*100,6) END as match_rate')
-                    ->selectRaw('CASE WHEN SUM(matched_requests)=0 THEN NULL ELSE ROUND(SUM(impressions)/SUM(matched_requests)*100,6) END as show_rate')
-                    ->selectRaw('CASE WHEN (SUM(ad_spend_cost)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(gross_profit)/(SUM(ad_spend_cost)+SUM(traffic_cost)),6) END as roi')
-                    ->selectRaw('CASE WHEN SUM(report_new_users)=0 THEN NULL ELSE ROUND(SUM(ad_spend_cost)/SUM(report_new_users),6) END as cpi')
-                    ->selectRaw('CASE WHEN SUM(impressions)=0 THEN NULL ELSE ROUND(SUM(revenue)/SUM(impressions)*1000,6) END as fb_ecpm');
+                    ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/SUM(ad_impressions)*1000,6) END as ad_ecpm')
+                    ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_clicks)/SUM(ad_impressions)*100,6) END as ad_ctr')
+                    ->selectRaw('CASE WHEN SUM(ad_requests)=0 THEN NULL ELSE ROUND(SUM(ad_matched_requests)/SUM(ad_requests)*100,6) END as ad_match_rate')
+                    ->selectRaw('CASE WHEN SUM(ad_matched_requests)=0 THEN NULL ELSE ROUND(SUM(ad_impressions)/SUM(ad_matched_requests)*100,6) END as ad_show_rate')
+                    ->selectRaw('CASE WHEN (SUM(ad_spend_cost)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/(SUM(ad_spend_cost)+SUM(traffic_cost)),6) END as roi')
+                    ->selectRaw('CASE WHEN SUM(new_users)=0 THEN NULL ELSE ROUND(SUM(ad_spend_cost)/SUM(new_users),6) END as ad_spend_cpi')
+                    ->selectRaw('CASE WHEN SUM(ad_clicks)=0 THEN NULL ELSE ROUND(SUM(ad_spend_cost)/SUM(ad_clicks),6) END as ad_spend_cpc')
+                    ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_spend_cost)*1000/SUM(ad_impressions),6) END as ad_spend_cpm');
 
                 $countQuery = DB::table(DB::raw("({$groupQuery->toSql()}) as t"))
                     ->mergeBindings($groupQuery)
@@ -203,36 +191,32 @@ class ProjectAggregateController extends Controller
             $list = $rows->map(function ($row) {
                 $reportDate = $row->report_date ?? null;
                 $projectCode = $row->project_code ?? null;
-                $adCountry = $row->ad_country ?? null;
-                $spendCountry = $row->spend_country ?? null;
-                $userCountry = $row->user_country ?? null;
+                $country = $row->country ?? null;
 
                 return [
                     'id' => isset($row->id) ? (int) $row->id : null,
                     'reportDate' => $reportDate === null ? null : (string) $reportDate,
                     'projectCode' => $projectCode,
-                    'adCountry' => $adCountry,
-                    'spendCountry' => $spendCountry,
-                    'userCountry' => $userCountry,
-                    'reportNewUsers' => (int) $row->report_new_users,
+                    'country' => $country,
                     'dauUsers' => (int) $row->dau_users,
-                    'registerNewUsers' => (int) $row->register_new_users,
-                    'revenue' => $this->formatDecimal($row->revenue),
+                    'newUsers' => (int) $row->new_users,
+                    'adRevenue' => $this->formatDecimal($row->ad_revenue),
                     'adRequests' => (int) $row->ad_requests,
-                    'matchedRequests' => (int) $row->matched_requests,
-                    'impressions' => (int) $row->impressions,
-                    'clicks' => (int) $row->clicks,
-                    'ecpm' => $this->formatDecimal($row->ecpm),
-                    'ctr' => $this->formatDecimal($row->ctr),
-                    'matchRate' => $this->formatDecimal($row->match_rate),
-                    'showRate' => $this->formatDecimal($row->show_rate),
+                    'adMatchedRequests' => (int) $row->ad_matched_requests,
+                    'adImpressions' => (int) $row->ad_impressions,
+                    'adClicks' => (int) $row->ad_clicks,
+                    'adEcpm' => $this->formatDecimal($row->ad_ecpm),
+                    'adCtr' => $this->formatDecimal($row->ad_ctr),
+                    'adMatchRate' => $this->formatDecimal($row->ad_match_rate),
+                    'adShowRate' => $this->formatDecimal($row->ad_show_rate),
                     'adSpendCost' => $this->formatDecimal($row->ad_spend_cost),
-                    'trafficUsageGb' => $this->formatDecimal($row->traffic_usage_gb),
+                    'adSpendCpi' => $this->formatDecimal($row->ad_spend_cpi),
+                    'adSpendCpc' => $this->formatDecimal($row->ad_spend_cpc),
+                    'adSpendCpm' => $this->formatDecimal($row->ad_spend_cpm),
+                    'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb),
                     'trafficCost' => $this->formatDecimal($row->traffic_cost),
-                    'grossProfit' => $this->formatDecimal($row->gross_profit),
+                    'profit' => $this->formatDecimal($row->profit),
                     'roi' => $this->formatDecimal($row->roi),
-                    'cpi' => $this->formatDecimal($row->cpi),
-                    'fbEcpm' => $this->formatDecimal($row->fb_ecpm),
                     'updatedAt' => $row->updated_at,
                 ];
             });
@@ -260,10 +244,8 @@ class ProjectAggregateController extends Controller
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
-                'adCountry' => 'nullable|string|max:50',
-                'spendCountry' => 'nullable|string|max:50',
-                'userCountry' => 'nullable|string|max:50',
-                'groupBy' => 'nullable|string|in:project,country,spendCountry,userCountry,date',
+                'country' => 'nullable|string|max:50',
+                'groupBy' => 'nullable|string|in:project,country,date',
             ]);
 
             $groupBy = (string) $request->input('groupBy', 'project');
@@ -275,90 +257,73 @@ class ProjectAggregateController extends Controller
             if ($request->filled('projectCode')) {
                 $query->where('project_code', $request->input('projectCode'));
             }
-            if ($request->has('adCountry')) {
-                $query->where('ad_country', (string) $request->input('adCountry', ''));
-            }
-            if ($request->has('spendCountry')) {
-                $query->where('spend_country', (string) $request->input('spendCountry', ''));
-            }
-            if ($request->has('userCountry')) {
-                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
+            if ($request->has('country')) {
+                $query->where('country', strtoupper((string) $request->input('country', '')));
             }
 
             if ($groupBy === 'project') {
                 $query->selectRaw('project_code as dimension')
                     ->groupBy('project_code');
             } elseif ($groupBy === 'country') {
-                $query->selectRaw('ad_country as dimension')
-                    ->groupBy('ad_country');
-            } elseif ($groupBy === 'spendCountry') {
-                $query->selectRaw('spend_country as dimension')
-                    ->groupBy('spend_country');
-            } elseif ($groupBy === 'userCountry') {
-                $query->selectRaw('user_country as dimension')
-                    ->groupBy('user_country');
+                $query->selectRaw('country as dimension')
+                    ->groupBy('country');
             } else {
                 $query->selectRaw('report_date as dimension')
                     ->groupBy('report_date');
             }
 
-            $query->selectRaw('SUM(report_new_users) as report_new_users')
+            $query->selectRaw('SUM(new_users) as new_users')
                 ->selectRaw('SUM(dau_users) as dau_users')
-                ->selectRaw('SUM(register_new_users) as register_new_users')
-                ->selectRaw('SUM(revenue) as revenue')
+                ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_requests) as ad_requests')
-                ->selectRaw('SUM(matched_requests) as matched_requests')
-                ->selectRaw('SUM(impressions) as impressions')
-                ->selectRaw('SUM(clicks) as clicks')
+                ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
+                ->selectRaw('SUM(ad_impressions) as ad_impressions')
+                ->selectRaw('SUM(ad_clicks) as ad_clicks')
                 ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
-                ->selectRaw('SUM(traffic_usage_gb) as traffic_usage_gb')
+                ->selectRaw('SUM(traffic_usage_mb) as traffic_usage_mb')
                 ->selectRaw('SUM(traffic_cost) as traffic_cost')
-                ->selectRaw('SUM(gross_profit) as gross_profit');
+                ->selectRaw('SUM(profit) as profit');
 
             $rows = $query->orderBy('dimension')->get();
 
             $data = $rows->map(function ($row) use ($groupBy) {
-                $revenue = (float) ($row->revenue ?? 0);
+                $adRevenue = (float) ($row->ad_revenue ?? 0);
                 $adRequests = (float) ($row->ad_requests ?? 0);
-                $matchedRequests = (float) ($row->matched_requests ?? 0);
-                $impressions = (float) ($row->impressions ?? 0);
-                $clicks = (float) ($row->clicks ?? 0);
+                $matchedRequests = (float) ($row->ad_matched_requests ?? 0);
+                $impressions = (float) ($row->ad_impressions ?? 0);
+                $clicks = (float) ($row->ad_clicks ?? 0);
                 $adSpendCost = (float) ($row->ad_spend_cost ?? 0);
                 $trafficCost = (float) ($row->traffic_cost ?? 0);
-                $grossProfit = (float) ($row->gross_profit ?? 0);
-                $reportNewUsers = (float) ($row->report_new_users ?? 0);
+                $profit = (float) ($row->profit ?? 0);
+                $newUsers = (float) ($row->new_users ?? 0);
                 $costTotal = $adSpendCost + $trafficCost;
 
                 $item = [
-                    'reportNewUsers' => (int) $reportNewUsers,
+                    'newUsers' => (int) $newUsers,
                     'dauUsers' => (int) ($row->dau_users ?? 0),
-                    'registerNewUsers' => (int) ($row->register_new_users ?? 0),
-                    'revenue' => $this->formatDecimal($revenue),
+                    'adRevenue' => $this->formatDecimal($adRevenue),
                     'adRequests' => (int) $adRequests,
-                    'matchedRequests' => (int) $matchedRequests,
-                    'impressions' => (int) $impressions,
-                    'clicks' => (int) $clicks,
-                    'ecpm' => $this->ratio($revenue * 1000, $impressions),
-                    'ctr' => $this->ratio($clicks * 100, $impressions),
-                    'matchRate' => $this->ratio($matchedRequests * 100, $adRequests),
-                    'showRate' => $this->ratio($impressions * 100, $matchedRequests),
+                    'adMatchedRequests' => (int) $matchedRequests,
+                    'adImpressions' => (int) $impressions,
+                    'adClicks' => (int) $clicks,
+                    'adEcpm' => $this->ratio($adRevenue * 1000, $impressions),
+                    'adCtr' => $this->ratio($clicks * 100, $impressions),
+                    'adMatchRate' => $this->ratio($matchedRequests * 100, $adRequests),
+                    'adShowRate' => $this->ratio($impressions * 100, $matchedRequests),
                     'adSpendCost' => $this->formatDecimal($adSpendCost),
-                    'trafficUsageGb' => $this->formatDecimal($row->traffic_usage_gb),
+                    'adSpendCpi' => $this->ratio($adSpendCost, $newUsers),
+                    'adSpendCpc' => $this->ratio($adSpendCost, $clicks),
+                    'adSpendCpm' => $this->ratio($adSpendCost * 1000, $impressions),
+                    'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb),
                     'trafficCost' => $this->formatDecimal($trafficCost),
-                    'grossProfit' => $this->formatDecimal($grossProfit),
-                    'roi' => $this->ratio($grossProfit, $costTotal),
-                    'cpi' => $this->ratio($adSpendCost, $reportNewUsers),
-                    'fbEcpm' => $this->ratio($revenue * 1000, $impressions),
+                    'profit' => $this->formatDecimal($profit),
+                    'roi' => $this->ratio($adRevenue, $costTotal),
                 ];
 
                 if ($groupBy === 'project') {
                     $item['projectCode'] = $row->dimension;
                 } elseif ($groupBy === 'country') {
-                    $item['adCountry'] = $row->dimension;
-                } elseif ($groupBy === 'spendCountry') {
-                    $item['spendCountry'] = $row->dimension;
-                } elseif ($groupBy === 'userCountry') {
-                    $item['userCountry'] = $row->dimension;
+                    $item['country'] = $row->dimension;
                 } else {
                     $item['date'] = (string) $row->dimension;
                 }
@@ -384,9 +349,7 @@ class ProjectAggregateController extends Controller
                 'startDate' => 'required|date',
                 'endDate' => 'required|date|after_or_equal:startDate',
                 'projectCode' => 'nullable|string|max:100',
-                'adCountry' => 'nullable|string|max:50',
-                'spendCountry' => 'nullable|string|max:50',
-                'userCountry' => 'nullable|string|max:50',
+                'country' => 'nullable|string|max:50',
                 'dimension' => 'nullable|string|in:day,month',
             ]);
 
@@ -402,25 +365,18 @@ class ProjectAggregateController extends Controller
             if ($request->filled('projectCode')) {
                 $query->where('project_code', $request->input('projectCode'));
             }
-            if ($request->has('adCountry')) {
-                $query->where('ad_country', (string) $request->input('adCountry', ''));
-            }
-            if ($request->has('spendCountry')) {
-                $query->where('spend_country', (string) $request->input('spendCountry', ''));
-            }
-            if ($request->has('userCountry')) {
-                $query->where('user_country', strtoupper((string) $request->input('userCountry', '')));
+            if ($request->has('country')) {
+                $query->where('country', strtoupper((string) $request->input('country', '')));
             }
 
             $rows = $query->selectRaw($timeExpr . ' as time')
-                ->selectRaw('SUM(report_new_users) as report_new_users')
+                ->selectRaw('SUM(new_users) as new_users')
                 ->selectRaw('SUM(dau_users) as dau_users')
-                ->selectRaw('SUM(register_new_users) as register_new_users')
-                ->selectRaw('SUM(revenue) as revenue')
+                ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
-                ->selectRaw('SUM(traffic_usage_gb) as traffic_usage_gb')
+                ->selectRaw('SUM(traffic_usage_mb) as traffic_usage_mb')
                 ->selectRaw('SUM(traffic_cost) as traffic_cost')
-                ->selectRaw('SUM(gross_profit) as gross_profit')
+                ->selectRaw('SUM(profit) as profit')
                 ->groupBy(DB::raw($timeExpr))
                 ->orderBy('time')
                 ->get();
@@ -428,22 +384,21 @@ class ProjectAggregateController extends Controller
             $data = $rows->map(function ($row) {
                 $adSpendCost = (float) ($row->ad_spend_cost ?? 0);
                 $trafficCost = (float) ($row->traffic_cost ?? 0);
-                $grossProfit = (float) ($row->gross_profit ?? 0);
-                $reportNewUsers = (float) ($row->report_new_users ?? 0);
+                $profit = (float) ($row->profit ?? 0);
+                $newUsers = (float) ($row->new_users ?? 0);
                 $costTotal = $adSpendCost + $trafficCost;
 
                 return [
                     'time' => (string) $row->time,
-                    'reportNewUsers' => (int) $reportNewUsers,
+                    'newUsers' => (int) $newUsers,
                     'dauUsers' => (int) ($row->dau_users ?? 0),
-                    'registerNewUsers' => (int) ($row->register_new_users ?? 0),
-                    'revenue' => $this->formatDecimal($row->revenue),
+                    'adRevenue' => $this->formatDecimal($row->ad_revenue),
                     'adSpendCost' => $this->formatDecimal($adSpendCost),
-                    'trafficUsageGb' => $this->formatDecimal($row->traffic_usage_gb),
+                    'adSpendCpi' => $this->ratio($adSpendCost, $newUsers),
+                    'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb),
                     'trafficCost' => $this->formatDecimal($trafficCost),
-                    'grossProfit' => $this->formatDecimal($grossProfit),
-                    'roi' => $this->ratio($grossProfit, $costTotal),
-                    'cpi' => $this->ratio($adSpendCost, $reportNewUsers),
+                    'profit' => $this->formatDecimal($profit),
+                    'roi' => $this->ratio((float) ($row->ad_revenue ?? 0), $costTotal),
                 ];
             });
 
@@ -480,9 +435,10 @@ class ProjectAggregateController extends Controller
             'startdate' => 'startDate',
             'enddate' => 'endDate',
             'projectcode' => 'projectCode',
-            'adcountry' => 'adCountry',
-            'spendcountry' => 'spendCountry',
-            'usercountry' => 'userCountry',
+            'country' => 'country',
+            'adcountry' => 'country',
+            'spendcountry' => 'country',
+            'usercountry' => 'country',
             'pagesize' => 'pageSize',
             'orderby' => 'orderBy',
             'orderdir' => 'orderDir',

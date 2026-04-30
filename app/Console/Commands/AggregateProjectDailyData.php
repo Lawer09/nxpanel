@@ -70,6 +70,142 @@ class AggregateProjectDailyData extends Command
     {
         $this->info("Aggregating {$date}...");
 
+        $adRevenueMap = $this->queryAdRevenueMetrics($date);
+        $adSpendMap = $this->queryAdSpendMetrics($date);
+        $userMap = $this->queryUserMetrics($date);
+
+        $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap]);
+
+        $trafficProjectCodes = DB::table('project_traffic_platform_accounts')
+            ->where('enabled', '=', 1)
+            ->pluck('project_code')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($trafficProjectCodes as $projectCode) {
+            $projectCodes[$projectCode] = true;
+        }
+
+        $trafficMap = [];
+        foreach (array_keys($projectCodes) as $projectCode) {
+            $countryMbMap = $this->queryTrafficUsageMbByCountry($date, $projectCode);
+            foreach ($countryMbMap as $country => $trafficUsageMb) {
+                $key = $this->makeDimensionKey($date, $projectCode, $country);
+                $trafficMap[$key] = [
+                    'traffic_usage_mb' => round($this->decimal($trafficUsageMb), 6),
+                ];
+            }
+        }
+
+        $allKeys = [];
+        foreach ([$adRevenueMap, $adSpendMap, $userMap, $trafficMap] as $map) {
+            foreach (array_keys($map) as $key) {
+                $allKeys[$key] = true;
+            }
+        }
+
+        if (empty($allKeys)) {
+            $this->info("No aggregate rows for {$date}");
+            return;
+        }
+
+        $rows = [];
+        $now = now();
+        $trafficCostPerMb = 0.16 / 1024;
+
+        foreach (array_keys($allKeys) as $key) {
+            [$reportDate, $projectCode, $country] = $this->parseDimensionKey($key);
+
+            $adRevenue = $this->decimal($adRevenueMap[$key]['ad_revenue'] ?? 0);
+            $adRequests = (int) ($adRevenueMap[$key]['ad_requests'] ?? 0);
+            $adMatchedRequests = (int) ($adRevenueMap[$key]['ad_matched_requests'] ?? 0);
+            $adImpressions = (int) ($adRevenueMap[$key]['ad_impressions'] ?? 0);
+            $adClicks = (int) ($adRevenueMap[$key]['ad_clicks'] ?? 0);
+
+            $dauUsers = (int) ($userMap[$key]['dau_users'] ?? 0);
+            $newUsers = (int) ($userMap[$key]['new_users'] ?? 0);
+
+            $adSpendCost = $this->decimal($adSpendMap[$key]['ad_spend_cost'] ?? 0);
+            $adSpendClicks = (int) ($adSpendMap[$key]['ad_spend_clicks'] ?? 0);
+            $adSpendImpressions = (int) ($adSpendMap[$key]['ad_spend_impressions'] ?? 0);
+
+            $trafficUsageMb = $this->decimal($trafficMap[$key]['traffic_usage_mb'] ?? 0);
+            $trafficCost = round($trafficUsageMb * $trafficCostPerMb, 6);
+
+            $adEcpm = $this->safeRatio($adRevenue * 1000, $adImpressions);
+            $adCtr = $this->safeRatio($adClicks * 100, $adImpressions);
+            $adMatchRate = $this->safeRatio($adMatchedRequests * 100, $adRequests);
+            $adShowRate = $this->safeRatio($adImpressions * 100, $adMatchedRequests);
+
+            $adSpendCpi = $this->safeRatio($adSpendCost, $newUsers);
+            $adSpendCpc = $this->safeRatio($adSpendCost, $adSpendClicks);
+            $adSpendCpm = $this->safeRatio($adSpendCost * 1000, $adSpendImpressions);
+
+            $profit = round($adRevenue - $adSpendCost - $trafficCost, 6);
+            $totalCost = round($adSpendCost + $trafficCost, 6);
+            $roi = $this->safeRatio($adRevenue, $totalCost);
+
+            $rows[] = [
+                'report_date' => $reportDate,
+                'project_code' => $projectCode,
+                'country' => $country,
+                'dau_users' => $dauUsers,
+                'new_users' => $newUsers,
+                'ad_revenue' => $adRevenue,
+                'ad_requests' => $adRequests,
+                'ad_matched_requests' => $adMatchedRequests,
+                'ad_impressions' => $adImpressions,
+                'ad_clicks' => $adClicks,
+                'ad_ecpm' => $adEcpm,
+                'ad_ctr' => $adCtr,
+                'ad_match_rate' => $adMatchRate,
+                'ad_show_rate' => $adShowRate,
+                'ad_spend_cost' => $adSpendCost,
+                'ad_spend_cpi' => $adSpendCpi,
+                'ad_spend_cpc' => $adSpendCpc,
+                'ad_spend_cpm' => $adSpendCpm,
+                'traffic_usage_mb' => round($trafficUsageMb, 6),
+                'traffic_cost' => $trafficCost,
+                'profit' => $profit,
+                'roi' => $roi,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ];
+        }
+
+        DB::table('project_daily_aggregates')->upsert(
+            $rows,
+            ['report_date', 'project_code', 'country'],
+            [
+                'dau_users',
+                'new_users',
+                'ad_revenue',
+                'ad_requests',
+                'ad_matched_requests',
+                'ad_impressions',
+                'ad_clicks',
+                'ad_ecpm',
+                'ad_ctr',
+                'ad_match_rate',
+                'ad_show_rate',
+                'ad_spend_cost',
+                'ad_spend_cpi',
+                'ad_spend_cpc',
+                'ad_spend_cpm',
+                'traffic_usage_mb',
+                'traffic_cost',
+                'profit',
+                'roi',
+                'updated_at',
+            ]
+        );
+    }
+
+    private function queryAdRevenueMetrics(string $date): array
+    {
         $rows = DB::table('ad_revenue_daily as ar')
             ->leftJoin('project_ad_platform_accounts as papa', function ($join) {
                 $join->on('papa.platform_code', '=', 'ar.source_platform')
@@ -102,270 +238,185 @@ class AggregateProjectDailyData extends Command
             ->whereNotNull('p.project_code')
             ->selectRaw('ar.report_date as report_date')
             ->selectRaw('p.project_code as project_code')
-            ->selectRaw('UPPER(COALESCE(ar.country_code, "")) as ad_country')
-            ->selectRaw('SUM(ar.estimated_earnings) as revenue')
+            ->selectRaw('UPPER(COALESCE(ar.country_code, "")) as country')
+            ->selectRaw('SUM(ar.estimated_earnings) as ad_revenue')
             ->selectRaw('SUM(ar.ad_requests) as ad_requests')
-            ->selectRaw('SUM(ar.matched_requests) as matched_requests')
-            ->selectRaw('SUM(ar.impressions) as impressions')
-            ->selectRaw('SUM(ar.clicks) as clicks')
-            ->groupBy(['ar.report_date', 'p.project_code', 'ar.country_code'])
+            ->selectRaw('SUM(ar.matched_requests) as ad_matched_requests')
+            ->selectRaw('SUM(ar.impressions) as ad_impressions')
+            ->selectRaw('SUM(ar.clicks) as ad_clicks')
+            ->groupBy(['ar.report_date', 'p.project_code', DB::raw('UPPER(COALESCE(ar.country_code, ""))')])
             ->get();
 
-        if ($rows->isEmpty()) {
-            $this->info("No revenue rows for {$date}");
-            return;
-        }
-
-        $trafficWrittenProjectSet = [];
-        $userMetricsWrittenProjectSet = [];
-
+        $result = [];
         foreach ($rows as $row) {
-            $projectCode = (string) $row->project_code;
-            $adCountry = strtoupper(trim((string) ($row->ad_country ?? '')));
-
-            $projectKey = $date . '|' . $projectCode;
-
-            $userMetrics = [
-                'user_country' => 'OO',
-                'dau_users' => 0,
-                'report_new_users' => 0,
-                'register_new_users' => 0,
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeDimensionKey((string) $row->report_date, (string) $row->project_code, $country);
+            $result[$key] = [
+                'ad_revenue' => $this->decimal($row->ad_revenue),
+                'ad_requests' => (int) ($row->ad_requests ?? 0),
+                'ad_matched_requests' => (int) ($row->ad_matched_requests ?? 0),
+                'ad_impressions' => (int) ($row->ad_impressions ?? 0),
+                'ad_clicks' => (int) ($row->ad_clicks ?? 0),
             ];
-            if (!isset($userMetricsWrittenProjectSet[$projectKey])) {
-                // TODO(next): user metrics are project+date granularity, but current table is finer.
-                // Hotfix: write user metrics once per date+project to avoid country mismatch and
-                // duplicate summation when ad revenue has multi-country rows.
-                $userMetrics = $this->buildUserMetrics($date, $projectCode, '');
-                $userMetricsWrittenProjectSet[$projectKey] = true;
-            }
-
-            $adSpendCost = $this->queryAdSpendCost($date, $projectCode, $adCountry);
-            $trafficKey = $projectKey;
-            $trafficUsageGb = 0.0;
-            if (!isset($trafficWrittenProjectSet[$trafficKey])) {
-                // TODO(next): traffic_usage_gb / traffic_cost should be moved to a dedicated
-                // date+project aggregate source. Hotfix: only write traffic once per date+project
-                // to prevent duplicate summation across finer country/user dimensions.
-                $trafficUsageGb = $this->queryTrafficUsageGb($date, $projectCode);
-                $trafficWrittenProjectSet[$trafficKey] = true;
-            }
-            $trafficCost = round($trafficUsageGb * 0.16, 6);
-
-            $revenue = $this->decimal($row->revenue);
-            $adRequests = (int) ($row->ad_requests ?? 0);
-            $matchedRequests = (int) ($row->matched_requests ?? 0);
-            $impressions = (int) ($row->impressions ?? 0);
-            $clicks = (int) ($row->clicks ?? 0);
-
-            $ecpm = $this->safeRatio($revenue * 1000, $impressions);
-            $ctr = $this->safeRatio($clicks * 100, $impressions);
-            $matchRate = $this->safeRatio($matchedRequests * 100, $adRequests);
-            $showRate = $this->safeRatio($impressions * 100, $matchedRequests);
-
-            $grossProfit = round($revenue - $adSpendCost - $trafficCost, 6);
-            $totalCost = round($adSpendCost + $trafficCost, 6);
-            $roi = $this->safeRatio($grossProfit, $totalCost);
-            $cpi = $this->safeRatio($adSpendCost, $userMetrics['report_new_users']);
-
-            DB::table('project_daily_aggregates')->updateOrInsert(
-                [
-                    'report_date' => $date,
-                    'project_code' => $projectCode,
-                    'ad_country' => $adCountry,
-                ],
-                [
-                    'spend_country' => $adCountry,
-                    'user_country' => $userMetrics['user_country'],
-                    'report_new_users' => $userMetrics['report_new_users'],
-                    'dau_users' => $userMetrics['dau_users'],
-                    'register_new_users' => $userMetrics['register_new_users'],
-                    'revenue' => $revenue,
-                    'ad_requests' => $adRequests,
-                    'matched_requests' => $matchedRequests,
-                    'impressions' => $impressions,
-                    'clicks' => $clicks,
-                    'ecpm' => $ecpm,
-                    'ctr' => $ctr,
-                    'match_rate' => $matchRate,
-                    'show_rate' => $showRate,
-                    'ad_spend_cost' => $adSpendCost,
-                    'traffic_usage_gb' => round($trafficUsageGb, 6),
-                    'traffic_cost' => $trafficCost,
-                    'gross_profit' => $grossProfit,
-                    'roi' => $roi,
-                    'cpi' => $cpi,
-                    'fb_ecpm' => $ecpm,
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
         }
+
+        return $result;
     }
 
-    private function buildUserMetrics(string $date, string $projectCode, string $adCountry): array
+    private function queryAdSpendMetrics(string $date): array
     {
-        $targetUserCountry = $this->normalizeCountry($adCountry);
-        $hasAdCountryFilter = trim((string) $adCountry) !== '';
-
-        $appStoreIds = DB::table('project_user_app_map')
-            ->where('project_code', '=', $projectCode)
-            ->where('enabled', '=', 1)
-            ->pluck('app_id')
-            ->map(fn ($v) => trim((string) $v))
-            ->filter(fn ($v) => $v !== '')
-            ->unique()
-            ->values()
-            ->all();
-
-        Log::info('project aggregate user-metrics app bindings', [
-            'date' => $date,
-            'projectCode' => $projectCode,
-            'adCountry' => $adCountry,
-            'appStoreIdsCount' => count($appStoreIds),
-            'appStoreIdsSample' => array_slice($appStoreIds, 0, 10),
-        ]);
-
-        if (empty($appStoreIds)) {
-            return [
-                'user_country' => $targetUserCountry,
-                'dau_users' => 0,
-                'report_new_users' => 0,
-                'register_new_users' => 0,
-            ];
-        }
-
-        $placeholders = implode(',', array_fill(0, count($appStoreIds), '?'));
-        $metaAppIdExpr = "JSON_UNQUOTE(JSON_EXTRACT(u.register_metadata, '$.app_id'))";
-
-        $users = DB::table('v2_user as u')
-            ->where(function ($query) use ($appStoreIds, $placeholders, $metaAppIdExpr) {
-                $query->whereRaw("{$metaAppIdExpr} in ({$placeholders})", $appStoreIds)
-                    ->orWhere(function ($fallback) use ($appStoreIds, $metaAppIdExpr) {
-                        $fallback->where(function ($metaEmpty) use ($metaAppIdExpr) {
-                            $metaEmpty->whereNull('u.register_metadata')
-                                ->orWhereRaw("COALESCE({$metaAppIdExpr}, '') = ''");
-                        })
-                        ->whereExists(function ($sub) use ($appStoreIds) {
-                            $sub->select(DB::raw(1))
-                                ->from('v3_user_report_count as urc')
-                                ->whereColumn('urc.user_id', 'u.id')
-                                ->whereNotNull('urc.app_id')
-                                ->where('urc.app_id', '!=', '')
-                                ->whereIn('urc.app_id', $appStoreIds);
-                        });
-                    });
-            })
-            ->select('u.id', 'u.created_at', 'u.register_metadata')
+        $rows = DB::table('ad_spend_platform_daily_reports')
+            ->where('report_date', '=', $date)
+            ->selectRaw('report_date as report_date')
+            ->selectRaw('project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(country, "")) as country')
+            ->selectRaw('SUM(spend) as ad_spend_cost')
+            ->selectRaw('SUM(clicks) as ad_spend_clicks')
+            ->selectRaw('SUM(impressions) as ad_spend_impressions')
+            ->groupBy(['report_date', 'project_code', DB::raw('UPPER(COALESCE(country, ""))')])
             ->get();
 
-        Log::info('project aggregate user-metrics users selected', [
-            'date' => $date,
-            'projectCode' => $projectCode,
-            'adCountry' => $adCountry,
-            'selectedUsers' => $users->count(),
-        ]);
-
-        if ($users->isEmpty()) {
-            return [
-                'user_country' => $targetUserCountry,
-                'dau_users' => 0,
-                'report_new_users' => 0,
-                'register_new_users' => 0,
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeDimensionKey((string) $row->report_date, (string) $row->project_code, $country);
+            $result[$key] = [
+                'ad_spend_cost' => $this->decimal($row->ad_spend_cost),
+                'ad_spend_clicks' => (int) ($row->ad_spend_clicks ?? 0),
+                'ad_spend_impressions' => (int) ($row->ad_spend_impressions ?? 0),
             ];
         }
 
-        $uids = $users->pluck('id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+        return $result;
+    }
 
-        $firstReportDateByUser = DB::table('v3_user_report_count')
-            ->whereIn('user_id', $uids)
-            ->selectRaw('user_id, MIN(date) as first_date')
-            ->groupBy('user_id')
-            ->pluck('first_date', 'user_id');
+    private function queryUserMetrics(string $date): array
+    {
+        $result = [];
 
-        $usersById = $users->keyBy('id');
+        $projectCodesByAppId = DB::table('project_user_app_map')
+            ->where('enabled', '=', 1)
+            ->select('project_code', 'app_id')
+            ->get()
+            ->groupBy(function ($row) {
+                return trim((string) ($row->app_id ?? ''));
+            })
+            ->map(function ($group) {
+                return collect($group)
+                    ->pluck('project_code')
+                    ->map(fn ($v) => trim((string) $v))
+                    ->filter(fn ($v) => $v !== '')
+                    ->unique()
+                    ->values()
+                    ->all();
+            })
+            ->filter(fn ($codes, $appId) => $appId !== '' && !empty($codes));
 
-        $activeUserIds = DB::table('v3_user_report_count')
-            ->where('date', '=', $date)
-            ->whereIn('user_id', $uids)
-            ->distinct()
-            ->pluck('user_id')
-            ->map(fn ($v) => (int) $v)
-            ->values()
-            ->all();
+        if ($projectCodesByAppId->isEmpty()) {
+            return $result;
+        }
 
-        $activeSet = array_flip($activeUserIds);
+        $activeRows = DB::table('v3_user_report_count as urc')
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->where('urc.date', '=', $date)
+            ->selectRaw('puam.project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as dau_users')
+            ->groupBy('puam.project_code')
+            ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
+            ->get();
 
-        Log::info('project aggregate user-metrics report rows', [
-            'date' => $date,
-            'projectCode' => $projectCode,
-            'adCountry' => $adCountry,
-            'uidsCount' => count($uids),
-            'activeUsersCount' => count($activeUserIds),
-            'firstReportUsersCount' => count($firstReportDateByUser),
-        ]);
+        foreach ($activeRows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeDimensionKey($date, (string) $row->project_code, $country);
+            $result[$key]['dau_users'] = (int) ($row->dau_users ?? 0);
+            $result[$key]['new_users'] = (int) ($result[$key]['new_users'] ?? 0);
+        }
 
         $startTs = strtotime($date . ' 00:00:00');
         $endTs = strtotime($date . ' 23:59:59') + 1;
 
-        $dau = 0;
-        $reportNew = 0;
-        $registerNew = 0;
+        $newUsers = DB::table('v2_user as u')
+            ->where('u.created_at', '>=', $startTs)
+            ->where('u.created_at', '<', $endTs)
+            ->select('u.id', 'u.register_metadata')
+            ->get();
 
-        foreach ($usersById as $uid => $user) {
-            $uid = (int) $uid;
+        if ($newUsers->isEmpty()) {
+            return $result;
+        }
+
+        $fallbackUserIds = [];
+        $parsedUsers = [];
+        foreach ($newUsers as $user) {
+            $uid = (int) ($user->id ?? 0);
             $meta = $this->parseJson((string) ($user->register_metadata ?? ''));
-
-            $metaCountry = '';
+            $appId = '';
+            $country = '';
             if (is_array($meta)) {
-                $metaCountry = strtoupper(trim((string) ($meta['country'] ?? '')));
+                $appId = trim((string) ($meta['app_id'] ?? ''));
+                $country = $this->normalizeCountry((string) ($meta['country'] ?? ''));
+            }
+            if ($appId === '') {
+                $fallbackUserIds[] = $uid;
             }
 
-            $userCountry = $this->normalizeCountry($metaCountry);
+            $parsedUsers[$uid] = [
+                'app_id' => $appId,
+                'country' => $country,
+            ];
+        }
 
-            if ($hasAdCountryFilter && $targetUserCountry !== $userCountry) {
-                continue;
-            }
+        $fallbackByUserId = [];
+        if (!empty($fallbackUserIds)) {
+            $fallbackRows = DB::table('v3_user_report_count')
+                ->where('date', '=', $date)
+                ->whereIn('user_id', $fallbackUserIds)
+                ->whereNotNull('app_id')
+                ->where('app_id', '!=', '')
+                ->selectRaw('user_id')
+                ->selectRaw('MAX(app_id) as app_id')
+                ->selectRaw('UPPER(MAX(COALESCE(client_country, ""))) as country')
+                ->groupBy('user_id')
+                ->get();
 
-            if (isset($activeSet[$uid])) {
-                $dau++;
-            }
-
-            $firstDate = (string) ($firstReportDateByUser[$uid] ?? '');
-            if ($firstDate !== '' && $firstDate === $date) {
-                $reportNew++;
-            }
-
-            $createdAt = (int) ($user->created_at ?? 0);
-            if ($createdAt >= $startTs && $createdAt < $endTs) {
-                $registerNew++;
+            foreach ($fallbackRows as $row) {
+                $fallbackByUserId[(int) $row->user_id] = [
+                    'app_id' => trim((string) ($row->app_id ?? '')),
+                    'country' => $this->normalizeCountry((string) ($row->country ?? '')),
+                ];
             }
         }
 
-        return [
-            'user_country' => $targetUserCountry,
-            'dau_users' => $dau,
-            'report_new_users' => $reportNew,
-            'register_new_users' => $registerNew,
-        ];
+        foreach ($parsedUsers as $uid => $userMeta) {
+            $appId = $userMeta['app_id'];
+            $country = $userMeta['country'];
+
+            if ($appId === '' && isset($fallbackByUserId[$uid])) {
+                $appId = $fallbackByUserId[$uid]['app_id'];
+                if ($country === '') {
+                    $country = $fallbackByUserId[$uid]['country'];
+                }
+            }
+
+            if ($appId === '' || !$projectCodesByAppId->has($appId)) {
+                continue;
+            }
+
+            foreach ($projectCodesByAppId->get($appId, []) as $projectCode) {
+                $key = $this->makeDimensionKey($date, $projectCode, $country);
+                $result[$key]['new_users'] = (int) ($result[$key]['new_users'] ?? 0) + 1;
+                $result[$key]['dau_users'] = (int) ($result[$key]['dau_users'] ?? 0);
+            }
+        }
+
+        return $result;
     }
 
-    private function normalizeCountry(?string $country): string
-    {
-        $value = strtoupper(trim((string) ($country ?? '')));
-        return $value === '' ? 'OO' : $value;
-    }
-
-    private function queryAdSpendCost(string $date, string $projectCode, string $adCountry): float
-    {
-        $query = DB::table('ad_spend_platform_daily_reports')
-            ->where('report_date', '=', $date)
-            ->where('project_code', '=', $projectCode)
-            ->whereRaw('UPPER(COALESCE(country, "")) = ?', [$adCountry]);
-
-        return $this->decimal($query->sum('spend'));
-    }
-
-    private function queryTrafficUsageGb(string $date, string $projectCode): float
+    private function queryTrafficUsageMbByCountry(string $date, string $projectCode): array
     {
         $accountRelations = DB::table('project_traffic_platform_accounts')
             ->where('project_code', '=', $projectCode)
@@ -374,11 +425,11 @@ class AggregateProjectDailyData extends Command
             ->get();
 
         if ($accountRelations->isEmpty()) {
-            return 0;
+            return [];
         }
 
         $grouped = $accountRelations->groupBy('traffic_platform_account_id');
-        $sum = 0.0;
+        $countryUsageMb = [];
 
         foreach ($grouped as $accountId => $rows) {
             $uidList = collect($rows)
@@ -406,14 +457,17 @@ class AggregateProjectDailyData extends Command
 
             $snapshotRows = $snapshotQuery
                 ->selectRaw('COALESCE(external_uid, "") as external_uid')
-                ->selectRaw('COALESCE(geo, "") as geo')
+                ->selectRaw('UPPER(COALESCE(geo, "")) as country')
                 ->selectRaw('COALESCE(region, "") as region')
                 ->selectRaw('MAX(total_mb) as max_total_mb')
-                ->groupByRaw('COALESCE(external_uid, ""), COALESCE(geo, ""), COALESCE(region, "")')
+                ->groupByRaw('COALESCE(external_uid, ""), UPPER(COALESCE(geo, "")), COALESCE(region, "")')
                 ->get();
 
             if ($snapshotRows->isNotEmpty()) {
-                $sum += $this->decimal($snapshotRows->sum('max_total_mb')) / 1024;
+                foreach ($snapshotRows as $row) {
+                    $country = $this->normalizeCountry((string) ($row->country ?? ''));
+                    $countryUsageMb[$country] = ($countryUsageMb[$country] ?? 0.0) + $this->decimal($row->max_total_mb);
+                }
                 continue;
             }
 
@@ -430,16 +484,55 @@ class AggregateProjectDailyData extends Command
 
             $usageRows = $usageQuery
                 ->selectRaw('COALESCE(external_uid, "") as external_uid')
-                ->selectRaw('COALESCE(geo, "") as geo')
+                ->selectRaw('UPPER(COALESCE(geo, "")) as country')
                 ->selectRaw('COALESCE(region, "") as region')
                 ->selectRaw('MAX(traffic_mb) as max_traffic_mb')
-                ->groupByRaw('COALESCE(external_uid, ""), COALESCE(geo, ""), COALESCE(region, "")')
+                ->groupByRaw('COALESCE(external_uid, ""), UPPER(COALESCE(geo, "")), COALESCE(region, "")')
                 ->get();
 
-            $sum += $this->decimal($usageRows->sum('max_traffic_mb')) / 1024;
+            foreach ($usageRows as $row) {
+                $country = $this->normalizeCountry((string) ($row->country ?? ''));
+                $countryUsageMb[$country] = ($countryUsageMb[$country] ?? 0.0) + $this->decimal($row->max_traffic_mb);
+            }
         }
 
-        return $sum;
+        return $countryUsageMb;
+    }
+
+    private function buildProjectCodeSetFromDimensionMaps(array $dimensionMaps): array
+    {
+        $set = [];
+        foreach ($dimensionMaps as $map) {
+            foreach (array_keys($map) as $key) {
+                [, $projectCode] = $this->parseDimensionKey($key);
+                if ($projectCode !== '') {
+                    $set[$projectCode] = true;
+                }
+            }
+        }
+
+        return $set;
+    }
+
+    private function makeDimensionKey(string $date, string $projectCode, string $country): string
+    {
+        return trim($date) . "\t" . trim($projectCode) . "\t" . $this->normalizeCountry($country);
+    }
+
+    private function parseDimensionKey(string $key): array
+    {
+        $parts = explode("\t", $key, 3);
+        return [
+            trim((string) ($parts[0] ?? '')),
+            trim((string) ($parts[1] ?? '')),
+            $this->normalizeCountry((string) ($parts[2] ?? '')),
+        ];
+    }
+
+    private function normalizeCountry(?string $country): string
+    {
+        $value = strtoupper(trim((string) ($country ?? '')));
+        return $value === '' ? 'XX' : $value;
     }
 
     private function decimal($value): float

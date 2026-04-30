@@ -183,11 +183,31 @@ class AuthController extends Controller
     {
         $request->validate([
             'aid' => 'required|string|min:1|max:255',
+            'metadata' => 'nullable|array',
+            'metadata.app_id' => 'nullable|string|max:255',
+            'metadata.app_version' => 'nullable|string|max:50',
+            'metadata.platform' => 'nullable|string|max:100',
+            'metadata.brand' => 'nullable|string|max:100',
+            'metadata.country' => 'nullable|string|max:100',
+            'metadata.city' => 'nullable|string|max:100',
+            'metadata.device_id' => 'nullable|string|max:255',
+            'metadata.channel' => 'nullable|string|max:100',
+            'metadata.channelType' => 'nullable|string|in:paid,organic,unknown',
+            'metadata.channel_type' => 'nullable|string|in:paid,organic,unknown',
+            'metadata.utm_source' => 'nullable|string|max:255',
+            'metadata.utm_medium' => 'nullable|string|max:255',
+            'metadata.utm_campaign' => 'nullable|string|max:255',
+            'metadata.raw_referrer' => 'nullable|string|max:2048',
+            'metadata.click_ts' => 'nullable|integer|min:0',
+            'metadata.install_begin_ts' => 'nullable|integer|min:0',
         ], [
             'aid.required' => 'aid参数不能为空',
         ]);
 
-        [$success, $result] = $this->loginService->loginByAid($request->input('aid'));
+        [$success, $result] = $this->loginService->loginByAid(
+            $request->input('aid'),
+            $request->input('metadata')
+        );
 
         if (!$success) {
             return $this->fail($result);

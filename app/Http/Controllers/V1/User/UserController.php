@@ -107,6 +107,16 @@ class UserController extends Controller
         if (!$user) {
             return $this->fail([400, __('The user does not exist')]);
         }
+        $meta = is_array($user->register_metadata) ? $user->register_metadata : [];
+        $user['channel'] = $meta['channel'] ?? null;
+        $channelType = $meta['channel_type'] ?? ($meta['channelType'] ?? null);
+        $user['channelType'] = $channelType;
+        $user['utm_source'] = $meta['utm_source'] ?? null;
+        $user['utm_medium'] = $meta['utm_medium'] ?? null;
+        $user['utm_campaign'] = $meta['utm_campaign'] ?? null;
+        $user['raw_referrer'] = $meta['raw_referrer'] ?? null;
+        $user['click_ts'] = isset($meta['click_ts']) ? (int) $meta['click_ts'] : null;
+        $user['install_begin_ts'] = isset($meta['install_begin_ts']) ? (int) $meta['install_begin_ts'] : null;
         // $user['avatar_url'] = 'https://cdn.v2ex.com/gravatar/' . md5($user->email) . '?s=64&d=identicon';
         return $this->success($user);
     }

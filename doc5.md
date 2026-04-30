@@ -28,19 +28,19 @@
 | startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
 | endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
 | projectCode | string | 否 | 项目代号 |
-| adCountry | string | 否 | 广告国家 |
-| groupBy | string[] | 否 | 按维度聚合，支持 `reportDate` / `projectCode` / `adCountry`，默认明细 |
+| country | string | 否 | 国家（空值统一按 `XX` 处理） |
+| groupBy | string[] | 否 | 按维度聚合，支持 `reportDate` / `projectCode` / `country`，默认明细 |
 | page | int | 否 | 默认 `1` |
 | pageSize | int | 否 | 默认 `50`，最大 `200` |
-| orderBy | string | 否 | 默认 `reportDate` |
+| orderBy | string | 否 | 默认 `reportDate`，支持：`reportDate` / `projectCode` / `country` / `adRevenue` / `adSpendCost` / `trafficCost` / `profit` / `roi` / `adSpendCpi` / `updatedAt` |
 | orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
 
 `groupBy` 定义：
 
-- 不传或传空数组：明细（按 `reportDate + projectCode + adCountry` 原始粒度）
+- 不传或传空数组：明细（按 `reportDate + projectCode + country` 原始粒度）
 - 传数组：按数组中的维度组合聚合，例如：
   - `['reportDate', 'projectCode']`
-  - `['reportDate', 'projectCode', 'adCountry']`
+  - `['reportDate', 'projectCode', 'country']`
 
 说明：
 
@@ -56,26 +56,26 @@
       "id": 1,
       "reportDate": "2026-04-28",
       "projectCode": "A003",
-      "adCountry": "US",
-      "reportNewUsers": 36,
+      "country": "US",
       "dauUsers": 220,
-      "registerNewUsers": 28,
-      "revenue": "344.340000",
+      "newUsers": 36,
+      "adRevenue": "344.340000",
       "adRequests": 120000,
-      "matchedRequests": 108000,
-      "impressions": 98000,
-      "clicks": 5100,
-      "ecpm": "3.513673",
-      "ctr": "5.204082",
-      "matchRate": "90.000000",
-      "showRate": "90.740741",
+      "adMatchedRequests": 108000,
+      "adImpressions": 98000,
+      "adClicks": 5100,
+      "adEcpm": "3.513673",
+      "adCtr": "5.204082",
+      "adMatchRate": "90.000000",
+      "adShowRate": "90.740741",
       "adSpendCost": "210.000000",
-      "trafficUsageGb": "52.300000",
-      "trafficCost": "83.680000",
-      "grossProfit": "50.660000",
-      "roi": "0.172680",
-      "cpi": "5.833333",
-      "fbEcpm": "3.513673",
+      "adSpendCpi": "5.833333",
+      "adSpendCpc": "0.041176",
+      "adSpendCpm": "2.142857",
+      "trafficUsageMb": "53555.200000",
+      "trafficCost": "8.368000",
+      "profit": "125.972000",
+      "roi": "1.580370",
       "updatedAt": "2026-04-28 10:05:02"
     }
   ],
@@ -170,11 +170,11 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| startDate | string | 是 | 开始日期 |
-| endDate | string | 是 | 结束日期 |
+| startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
+| endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
 | projectCode | string | 否 | 项目代号 |
-| adCountry | string | 否 | 广告国家 |
-| groupBy | string | 否 | `project` / `country` / `date`，默认 `project` |
+| country | string | 否 | 国家 |
+| groupBy | string | 否 | 聚合维度：`project` / `country` / `date`，默认 `project` |
 
 ### data 返回
 
@@ -182,25 +182,25 @@
 [
   {
     "projectCode": "A003",
-    "reportNewUsers": 126,
-    "dauUsers": 880,
-    "registerNewUsers": 96,
-    "revenue": "1298.120000",
-    "adRequests": 520000,
-    "matchedRequests": 468000,
-    "impressions": 430000,
-    "clicks": 22100,
-    "ecpm": "3.018884",
-    "ctr": "5.139535",
-    "matchRate": "90.000000",
-    "showRate": "91.880342",
-    "adSpendCost": "860.000000",
-    "trafficUsageGb": "201.500000",
-    "trafficCost": "322.400000",
-    "grossProfit": "115.720000",
-    "roi": "0.220862",
-    "cpi": "6.825397",
-    "fbEcpm": "3.018884"
+    "newUsers": 380,
+    "dauUsers": 2450,
+    "adRevenue": "5230.330000",
+    "adRequests": 1860000,
+    "adMatchedRequests": 1670000,
+    "adImpressions": 1490000,
+    "adClicks": 78800,
+    "adEcpm": "3.510289",
+    "adCtr": "5.288591",
+    "adMatchRate": "89.784946",
+    "adShowRate": "89.221557",
+    "adSpendCost": "3100.000000",
+    "adSpendCpi": "8.157895",
+    "adSpendCpc": "0.039340",
+    "adSpendCpm": "2.080537",
+    "trafficUsageMb": "782344.120000",
+    "trafficCost": "122.241269",
+    "profit": "2008.088731",
+    "roi": "1.624269"
   }
 ]
 ```
@@ -215,11 +215,11 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| startDate | string | 是 | 开始日期 |
-| endDate | string | 是 | 结束日期 |
+| startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
+| endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
 | projectCode | string | 否 | 项目代号 |
-| adCountry | string | 否 | 广告国家 |
-| dimension | string | 否 | `day` / `month`，默认 `day` |
+| country | string | 否 | 国家 |
+| dimension | string | 否 | 时间维度：`day` / `month`，默认 `day` |
 
 ### data 返回
 
@@ -227,16 +227,15 @@
 [
   {
     "time": "2026-04-28",
-    "reportNewUsers": 36,
+    "newUsers": 36,
     "dauUsers": 220,
-    "registerNewUsers": 28,
-    "revenue": "344.340000",
+    "adRevenue": "344.340000",
     "adSpendCost": "210.000000",
-    "trafficUsageGb": "52.300000",
-    "trafficCost": "83.680000",
-    "grossProfit": "50.660000",
-    "roi": "0.172680",
-    "cpi": "5.833333"
+    "adSpendCpi": "5.833333",
+    "trafficUsageMb": "53555.200000",
+    "trafficCost": "8.368000",
+    "profit": "125.972000",
+    "roi": "1.580370"
   }
 ]
 ```
@@ -247,23 +246,24 @@
 
 - `reportDate`: 日期
 - `projectCode`: 项目代号
-- `adCountry`: 广告国家
-- `reportNewUsers`: 上报新增用户
-- `dauUsers`: 日活用户
-- `registerNewUsers`: 注册新增用户
-- `revenue`: 广告收入
+- `country`: 国家（空值统一归一为 `XX`）
+- `dauUsers`: 活跃用户数
+- `newUsers`: 新增用户数
+- `adRevenue`: 广告收入
 - `adRequests`: 请求数
-- `matchedRequests`: 匹配数
-- `impressions`: 展示量
-- `clicks`: 点击量
-- `ecpm`: eCPM
-- `ctr`: CTR
-- `matchRate`: 匹配率
-- `showRate`: 展示率
+- `adMatchedRequests`: 匹配数
+- `adImpressions`: 展示量
+- `adClicks`: 点击量
+- `adEcpm`: eCPM
+- `adCtr`: CTR
+- `adMatchRate`: 匹配率
+- `adShowRate`: 展示率
 - `adSpendCost`: 广告投放成本
-- `trafficUsageGb`: 代理流量使用量（GB）
-- `trafficCost`: 代理流量成本（`trafficUsageGb * 1.6`）
-- `grossProfit`: 毛利（`revenue - adSpendCost - trafficCost`）
-- `roi`: ROI（`grossProfit / (adSpendCost + trafficCost)`）
-- `cpi`: CPI（`adSpendCost / reportNewUsers`）
-- `fbEcpm`: eCPM（FB口径字段，占位与 `ecpm` 一致）
+- `adSpendCpi`: CPI（`adSpendCost / newUsers`）
+- `adSpendCpc`: CPC（`adSpendCost / adClicks`）
+- `adSpendCpm`: CPM（`adSpendCost * 1000 / adImpressions`）
+- `trafficUsageMb`: 代理流量使用量（MB）
+- `trafficCost`: 代理流量成本（`trafficUsageMb * 0.16 / 1024`）
+- `profit`: 毛利（`adRevenue - adSpendCost - trafficCost`）
+- `roi`: ROI（`adRevenue / (adSpendCost + trafficCost)`）
+- `updatedAt`: 更新时间

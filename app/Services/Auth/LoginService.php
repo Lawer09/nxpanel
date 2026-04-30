@@ -87,6 +87,7 @@ class LoginService
     {
         $email = $aid . '@apple.com';
         $password = $aid;
+        $normalizedMetadata = $this->normalizeAidMetadata($metadata);
 
         $user = User::where('email', $email)->first();
         $created = false;
@@ -100,7 +101,7 @@ class LoginService
                     'email'    => $email,
                     'password' => $password,
                     'plan_id'  => 1,
-                    'register_metadata' => $metadata,
+                    'register_metadata' => $normalizedMetadata,
                 ]);
 
                 if (!$user->save()) {
@@ -149,6 +150,11 @@ class LoginService
             if ($user->banned) {
                 return [false, [400, __('Your account has been suspended')]];
             }
+
+            if (!empty($normalizedMetadata)) {
+                $currentMetadata = is_array($user->register_metadata) ? $user->register_metadata : [];
+                $user->register_metadata = array_merge($currentMetadata, $normalizedMetadata);
+            }
         }
 
         // 更新最后登录时间
@@ -156,6 +162,60 @@ class LoginService
         $user->save();
 
         return [true, $user];
+    }
+
+    private function normalizeAidMetadata(?array $metadata): array
+    {
+        if (!is_array($metadata)) {
+            return [];
+        }
+
+        $allowedKeys = [
+            'app_id',
+            'app_version',
+            'platform',
+            'brand',
+            'country',
+            'city',
+            'device_id',
+            'channel',
+            'channel_type',
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'raw_referrer',
+            'click_ts',
+            'install_begin_ts',
+        ];
+
+        if (array_key_exists('channelType', $metadata) && !array_key_exists('channel_type', $metadata)) {
+            $metadata['channel_type'] = $metadata['channelType'];
+        }
+
+        $result = [];
+        foreach ($allowedKeys as $key) {
+            if (!array_key_exists($key, $metadata)) {
+                continue;
+            }
+
+            $value = $metadata[$key];
+            if ($value === null) {
+                continue;
+            }
+
+            if (in_array($key, ['click_ts', 'install_begin_ts'], true)) {
+                $result[$key] = (int) $value;
+                continue;
+            }
+
+            $normalized = trim((string) $value);
+            if ($normalized === '') {
+                continue;
+            }
+            $result[$key] = $normalized;
+        }
+
+        return $result;
     }
 
     /**
