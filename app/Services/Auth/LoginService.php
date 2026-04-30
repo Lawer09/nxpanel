@@ -170,7 +170,7 @@ class LoginService
             return [];
         }
 
-        $allowedKeys = [
+        $allowedScalarKeys = [
             'app_id',
             'app_version',
             'platform',
@@ -178,11 +178,11 @@ class LoginService
             'country',
             'city',
             'device_id',
-            'channel'
+            'channel',
         ];
 
         $result = [];
-        foreach ($allowedKeys as $key) {
+        foreach ($allowedScalarKeys as $key) {
             if (!array_key_exists($key, $metadata)) {
                 continue;
             }
@@ -192,8 +192,7 @@ class LoginService
                 continue;
             }
 
-            if (in_array($key, ['click_ts', 'install_begin_ts'], true)) {
-                $result[$key] = (int) $value;
+            if (is_array($value) || is_object($value)) {
                 continue;
             }
 
@@ -202,6 +201,29 @@ class LoginService
                 continue;
             }
             $result[$key] = $normalized;
+        }
+
+        // 兼容 metadata.channel 对象
+        $channel = $metadata['channel'] ?? null;
+        if (is_array($channel)) {
+            $nestedChannelType = $channel['channel_type'] ?? ($channel['channelType'] ?? null);
+            if (is_string($nestedChannelType) && trim($nestedChannelType) !== '') {
+                $result['channel_type'] = trim($nestedChannelType);
+            }
+
+            foreach (['utm_source', 'utm_medium', 'utm_campaign', 'raw_referrer'] as $key) {
+                $value = $channel[$key] ?? null;
+                if (is_string($value) && trim($value) !== '') {
+                    $result[$key] = trim($value);
+                }
+            }
+
+            foreach (['click_ts', 'install_begin_ts'] as $key) {
+                $value = $channel[$key] ?? null;
+                if ($value !== null && $value !== '' && is_numeric($value)) {
+                    $result[$key] = (int) $value;
+                }
+            }
         }
 
         return $result;

@@ -71,6 +71,7 @@ class AuthController extends V1AuthController
             'metadata.device_id' => 'nullable|string|max:255',
             'channel' => 'nullable|array',
             'channel.channel_type' => 'nullable|string|in:paid,organic,unknown',
+            'channel.channelType' => 'nullable|string|in:paid,organic,unknown',
             'channel.utm_source' => 'nullable|string|max:255',
             'channel.utm_medium' => 'nullable|string|max:255',
             'channel.utm_campaign' => 'nullable|string|max:255',
@@ -82,7 +83,10 @@ class AuthController extends V1AuthController
         ]);
 
         $metadata = $request->input('metadata', []);
-        $metadata['channel'] = $request->input('channel', []);
+        $channel = $request->input('channel', null);
+        if (is_array($channel) && !empty($channel)) {
+            $metadata['channel'] = $channel;
+        }
         [$success, $result] = $this->loginService->loginByAid(
             $request->input('aid'),
             $metadata   
