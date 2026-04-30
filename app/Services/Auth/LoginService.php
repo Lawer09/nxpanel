@@ -178,19 +178,8 @@ class LoginService
             'country',
             'city',
             'device_id',
-            'channel',
-            'channel_type',
-            'utm_source',
-            'utm_medium',
-            'utm_campaign',
-            'raw_referrer',
-            'click_ts',
-            'install_begin_ts',
+            'channel'
         ];
-
-        if (array_key_exists('channelType', $metadata) && !array_key_exists('channel_type', $metadata)) {
-            $metadata['channel_type'] = $metadata['channelType'];
-        }
 
         $result = [];
         foreach ($allowedKeys as $key) {

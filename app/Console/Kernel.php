@@ -60,6 +60,9 @@ class Kernel extends ConsoleKernel
         // 项目日报聚合（每 5 分钟刷新当天）
         $schedule->command('project:aggregate-daily')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
 
+        // 投放日报同步（每小时）
+        $schedule->command('ad-spend:sync --lookback-days=2')->hourly()->onOneServer()->withoutOverlapping(55);
+
         // 应用客户端凭证同步到 Redis（每分钟）
         $schedule->command('app-client:sync-redis')->everyMinute()->onOneServer()->withoutOverlapping(2);
 
