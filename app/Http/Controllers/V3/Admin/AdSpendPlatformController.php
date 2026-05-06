@@ -322,6 +322,7 @@ class AdSpendPlatformController extends Controller
 
             $totalRecords = 0;
             $matchedRecords = 0;
+            $unmatchedRecords = 0;
 
             foreach ($records as $record) {
                 if (!is_array($record)) {
@@ -380,7 +381,7 @@ class AdSpendPlatformController extends Controller
                 'status' => AdSpendSyncJob::STATUS_SUCCESS,
                 'total_records' => $totalRecords,
                 'matched_records' => $matchedRecords,
-                'unmatched_records' => 0,
+                'unmatched_records' => $unmatchedRecords,
                 'error_message' => null,
             ]);
 
