@@ -13,7 +13,7 @@ class AggregateProjectDailyData extends Command
         {--start-date= : 开始日期(Y-m-d)}
         {--end-date= : 结束日期(Y-m-d)}';
 
-    protected $description = '聚合项目日报数据（默认仅更新当天，支持指定日期范围回补）';
+    protected $description = '聚合项目日报数据（默认更新昨天+当天，支持指定日期范围回补）';
 
     public function handle(): int
     {
@@ -49,7 +49,8 @@ class AggregateProjectDailyData extends Command
 
         if (empty($start) && empty($end)) {
             $today = now()->toDateString();
-            return [$today, $today];
+            $yesterday = now()->subDay()->toDateString();
+            return [$yesterday, $today];
         }
 
         if (empty($start) || empty($end)) {
@@ -251,12 +252,19 @@ class AggregateProjectDailyData extends Command
         foreach ($rows as $row) {
             $country = $this->normalizeCountry((string) ($row->country ?? ''));
             $key = $this->makeDimensionKey((string) $row->report_date, (string) $row->project_code, $country);
+            $current = $result[$key] ?? [
+                'ad_revenue' => 0.0,
+                'ad_requests' => 0,
+                'ad_matched_requests' => 0,
+                'ad_impressions' => 0,
+                'ad_clicks' => 0,
+            ];
             $result[$key] = [
-                'ad_revenue' => $this->decimal($row->ad_revenue),
-                'ad_requests' => (int) ($row->ad_requests ?? 0),
-                'ad_matched_requests' => (int) ($row->ad_matched_requests ?? 0),
-                'ad_impressions' => (int) ($row->ad_impressions ?? 0),
-                'ad_clicks' => (int) ($row->ad_clicks ?? 0),
+                'ad_revenue' => $current['ad_revenue'] + $this->decimal($row->ad_revenue),
+                'ad_requests' => $current['ad_requests'] + (int) ($row->ad_requests ?? 0),
+                'ad_matched_requests' => $current['ad_matched_requests'] + (int) ($row->ad_matched_requests ?? 0),
+                'ad_impressions' => $current['ad_impressions'] + (int) ($row->ad_impressions ?? 0),
+                'ad_clicks' => $current['ad_clicks'] + (int) ($row->ad_clicks ?? 0),
             ];
         }
 
@@ -280,10 +288,15 @@ class AggregateProjectDailyData extends Command
         foreach ($rows as $row) {
             $country = $this->normalizeCountry((string) ($row->country ?? ''));
             $key = $this->makeDimensionKey((string) $row->report_date, (string) $row->project_code, $country);
+            $current = $result[$key] ?? [
+                'ad_spend_cost' => 0.0,
+                'ad_spend_clicks' => 0,
+                'ad_spend_impressions' => 0,
+            ];
             $result[$key] = [
-                'ad_spend_cost' => $this->decimal($row->ad_spend_cost),
-                'ad_spend_clicks' => (int) ($row->ad_spend_clicks ?? 0),
-                'ad_spend_impressions' => (int) ($row->ad_spend_impressions ?? 0),
+                'ad_spend_cost' => $current['ad_spend_cost'] + $this->decimal($row->ad_spend_cost),
+                'ad_spend_clicks' => $current['ad_spend_clicks'] + (int) ($row->ad_spend_clicks ?? 0),
+                'ad_spend_impressions' => $current['ad_spend_impressions'] + (int) ($row->ad_spend_impressions ?? 0),
             ];
         }
 
@@ -332,7 +345,7 @@ class AggregateProjectDailyData extends Command
         foreach ($activeRows as $row) {
             $country = $this->normalizeCountry((string) ($row->country ?? ''));
             $key = $this->makeDimensionKey($date, (string) $row->project_code, $country);
-            $result[$key]['dau_users'] = (int) ($row->dau_users ?? 0);
+            $result[$key]['dau_users'] = (int) ($result[$key]['dau_users'] ?? 0) + (int) ($row->dau_users ?? 0);
             $result[$key]['new_users'] = (int) ($result[$key]['new_users'] ?? 0);
         }
 
