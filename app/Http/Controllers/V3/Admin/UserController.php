@@ -36,8 +36,24 @@ class UserController extends V2UserController
         $users = $userModel->orderBy('id', 'desc')
             ->paginate($pageSize, ['*'], 'page', $current);
 
-        $users->getCollection()->transform(function ($user): array {
-            return V2UserController::transformUserData($user);
+        $userIds = collect($users->items())->pluck('id')->filter()->values();
+        $reportTrafficMap = [];
+
+        if ($userIds->isNotEmpty()) {
+            $reportTrafficMap = DB::table('v2_node_traffic_aggregated')
+                ->whereDate('date', now()->toDateString())
+                ->whereIn('user_id', $userIds->all())
+                ->selectRaw('user_id, ROUND(SUM(total_usage_mb), 3) as report_traffic')
+                ->groupBy('user_id')
+                ->get()
+                ->mapWithKeys(fn($row) => [(int) $row->user_id => (float) ($row->report_traffic ?? 0)])
+                ->toArray();
+        }
+
+        $users->getCollection()->transform(function ($user) use ($reportTrafficMap): array {
+            $data = V2UserController::transformUserData($user);
+            $data['report_traffic'] = $reportTrafficMap[(int) ($user->id ?? 0)] ?? 0.0;
+            return $data;
         });
 
         return $this->ok([
