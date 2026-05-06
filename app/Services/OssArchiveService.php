@@ -23,7 +23,7 @@ class OssArchiveService
     /** OSS 是否已启用（env OSS_ENABLED=true） */
     public static function enabled(): bool
     {
-        return (bool) env('OSS_ENABLED', false);
+        return (bool) config('filesystems.disks.oss.enabled', false);
     }
 
     /**

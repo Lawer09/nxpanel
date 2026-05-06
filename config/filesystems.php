@@ -68,6 +68,7 @@ return [
         // 需安装：composer require league/flysystem-aws-s3-v3
         'oss' => [
             'driver'                  => 's3',
+            'enabled'                 => env('OSS_ENABLED', false),
             'key'                     => env('OSS_ACCESS_KEY_ID'),
             'secret'                  => env('OSS_ACCESS_KEY_SECRET'),
             'region'                  => env('OSS_REGION', 'oss-cn-hangzhou'),
