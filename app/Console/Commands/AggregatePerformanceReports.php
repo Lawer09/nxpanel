@@ -171,19 +171,21 @@ class AggregatePerformanceReports extends Command
                 continue;
             }
 
+            $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+            $metadataTimestampMs = $this->resolveMetadataTimestampMs($metadata);
+
             // 兼容旧格式：单条记录直接入列
             if (array_key_exists('node_id', $payload)) {
+                $payload['metadata_timestamp_ms'] = $metadataTimestampMs;
+                $payload['event_timestamp_ms'] = $metadataTimestampMs;
                 $flattened[] = $payload;
                 continue;
             }
 
-            $metadata = $payload['metadata'] ?? [];
             $reports = is_array($payload['reports'] ?? null) ? $payload['reports'] : [];
             $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? 0);
             $clientIp = $payload['clientIp'] ?? $payload['client_ip'] ?? null;
-            $eventTimestampMs = $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
-                ?? $this->normalizeTimestampMs($payload['reported_at'] ?? null)
-                ?? now()->getTimestampMs();
+            $eventTimestampMs = $metadataTimestampMs;
             $reportedAt = $payload['reported_at'] ?? $eventTimestampMs;
             $createdAt = $payload['created_at'] ?? now()->toDateTimeString();
 
@@ -209,6 +211,7 @@ class AggregatePerformanceReports extends Command
                     'error_code' => null,
                     'vpn_user_time_seconds' => 0,
                     'vpn_user_traffic_mb' => 0.0,
+                    'metadata_timestamp_ms' => $metadataTimestampMs,
                     'event_timestamp_ms' => $eventTimestampMs,
                     'arise_timestamp_ms' => null,
                     'reported_at' => $reportedAt,
@@ -265,6 +268,7 @@ class AggregatePerformanceReports extends Command
                     'error_code' => $errorCode,
                     'vpn_user_time_seconds' => $vpnUserTimeSeconds,
                     'vpn_user_traffic_mb' => $vpnUserTrafficMb,
+                    'metadata_timestamp_ms' => $metadataTimestampMs,
                     'event_timestamp_ms' => $eventTimestampMs,
                     'arise_timestamp_ms' => $ariseTimestampMs,
                     'reported_at' => $reportedAt,
@@ -644,10 +648,9 @@ class AggregatePerformanceReports extends Command
 
     private function resolveTrafficBucket(array $record): array
     {
-        $timestampMs = $this->normalizeTimestampMs($record['arise_timestamp_ms'] ?? null)
-            ?? $this->normalizeTimestampMs($record['event_timestamp_ms'] ?? null)
-            ?? $this->normalizeTimestampMs($record['reported_at'] ?? null)
-            ?? now()->getTimestampMs();
+        $timestampMs = $this->resolveTrustedTimestampMs(
+            $this->normalizeTimestampMs($record['metadata_timestamp_ms'] ?? null)
+        );
 
         $time = Carbon::createFromTimestampMs($timestampMs);
         $minute = (int) floor($time->minute / 5) * 5;
@@ -661,9 +664,9 @@ class AggregatePerformanceReports extends Command
 
     private function resolveEventBucket(array $record): array
     {
-        $timestampMs = $this->normalizeTimestampMs($record['event_timestamp_ms'] ?? null)
-            ?? $this->normalizeTimestampMs($record['reported_at'] ?? null)
-            ?? now()->getTimestampMs();
+        $timestampMs = $this->resolveTrustedTimestampMs(
+            $this->normalizeTimestampMs($record['metadata_timestamp_ms'] ?? null)
+        );
 
         $time = Carbon::createFromTimestampMs($timestampMs);
         $minute = (int) floor($time->minute / 5) * 5;
@@ -677,9 +680,9 @@ class AggregatePerformanceReports extends Command
 
     private function resolvePayloadBucket(array $payload, array $metadata): array
     {
-        $timestampMs = $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
-            ?? $this->normalizeTimestampMs($payload['reported_at'] ?? null)
-            ?? now()->getTimestampMs();
+        $timestampMs = $this->resolveTrustedTimestampMs(
+            $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
+        );
 
         $time = Carbon::createFromTimestampMs($timestampMs);
         $minute = (int) floor($time->minute / 5) * 5;
@@ -689,6 +692,23 @@ class AggregatePerformanceReports extends Command
             'hour' => (int) $time->hour,
             'minute' => $minute,
         ];
+    }
+
+    private function resolveMetadataTimestampMs(array $metadata): int
+    {
+        return $this->resolveTrustedTimestampMs(
+            $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
+        );
+    }
+
+    private function resolveTrustedTimestampMs(?int $timestampMs): int
+    {
+        $nowMs = now()->getTimestampMs();
+        if ($timestampMs === null || $timestampMs > $nowMs) {
+            return $nowMs;
+        }
+
+        return $timestampMs;
     }
 
     private function normalizeTimestampMs($timestamp): ?int
