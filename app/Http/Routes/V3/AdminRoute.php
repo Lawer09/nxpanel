@@ -70,6 +70,7 @@ class AdminRoute
             // User
             $router->group(['prefix' => 'user'], function ($router) {
                 $router->any('/fetch',              [UserController::class, 'fetch']);
+                $router->get('/report',             [UserController::class, 'report']);
                 $router->post('/update',            [UserController::class, 'update']);
                 $router->get('/getUserInfoById',    [UserController::class, 'getUserInfoById']);
                 $router->post('/generate',          [UserController::class, 'generate']);

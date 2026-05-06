@@ -372,6 +372,7 @@ class AggregatePerformanceReports extends Command
                 $bucket['date'],
                 $bucket['hour'],
                 $bucket['minute'],
+                $record['user_id'] ?? 0,
                 $record['node_id'] ?? 0,
                 $record['node_ip'] ?? '',
                 $record['client_country'] ?? '',
@@ -392,6 +393,7 @@ class AggregatePerformanceReports extends Command
                 $bucket['date'],
                 $bucket['hour'],
                 $bucket['minute'],
+                (int) ($first['user_id'] ?? 0),
                 (int) ($first['node_id'] ?? 0),
                 (string) ($first['node_ip'] ?? ''),
                 (string) ($first['client_country'] ?? ''),
@@ -409,6 +411,7 @@ class AggregatePerformanceReports extends Command
                     'date' => $bucket['date'],
                     'hour' => $bucket['hour'],
                     'minute' => $bucket['minute'],
+                    'user_id' => (int) ($first['user_id'] ?? 0),
                     'node_id' => (int) ($first['node_id'] ?? 0),
                     'node_ip' => $first['node_ip'] ?? null,
                     'client_country' => $first['client_country'] ?? null,
@@ -529,15 +532,16 @@ class AggregatePerformanceReports extends Command
             ->where('date', '<', $cutoff)
             ->delete();
 
-        $deletedTraffic = DB::table('v2_node_traffic_aggregated')
-            ->where('date', '<', $cutoff)
-            ->delete();
+        // $deletedTraffic = DB::table('v2_node_traffic_aggregated')
+        //     ->where('date', '<', $cutoff)
+        //     ->delete();
 
         // $deletedUser = DB::table('v3_user_report_count')
         //     ->where('date', '<', $cutoff)
         //     ->delete();
     
         $deletedUser = 0; // 暂不删除用户上报统计数据，保留历史查询能力    
+        $deletedTraffic = 0; // 暂不删除流量聚合数据，保留历史查询能力
         
         if ($deletedAgg > 0 || $deletedProbe > 0 || $deletedTraffic > 0 || $deletedUser > 0) {
             $this->info("Pruned old data (before {$cutoff}): aggregated={$deletedAgg}, probe={$deletedProbe}, traffic={$deletedTraffic}, user_report={$deletedUser}");

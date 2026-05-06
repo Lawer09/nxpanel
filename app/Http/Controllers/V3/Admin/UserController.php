@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuthService;
 use App\Services\NodeSyncService;
 use App\Services\UserService;
+use App\Http\Resources\CamelizeResource;
 use App\Utils\Helper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -186,6 +187,155 @@ class UserController extends V2UserController
             Log::error($e);
             return $this->error([500, '删除失败']);
         }
+    }
+
+    /**
+     * 用户报表（按天）
+     *
+     * GET /user/report
+     */
+    public function report(Request $request): JsonResponse
+    {
+        $request->validate([
+            'userId'        => 'required|integer|exists:v2_user,id',
+            'dateFrom'      => 'nullable|date',
+            'dateTo'        => 'nullable|date',
+            'clientCountry' => 'nullable|string|max:2',
+            'platform'      => 'nullable|string|max:100',
+            'appId'         => 'nullable|string|max:255',
+            'appVersion'    => 'nullable|string|max:50',
+            'pageSize'      => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $userId = (int) $request->input('userId');
+        $dateFrom = $request->input('dateFrom', now()->subDays(29)->toDateString());
+        $dateTo = $request->input('dateTo', now()->toDateString());
+        $pageSize = (int) $request->input('pageSize', 30);
+
+        $dailyQuery = DB::table('v3_user_report_count as urc')
+            ->where('urc.user_id', $userId)
+            ->where('urc.date', '>=', $dateFrom)
+            ->where('urc.date', '<=', $dateTo);
+
+        if ($request->filled('clientCountry')) {
+            $dailyQuery->where('urc.client_country', $request->input('clientCountry'));
+        }
+        if ($request->filled('platform')) {
+            $dailyQuery->where('urc.platform', $request->input('platform'));
+        }
+        if ($request->filled('appId')) {
+            $dailyQuery->where('urc.app_id', $request->input('appId'));
+        }
+        if ($request->filled('appVersion')) {
+            $dailyQuery->where('urc.app_version', $request->input('appVersion'));
+        }
+
+        $data = $dailyQuery
+            ->selectRaw('urc.date, urc.user_id')
+            ->selectRaw('SUM(urc.report_count) as total_reports')
+            ->selectRaw('MAX(urc.node_count) as max_nodes')
+            ->selectRaw('MAX(urc.client_country) as client_country')
+            ->selectRaw('MAX(urc.client_isp) as client_isp')
+            ->selectRaw('MAX(urc.platform) as platform')
+            ->selectRaw('MAX(urc.app_id) as app_id')
+            ->selectRaw('MAX(urc.app_version) as app_version')
+            ->groupBy('urc.date', 'urc.user_id')
+            ->orderByDesc('urc.date')
+            ->paginate($pageSize);
+
+        $rows = collect($data->items());
+        $dateList = $rows->pluck('date')->filter()->unique()->values();
+
+        $trafficMap = [];
+        $probeMap = [];
+
+        if ($dateList->isNotEmpty()) {
+            $trafficQuery = DB::table('v2_node_traffic_aggregated as t')
+                ->where('t.user_id', $userId)
+                ->whereIn('t.date', $dateList->all());
+
+            if ($request->filled('clientCountry')) {
+                $trafficQuery->where('t.client_country', $request->input('clientCountry'));
+            }
+            if ($request->filled('platform')) {
+                $trafficQuery->where('t.platform', $request->input('platform'));
+            }
+            if ($request->filled('appId')) {
+                $trafficQuery->where('t.app_id', $request->input('appId'));
+            }
+            if ($request->filled('appVersion')) {
+                $trafficQuery->where('t.app_version', $request->input('appVersion'));
+            }
+
+            $trafficMap = $trafficQuery
+                ->selectRaw('t.date')
+                ->selectRaw('SUM(t.total_usage_seconds) as total_usage_seconds')
+                ->selectRaw('ROUND(SUM(t.total_usage_mb), 3) as total_usage_mb')
+                ->selectRaw('SUM(t.report_count) as traffic_report_count')
+                ->groupBy('t.date')
+                ->get()
+                ->mapWithKeys(fn($row) => [(string) $row->date => [
+                    'total_usage_seconds' => (int) ($row->total_usage_seconds ?? 0),
+                    'total_usage_mb' => (float) ($row->total_usage_mb ?? 0),
+                    'traffic_report_count' => (int) ($row->traffic_report_count ?? 0),
+                ]])
+                ->toArray();
+
+            $probeQuery = DB::table('v2_node_probe_aggregated as p')
+                ->whereIn('p.date', $dateList->all());
+
+            if ($request->filled('clientCountry')) {
+                $probeQuery->where('p.client_country', $request->input('clientCountry'));
+            }
+            if ($request->filled('platform')) {
+                $probeQuery->where('p.platform', $request->input('platform'));
+            }
+            if ($request->filled('appId')) {
+                $probeQuery->where('p.app_id', $request->input('appId'));
+            }
+            if ($request->filled('appVersion')) {
+                $probeQuery->where('p.app_version', $request->input('appVersion'));
+            }
+
+            $probeMap = $probeQuery
+                ->selectRaw('p.date')
+                ->selectRaw('SUM(p.total_count) as probe_total_count')
+                ->selectRaw("SUM(CASE WHEN p.status = 'success' THEN p.total_count ELSE 0 END) as probe_success_count")
+                ->selectRaw("SUM(CASE WHEN p.status IN ('failed', 'timeout', 'cancelled') THEN p.total_count ELSE 0 END) as probe_failed_count")
+                ->groupBy('p.date')
+                ->get()
+                ->mapWithKeys(fn($row) => [(string) $row->date => [
+                    'probe_total_count' => (int) ($row->probe_total_count ?? 0),
+                    'probe_success_count' => (int) ($row->probe_success_count ?? 0),
+                    'probe_failed_count' => (int) ($row->probe_failed_count ?? 0),
+                ]])
+                ->toArray();
+        }
+
+        $mapped = $rows->map(function ($row) use ($trafficMap, $probeMap) {
+            $date = (string) $row->date;
+            $traffic = $trafficMap[$date] ?? [
+                'total_usage_seconds' => 0,
+                'total_usage_mb' => 0,
+                'traffic_report_count' => 0,
+            ];
+            $probe = $probeMap[$date] ?? [
+                'probe_total_count' => 0,
+                'probe_success_count' => 0,
+                'probe_failed_count' => 0,
+            ];
+
+            return array_merge((array) $row, $traffic, $probe);
+        })->values();
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($mapped),
+            'total' => $data->total(),
+            'page' => $data->currentPage(),
+            'pageSize' => $data->perPage(),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+        ]);
     }
 
     // ----------------------------------------------------------------
