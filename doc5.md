@@ -59,6 +59,7 @@
       "country": "US",
       "dauUsers": 220,
       "newUsers": 36,
+      "reportNewUsers": 12,
       "adRevenue": "344.340000",
       "adRequests": 120000,
       "adMatchedRequests": 108000,
@@ -183,6 +184,7 @@
   {
     "projectCode": "A003",
     "newUsers": 380,
+    "reportNewUsers": 120,
     "dauUsers": 2450,
     "adRevenue": "5230.330000",
     "adRequests": 1860000,
@@ -228,6 +230,7 @@
   {
     "time": "2026-04-28",
     "newUsers": 36,
+    "reportNewUsers": 12,
     "dauUsers": 220,
     "adRevenue": "344.340000",
     "adSpendCost": "210.000000",
@@ -249,6 +252,7 @@
 - `country`: 国家（空值统一归一为 `XX`）
 - `dauUsers`: 活跃用户数
 - `newUsers`: 新增用户数
+- `reportNewUsers`: 上报新增用户数（首次上报日期为当日的去重用户数，来源 `v3_user_report_count`）
 - `adRevenue`: 广告收入
 - `adRequests`: 请求数
 - `adMatchedRequests`: 匹配数

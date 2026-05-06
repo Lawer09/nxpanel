@@ -74,8 +74,9 @@ class AggregateProjectDailyData extends Command
         $adRevenueMap = $this->queryAdRevenueMetrics($date);
         $adSpendMap = $this->queryAdSpendMetrics($date);
         $userMap = $this->queryUserMetrics($date);
+        $reportNewUsersMap = $this->queryReportNewUsersMetrics($date);
 
-        $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap]);
+        $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap]);
 
         $trafficProjectCodes = DB::table('project_traffic_platform_accounts')
             ->where('enabled', '=', 1)
@@ -102,7 +103,7 @@ class AggregateProjectDailyData extends Command
         }
 
         $allKeys = [];
-        foreach ([$adRevenueMap, $adSpendMap, $userMap, $trafficMap] as $map) {
+        foreach ([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap, $trafficMap] as $map) {
             foreach (array_keys($map) as $key) {
                 $allKeys[$key] = true;
             }
@@ -128,6 +129,7 @@ class AggregateProjectDailyData extends Command
 
             $dauUsers = (int) ($userMap[$key]['dau_users'] ?? 0);
             $newUsers = (int) ($userMap[$key]['new_users'] ?? 0);
+            $reportNewUsers = (int) ($reportNewUsersMap[$key]['report_new_users'] ?? 0);
 
             $adSpendCost = $this->decimal($adSpendMap[$key]['ad_spend_cost'] ?? 0);
             $adSpendClicks = (int) ($adSpendMap[$key]['ad_spend_clicks'] ?? 0);
@@ -155,6 +157,7 @@ class AggregateProjectDailyData extends Command
                 'country' => $country,
                 'dau_users' => $dauUsers,
                 'new_users' => $newUsers,
+                'report_new_users' => $reportNewUsers,
                 'ad_revenue' => $adRevenue,
                 'ad_requests' => $adRequests,
                 'ad_matched_requests' => $adMatchedRequests,
@@ -183,6 +186,7 @@ class AggregateProjectDailyData extends Command
             [
                 'dau_users',
                 'new_users',
+                'report_new_users',
                 'ad_revenue',
                 'ad_requests',
                 'ad_matched_requests',
@@ -510,6 +514,38 @@ class AggregateProjectDailyData extends Command
         }
 
         return $countryUsageMb;
+    }
+
+    private function queryReportNewUsersMetrics(string $date): array
+    {
+        $rows = DB::table('v3_user_report_count as urc')
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->join(DB::raw('(SELECT user_id, MIN(date) as first_report_date FROM v3_user_report_count GROUP BY user_id) as first_seen'), function ($join) {
+                $join->on('first_seen.user_id', '=', 'urc.user_id')
+                    ->on('first_seen.first_report_date', '=', 'urc.date');
+            })
+            ->where('urc.date', '=', $date)
+            ->selectRaw('urc.date as report_date')
+            ->selectRaw('puam.project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as report_new_users')
+            ->groupBy('urc.date', 'puam.project_code')
+            ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeDimensionKey((string) $row->report_date, (string) $row->project_code, $country);
+            $result[$key] = [
+                'report_new_users' => (int) ($row->report_new_users ?? 0),
+            ];
+        }
+
+        return $result;
     }
 
     private function buildProjectCodeSetFromDimensionMaps(array $dimensionMaps): array

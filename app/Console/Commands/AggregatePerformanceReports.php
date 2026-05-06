@@ -35,11 +35,6 @@ class AggregatePerformanceReports extends Command
         $prevBucket = $now->copy()->subMinutes(5);
         $bucketKey = NodePerformanceService::bucketKeyAt($prevBucket);
 
-        // 对齐到该桶的时间窗口
-        $minute = (int) floor($prevBucket->minute / 5) * 5;
-        $date = $prevBucket->toDateString();
-        $hour = $prevBucket->hour;
-
         // 2. 从 Redis 弹出该桶全部数据
         $rawPayloads = NodePerformanceService::popBucket($bucketKey, $batchSize);
 
@@ -68,7 +63,11 @@ class AggregatePerformanceReports extends Command
         }));
 
         $grouped = collect($internalNodeRecords)->groupBy(function ($record) {
+            $bucket = $this->resolveEventBucket($record);
             return implode('|', [
+                $bucket['date'],
+                $bucket['hour'],
+                $bucket['minute'],
                 $record['node_id'] ?? 0,
                 $record['client_country'] ?? '',
                 $record['platform'] ?? '',
@@ -86,11 +85,12 @@ class AggregatePerformanceReports extends Command
             $avgDelay = $items->avg('delay');
             $avgSuccessRate = $items->avg('success_rate');
             $totalCount = $items->count();
+            $bucket = $this->resolveEventBucket($first);
 
             $upsertData[] = [
-                'date'             => $date,
-                'hour'             => $hour,
-                'minute'           => $minute,
+                'date'             => $bucket['date'],
+                'hour'             => $bucket['hour'],
+                'minute'           => $bucket['minute'],
                 'node_id'          => (int) ($first['node_id'] ?? 0),
                 'client_country'   => $first['client_country'] ?? null,
                 'platform'         => $first['platform'] ?? null,
@@ -104,7 +104,7 @@ class AggregatePerformanceReports extends Command
         }
 
         // 5.1 探测状态/错误码聚合（用于节点错误排查）
-        $this->aggregateProbeMetrics($probeNodeRecords, $date, $hour, $minute);
+        $this->aggregateProbeMetrics($probeNodeRecords);
 
         // 5.2 节点流量聚合（用于客户端上报流量分析，按 arise_timestamp 归桶）
         $this->aggregateTrafficMetrics($probeNodeRecords);
@@ -145,7 +145,7 @@ class AggregatePerformanceReports extends Command
         $this->info("Aggregated " . count($upsertData) . " dimension groups into DB.");
 
         // 6. 用户上报次数统计（按 payload 次数统计；一个 batchReport 记 1 次）
-        $this->aggregateUserReportCount($rawPayloads, $date, $hour, $minute);
+        $this->aggregateUserReportCount($rawPayloads);
 
         // 7. 清理旧数据
         $this->pruneOldData();
@@ -154,9 +154,6 @@ class AggregatePerformanceReports extends Command
             'bucket'          => $bucketKey,
             'raw_count'       => count($rawRecords),
             'dimension_count' => count($upsertData),
-            'date'            => $date,
-            'hour'            => $hour,
-            'minute'          => $minute,
         ]);
 
         return self::SUCCESS;
@@ -184,7 +181,10 @@ class AggregatePerformanceReports extends Command
             $reports = is_array($payload['reports'] ?? null) ? $payload['reports'] : [];
             $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? 0);
             $clientIp = $payload['clientIp'] ?? $payload['client_ip'] ?? null;
-            $reportedAt = $payload['reported_at'] ?? ($metadata['timestamp'] ?? now()->getTimestampMs());
+            $eventTimestampMs = $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
+                ?? $this->normalizeTimestampMs($payload['reported_at'] ?? null)
+                ?? now()->getTimestampMs();
+            $reportedAt = $payload['reported_at'] ?? $eventTimestampMs;
             $createdAt = $payload['created_at'] ?? now()->toDateTimeString();
 
             // reports 为空时也保留一条，用于用户上报次数统计
@@ -209,6 +209,7 @@ class AggregatePerformanceReports extends Command
                     'error_code' => null,
                     'vpn_user_time_seconds' => 0,
                     'vpn_user_traffic_mb' => 0.0,
+                    'event_timestamp_ms' => $eventTimestampMs,
                     'arise_timestamp_ms' => null,
                     'reported_at' => $reportedAt,
                     'created_at' => $createdAt,
@@ -264,6 +265,7 @@ class AggregatePerformanceReports extends Command
                     'error_code' => $errorCode,
                     'vpn_user_time_seconds' => $vpnUserTimeSeconds,
                     'vpn_user_traffic_mb' => $vpnUserTrafficMb,
+                    'event_timestamp_ms' => $eventTimestampMs,
                     'arise_timestamp_ms' => $ariseTimestampMs,
                     'reported_at' => $reportedAt,
                     'created_at' => $createdAt,
@@ -277,7 +279,7 @@ class AggregatePerformanceReports extends Command
     /**
      * 探测数据聚合：按节点 + 环境 + 阶段 + 状态 + 错误码汇总
      */
-    private function aggregateProbeMetrics(array $nodeRecords, string $date, int $hour, int $minute): void
+    private function aggregateProbeMetrics(array $nodeRecords): void
     {
         $probeRecords = array_values(array_filter($nodeRecords, function ($record) {
             return !empty($record['status']) || !empty($record['error_code']) || !empty($record['probe_stage']);
@@ -304,10 +306,11 @@ class AggregatePerformanceReports extends Command
 
         foreach ($grouped as $items) {
             $first = $items->first();
+            $bucket = $this->resolveEventBucket($first);
             $dimensionHash = md5(implode('|', [
-                $date,
-                $hour,
-                $minute,
+                $bucket['date'],
+                $bucket['hour'],
+                $bucket['minute'],
                 (int) ($first['node_id'] ?? 0),
                 (string) ($first['node_ip'] ?? ''),
                 (string) ($first['client_country'] ?? ''),
@@ -325,9 +328,9 @@ class AggregatePerformanceReports extends Command
                     'dimension_hash' => $dimensionHash,
                 ],
                 [
-                    'date' => $date,
-                    'hour' => $hour,
-                    'minute' => $minute,
+                    'date' => $bucket['date'],
+                    'hour' => $bucket['hour'],
+                    'minute' => $bucket['minute'],
                     'node_id' => (int) ($first['node_id'] ?? 0),
                     'node_ip' => $first['node_ip'] ?? null,
                     'client_country' => $first['client_country'] ?? null,
@@ -427,7 +430,7 @@ class AggregatePerformanceReports extends Command
      * 按用户聚合上报次数，写入 v3_user_report_count
      * 统计口径：每个 payload（即一次 batchReport）计 1 次，不按 reports 条数累计
      */
-    private function aggregateUserReportCount(array $rawPayloads, string $date, int $hour, int $minute): void
+    private function aggregateUserReportCount(array $rawPayloads): void
     {
         $payloadRows = [];
 
@@ -443,6 +446,8 @@ class AggregatePerformanceReports extends Command
             if ($userId <= 0) {
                 continue;
             }
+
+            $bucket = $this->resolvePayloadBucket($payload, $metadata);
 
             // 兼容旧格式：单条记录直传 node_id
             if (array_key_exists('node_id', $payload)) {
@@ -465,20 +470,34 @@ class AggregatePerformanceReports extends Command
                 'platform' => $metadata['platform'] ?? ($payload['platform'] ?? null),
                 'app_id' => $metadata['app_id'] ?? ($payload['app_id'] ?? null),
                 'app_version' => $metadata['app_version'] ?? ($payload['app_version'] ?? null),
+                'date' => $bucket['date'],
+                'hour' => $bucket['hour'],
+                'minute' => $bucket['minute'],
             ];
         }
 
-        $userGrouped = collect($payloadRows)->groupBy('user_id');
+        $userGrouped = collect($payloadRows)->groupBy(function ($row) {
+            return implode('|', [
+                $row['date'],
+                $row['hour'],
+                $row['minute'],
+                $row['user_id'],
+            ]);
+        });
 
-        foreach ($userGrouped as $userId => $items) {
+        foreach ($userGrouped as $items) {
             $last = $items->last();
+            $userId = (int) ($last['user_id'] ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
 
             DB::table('v3_user_report_count')->updateOrInsert(
                 [
-                    'date'    => $date,
-                    'hour'    => $hour,
-                    'minute'  => $minute,
-                    'user_id' => (int) $userId,
+                    'date'    => $last['date'],
+                    'hour'    => (int) $last['hour'],
+                    'minute'  => (int) $last['minute'],
+                    'user_id' => $userId,
                 ],
                 [
                     'report_count'   => DB::raw('report_count + ' . $items->count()),
@@ -622,7 +641,40 @@ class AggregatePerformanceReports extends Command
     private function resolveTrafficBucket(array $record): array
     {
         $timestampMs = $this->normalizeTimestampMs($record['arise_timestamp_ms'] ?? null)
+            ?? $this->normalizeTimestampMs($record['event_timestamp_ms'] ?? null)
             ?? $this->normalizeTimestampMs($record['reported_at'] ?? null)
+            ?? now()->getTimestampMs();
+
+        $time = Carbon::createFromTimestampMs($timestampMs);
+        $minute = (int) floor($time->minute / 5) * 5;
+
+        return [
+            'date' => $time->toDateString(),
+            'hour' => (int) $time->hour,
+            'minute' => $minute,
+        ];
+    }
+
+    private function resolveEventBucket(array $record): array
+    {
+        $timestampMs = $this->normalizeTimestampMs($record['event_timestamp_ms'] ?? null)
+            ?? $this->normalizeTimestampMs($record['reported_at'] ?? null)
+            ?? now()->getTimestampMs();
+
+        $time = Carbon::createFromTimestampMs($timestampMs);
+        $minute = (int) floor($time->minute / 5) * 5;
+
+        return [
+            'date' => $time->toDateString(),
+            'hour' => (int) $time->hour,
+            'minute' => $minute,
+        ];
+    }
+
+    private function resolvePayloadBucket(array $payload, array $metadata): array
+    {
+        $timestampMs = $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
+            ?? $this->normalizeTimestampMs($payload['reported_at'] ?? null)
             ?? now()->getTimestampMs();
 
         $time = Carbon::createFromTimestampMs($timestampMs);

@@ -153,6 +153,7 @@ class ProjectAggregateController extends Controller
                 }
 
                 $groupQuery->selectRaw('SUM(new_users) as new_users')
+                    ->selectRaw('SUM(report_new_users) as report_new_users')
                     ->selectRaw('SUM(dau_users) as dau_users')
                     ->selectRaw('SUM(ad_revenue) as ad_revenue')
                     ->selectRaw('SUM(ad_requests) as ad_requests')
@@ -200,6 +201,7 @@ class ProjectAggregateController extends Controller
                     'country' => $country,
                     'dauUsers' => (int) $row->dau_users,
                     'newUsers' => (int) $row->new_users,
+                    'reportNewUsers' => (int) ($row->report_new_users ?? 0),
                     'adRevenue' => $this->formatDecimal($row->ad_revenue),
                     'adRequests' => (int) $row->ad_requests,
                     'adMatchedRequests' => (int) $row->ad_matched_requests,
@@ -273,6 +275,7 @@ class ProjectAggregateController extends Controller
             }
 
             $query->selectRaw('SUM(new_users) as new_users')
+                ->selectRaw('SUM(report_new_users) as report_new_users')
                 ->selectRaw('SUM(dau_users) as dau_users')
                 ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_requests) as ad_requests')
@@ -296,10 +299,12 @@ class ProjectAggregateController extends Controller
                 $trafficCost = (float) ($row->traffic_cost ?? 0);
                 $profit = (float) ($row->profit ?? 0);
                 $newUsers = (float) ($row->new_users ?? 0);
+                $reportNewUsers = (float) ($row->report_new_users ?? 0);
                 $costTotal = $adSpendCost + $trafficCost;
 
                 $item = [
                     'newUsers' => (int) $newUsers,
+                    'reportNewUsers' => (int) $reportNewUsers,
                     'dauUsers' => (int) ($row->dau_users ?? 0),
                     'adRevenue' => $this->formatDecimal($adRevenue),
                     'adRequests' => (int) $adRequests,
@@ -371,6 +376,7 @@ class ProjectAggregateController extends Controller
 
             $rows = $query->selectRaw($timeExpr . ' as time')
                 ->selectRaw('SUM(new_users) as new_users')
+                ->selectRaw('SUM(report_new_users) as report_new_users')
                 ->selectRaw('SUM(dau_users) as dau_users')
                 ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
@@ -386,11 +392,13 @@ class ProjectAggregateController extends Controller
                 $trafficCost = (float) ($row->traffic_cost ?? 0);
                 $profit = (float) ($row->profit ?? 0);
                 $newUsers = (float) ($row->new_users ?? 0);
+                $reportNewUsers = (float) ($row->report_new_users ?? 0);
                 $costTotal = $adSpendCost + $trafficCost;
 
                 return [
                     'time' => (string) $row->time,
                     'newUsers' => (int) $newUsers,
+                    'reportNewUsers' => (int) $reportNewUsers,
                     'dauUsers' => (int) ($row->dau_users ?? 0),
                     'adRevenue' => $this->formatDecimal($row->ad_revenue),
                     'adSpendCost' => $this->formatDecimal($adSpendCost),
