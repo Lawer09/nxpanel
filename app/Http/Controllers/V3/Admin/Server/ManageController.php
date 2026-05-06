@@ -569,7 +569,7 @@ class ManageController extends V2ManageController
             'NODE_ID'   => $server->id,
             'CERT_MODE' => 'dns',
             'CERT_DOMAIN' => $server->host,
-            'CERT_EMAIL' => env('TLS_EMAIL', ''),
+            'CERT_EMAIL' => config('app.tls_email', ''),
         ];
 
         if (!$server) {
