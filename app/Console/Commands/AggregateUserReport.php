@@ -655,6 +655,19 @@ class AggregateUserReport extends Command
             return 0;
         }
 
+        if (preg_match('/^(\d{1,3}):(\d{2})(?::(\d{2}))?$/', $text, $m) === 1) {
+            if (isset($m[3]) && $m[3] !== '') {
+                $hours = (int) $m[1];
+                $minutes = (int) $m[2];
+                $seconds = (int) $m[3];
+                return max(0, $hours * 3600 + $minutes * 60 + $seconds);
+            }
+
+            $minutes = (int) $m[1];
+            $seconds = (int) $m[2];
+            return max(0, $minutes * 60 + $seconds);
+        }
+
         if (preg_match('/^\d+$/', $text) === 1) {
             return (int) $text;
         }
@@ -685,8 +698,9 @@ class AggregateUserReport extends Command
             return 0.0;
         }
 
-        $text = str_replace([' ', ','], ['', '.'], $text);
-        if (!preg_match('/([0-9]+(?:\.[0-9]+)?)/', $text, $m)) {
+        $text = preg_replace('/\s+/', '', $text);
+        $text = str_replace(',', '.', (string) $text);
+        if (!preg_match('/^([0-9]+(?:\.[0-9]+)?)([a-z]*)$/', (string) $text, $m)) {
             return 0.0;
         }
 
@@ -695,13 +709,21 @@ class AggregateUserReport extends Command
             return 0.0;
         }
 
-        if (str_contains($text, 'gib') || str_contains($text, 'gb')) {
+        $unit = $m[2] ?? '';
+
+        if (in_array($unit, ['', 'm', 'mb', 'mib'], true)) {
+            return round($num, 3);
+        }
+
+        if (in_array($unit, ['g', 'gb', 'gib'], true)) {
             return round($num * 1024, 3);
         }
-        if (str_contains($text, 'kib') || str_contains($text, 'kb')) {
+
+        if (in_array($unit, ['k', 'kb', 'kib'], true)) {
             return round($num / 1024, 3);
         }
-        if (str_contains($text, 'b') && !str_contains($text, 'mb')) {
+
+        if (in_array($unit, ['b', 'byte', 'bytes'], true)) {
             return round($num / 1024 / 1024, 3);
         }
 
