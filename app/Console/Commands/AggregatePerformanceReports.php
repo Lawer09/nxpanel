@@ -48,6 +48,9 @@ class AggregatePerformanceReports extends Command
 
         $this->info("Popped " . count($rawPayloads) . " raw payloads from bucket: {$bucketKey}");
 
+        // 2.1 归档原始 payload 到 OSS（保持原始结构，便于后续审计回放）
+        $this->archiveRawPayloadsToOss($rawPayloads, $bucketKey);
+
         // 3. 解析 payload 为扁平记录（兼容旧格式）
         $rawRecords = $this->flattenPayloads($rawPayloads);
 
@@ -110,7 +113,9 @@ class AggregatePerformanceReports extends Command
         $this->aggregateProbeMetrics($probeNodeRecords, $writeTemp);
 
         // 5.2 节点流量聚合（用于客户端上报流量分析，按 arise_timestamp 归桶）
-        $this->aggregateTrafficMetrics($probeNodeRecords, $writeTemp);
+        // 注意：这里必须使用 rawRecords，不能使用 probeNodeRecords。
+        // probeNodeRecords 会过滤掉 node_id=0 且 node_ip 为空的数据，导致客户端流量无法入表。
+        $this->aggregateTrafficMetrics($rawRecords, $writeTemp);
 
         // 5. 写入 DB（upsert：同维度累加）
         foreach ($upsertData as $row) {
@@ -207,6 +212,14 @@ class AggregatePerformanceReports extends Command
 
             $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
             $metadataTimestampMs = $this->resolveMetadataTimestampMs($metadata);
+            $vpnData = $this->extractVpnConnectData($payload);
+            $vpnStatus = $this->normalizeStatus($vpnData['vpn_status'] ?? null);
+            $vpnProbeStage = $this->normalizeProbeStage($vpnData['vpn_type'] ?? null);
+            $vpnErrorCode = $this->normalizeErrorCode($vpnData['prohibition_connection'] ?? ($vpnData['vpn_error_msg'] ?? null));
+            $vpnNodeIp = $this->normalizeNodeIp($vpnData['vpn_node_ip'] ?? ($vpnData['vpn_node_address'] ?? null));
+            $vpnUserTimeSeconds = $this->parseUsageSeconds($vpnData['vpn_user_time'] ?? null);
+            $vpnUserTrafficMb = $this->parseUsageMb($vpnData['vpn_user_traffic'] ?? null);
+            $vpnAriseTimestampMs = $this->normalizeTimestampMs($vpnData['arise_timestamp'] ?? null);
 
             // 兼容旧格式：单条记录直接入列
             if (array_key_exists('node_id', $payload)) {
@@ -217,7 +230,7 @@ class AggregatePerformanceReports extends Command
             }
 
             $reports = is_array($payload['reports'] ?? null) ? $payload['reports'] : [];
-            $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? 0);
+            $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? ($vpnData['my_user_id'] ?? 0));
             $clientIp = $payload['clientIp'] ?? $payload['client_ip'] ?? null;
             $eventTimestampMs = $metadataTimestampMs;
             $reportedAt = $payload['reported_at'] ?? $eventTimestampMs;
@@ -225,10 +238,15 @@ class AggregatePerformanceReports extends Command
 
             // reports 为空时也保留一条，用于用户上报次数统计
             if (empty($reports)) {
+                $emptyNodeId = 0;
+                if ($vpnNodeIp) {
+                    $emptyNodeId = $this->resolveNodeIdByNodeIp($vpnNodeIp);
+                }
+
                 $flattened[] = [
                     'user_id' => $userId,
-                    'node_id' => 0,
-                    'node_ip' => null,
+                    'node_id' => $emptyNodeId,
+                    'node_ip' => $vpnNodeIp,
                     'delay' => 0,
                     'success_rate' => 0,
                     'client_ip' => $clientIp,
@@ -240,14 +258,21 @@ class AggregatePerformanceReports extends Command
                     'app_id' => $metadata['app_id'] ?? null,
                     'app_version' => $metadata['app_version'] ?? null,
                     'connect_country' => $metadata['connect_country'] ?? null,
-                    'status' => null,
-                    'probe_stage' => null,
-                    'error_code' => null,
-                    'vpn_user_time_seconds' => 0,
-                    'vpn_user_traffic_mb' => 0.0,
+                    'status' => $vpnStatus,
+                    'probe_stage' => $vpnProbeStage,
+                    'error_code' => $vpnErrorCode,
+                    'vpn_user_time_seconds' => $vpnUserTimeSeconds,
+                    'vpn_user_traffic_mb' => $vpnUserTrafficMb,
+                    'vpn_status' => $vpnData['vpn_status'] ?? null,
+                    'prohibition_connection' => $vpnData['prohibition_connection'] ?? null,
+                    'vpn_type' => $vpnData['vpn_type'] ?? null,
+                    'vpn_error_msg' => $vpnData['vpn_error_msg'] ?? null,
+                    'vpn_node_address' => $vpnData['vpn_node_address'] ?? null,
+                    'vpn_source' => $vpnData['vpn_source'] ?? null,
+                    'my_user_id' => isset($vpnData['my_user_id']) ? (int) $vpnData['my_user_id'] : null,
                     'metadata_timestamp_ms' => $metadataTimestampMs,
                     'event_timestamp_ms' => $eventTimestampMs,
-                    'arise_timestamp_ms' => null,
+                    'arise_timestamp_ms' => $vpnAriseTimestampMs,
                     'reported_at' => $reportedAt,
                     'created_at' => $createdAt,
                 ];
@@ -259,14 +284,18 @@ class AggregatePerformanceReports extends Command
                     continue;
                 }
 
-                $status = $this->normalizeStatus($report['status'] ?? null);
-                $probeStage = $this->normalizeProbeStage($report['probe_stage'] ?? null);
-                $errorCode = $this->normalizeErrorCode($report['error_code'] ?? null);
-                $nodeIp = $this->normalizeNodeIp($report['node_ip'] ?? ($report['vpn_node_ip'] ?? null));
+                $status = $vpnStatus ?? $this->normalizeStatus($report['status'] ?? null);
+                $probeStage = $vpnProbeStage ?? $this->normalizeProbeStage($report['probe_stage'] ?? null);
+                $errorCode = $vpnErrorCode ?? $this->normalizeErrorCode($report['error_code'] ?? null);
+                $nodeIp = $vpnNodeIp ?? $this->normalizeNodeIp($report['node_ip'] ?? ($report['vpn_node_ip'] ?? null));
                 $nodeId = (int) ($report['node_id'] ?? 0);
-                $vpnUserTimeSeconds = $this->parseUsageSeconds($report['vpn_user_time'] ?? null);
-                $vpnUserTrafficMb = $this->parseUsageMb($report['vpn_user_traffic'] ?? null);
-                $ariseTimestampMs = $this->normalizeTimestampMs($report['arise_timestamp'] ?? null);
+                $vpnUserTimeSecondsCurrent = $vpnUserTimeSeconds > 0
+                    ? $vpnUserTimeSeconds
+                    : $this->parseUsageSeconds($report['vpn_user_time'] ?? null);
+                $vpnUserTrafficMbCurrent = $vpnUserTrafficMb > 0
+                    ? $vpnUserTrafficMb
+                    : $this->parseUsageMb($report['vpn_user_traffic'] ?? null);
+                $ariseTimestampMs = $vpnAriseTimestampMs ?? $this->normalizeTimestampMs($report['arise_timestamp'] ?? null);
 
                 // 外部节点上报只有 IP/域名 时，尝试映射到内部 node_id（缓存 + DB）
                 if ($nodeId <= 0 && $nodeIp) {
@@ -300,8 +329,15 @@ class AggregatePerformanceReports extends Command
                     'status' => $status,
                     'probe_stage' => $probeStage,
                     'error_code' => $errorCode,
-                    'vpn_user_time_seconds' => $vpnUserTimeSeconds,
-                    'vpn_user_traffic_mb' => $vpnUserTrafficMb,
+                    'vpn_user_time_seconds' => $vpnUserTimeSecondsCurrent,
+                    'vpn_user_traffic_mb' => $vpnUserTrafficMbCurrent,
+                    'vpn_status' => $vpnData['vpn_status'] ?? null,
+                    'prohibition_connection' => $vpnData['prohibition_connection'] ?? null,
+                    'vpn_type' => $vpnData['vpn_type'] ?? null,
+                    'vpn_error_msg' => $vpnData['vpn_error_msg'] ?? null,
+                    'vpn_node_address' => $vpnData['vpn_node_address'] ?? null,
+                    'vpn_source' => $vpnData['vpn_source'] ?? null,
+                    'my_user_id' => isset($vpnData['my_user_id']) ? (int) $vpnData['my_user_id'] : null,
                     'metadata_timestamp_ms' => $metadataTimestampMs,
                     'event_timestamp_ms' => $eventTimestampMs,
                     'arise_timestamp_ms' => $ariseTimestampMs,
@@ -661,6 +697,12 @@ class AggregatePerformanceReports extends Command
         }
 
         $status = strtolower(trim($status));
+        $status = match ($status) {
+            'ok', 'connected', 'connect_success', 'successed' => 'success',
+            'fail', 'failed_connect', 'connect_failed', 'error', 'disconnected', 'disconnect', 'forbidden' => 'failed',
+            'canceled' => 'cancelled',
+            default => $status,
+        };
         $allowed = ['success', 'failed', 'timeout', 'cancelled'];
 
         return in_array($status, $allowed, true) ? $status : null;
@@ -835,6 +877,32 @@ class AggregatePerformanceReports extends Command
         return null;
     }
 
+    private function extractVpnConnectData(array $payload): array
+    {
+        $userDefault = $payload['user_default'] ?? null;
+        if (is_string($userDefault)) {
+            $decoded = json_decode($userDefault, true);
+            $userDefault = is_array($decoded) ? $decoded : null;
+        }
+
+        if (!is_array($userDefault)) {
+            return [];
+        }
+
+        $type = strtolower(trim((string) ($userDefault['type'] ?? '')));
+        if ($type !== 'vpn_connect') {
+            return [];
+        }
+
+        $data = $userDefault['data'] ?? null;
+        if (is_string($data)) {
+            $decoded = json_decode($data, true);
+            $data = is_array($decoded) ? $decoded : [];
+        }
+
+        return is_array($data) ? $data : [];
+    }
+
     private function parseUsageSeconds($value): int
     {
         if ($value === null || $value === '') {
@@ -906,6 +974,51 @@ class AggregatePerformanceReports extends Command
         }
 
         return round($valueNum, 3);
+    }
+
+    /**
+     * 将 Redis 弹出的原始 payload 归档到 OSS（NDJSON）
+     * 保留最原始结构，便于问题追溯与回放。
+     */
+    private function archiveRawPayloadsToOss(array $payloads, string $bucketKey): void
+    {
+        if (empty($payloads)) {
+            return;
+        }
+
+        if (!OssArchiveService::enabled()) {
+            $this->warn('OSS not enabled, skipping raw payload archive.');
+            return;
+        }
+
+        $now = Carbon::now();
+        $safeBucketKey = preg_replace('/[^A-Za-z0-9_\-:]/', '_', $bucketKey) ?: 'unknown_bucket';
+        $path = sprintf(
+            'perf/raw_payload/%s/%s/%s/%s_%s.ndjson',
+            $now->format('Y'),
+            $now->format('m'),
+            $now->format('d'),
+            $safeBucketKey,
+            uniqid()
+        );
+
+        $ndjson = collect($payloads)
+            ->map(fn($r) => json_encode($r, JSON_UNESCAPED_UNICODE))
+            ->implode("\n");
+
+        try {
+            $ok = Storage::disk('oss')->put($path, $ndjson);
+            if ($ok) {
+                $this->info('Archived ' . count($payloads) . " raw payloads to OSS: {$path}");
+            } else {
+                Log::warning('perf:aggregate raw payload OSS upload failed', ['path' => $path]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('perf:aggregate raw payload OSS upload exception', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -31,6 +31,9 @@ class PerformanceBatchReport extends FormRequest
             'metadata.isp'               => 'nullable|string|max:255',
             'metadata.timestamp'         => 'required|integer',
             'metadata.connect_country'   => 'nullable|string|max:2',
+            'user_default'               => 'nullable|array',
+            'user_default.type'          => 'nullable|string|max:64',
+            'user_default.data'          => 'nullable',
         ];
     }
 
@@ -54,6 +57,8 @@ class PerformanceBatchReport extends FormRequest
             'metadata.array'                      => 'metadata必须为对象',
             'metadata.country.max'                => 'country为2位国家缩写',
             'metadata.connect_country.max'        => 'connect_country为2位国家缩写',
+            'user_default.array'                  => 'user_default必须为对象',
+            'user_default.type.max'               => 'user_default.type长度不能超过64',
         ];
     }
 }
