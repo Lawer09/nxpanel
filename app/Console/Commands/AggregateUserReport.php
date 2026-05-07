@@ -102,12 +102,11 @@ class AggregateUserReport extends Command
         }
 
         $path = sprintf(
-            'user-report/raw/dt=%s/hour=%s/minute=%s/bucket=%s/part-%s-%s.ndjson',
-            $bucketTime->format('Y-m-d'),
-            $bucketTime->format('H'),
-            $bucketTime->format('i'),
-            $bucketTime->format('YmdHi'),
-            now()->format('His'),
+            'user_report/raw/%s/%s/%s/%s_%s.ndjson',
+            now()->format('Y'),
+            now()->format('m'),
+            now()->format('d'),
+            now()->format('H-i-s'),
             uniqid()
         );
 

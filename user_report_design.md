@@ -93,7 +93,7 @@
 ### 4.3 OSS 归档规范
 
 - 路径建议：
-  - `user-report/raw/dt=YYYY-MM-DD/hour=HH/minute=mm/bucket={bucket}/part-{ts}-{rand}.ndjson.gz`
+  - `user_report/raw/YYYY/MM/DD/HH-mm-ss_{rand}.ndjson`
 - 内容：原始 payload（补充字段后）逐行 NDJSON。
 - 附加 manifest（可选）：记录 `row_count/md5/created_at`，方便回放和审计。
 
@@ -178,33 +178,18 @@
 
 ---
 
-## 7. 查询缓存设计（重点）
+## 7. 查询策略（当前）
 
-### 7.1 缓存模式
+- 当前阶段：`summary/nodeSummary/traffic/nodeFail` 四个查询接口均**直查 DB**，不启用缓存。
+- 直查原因：便于口径联调、排查与快速修正，避免缓存带来的观测偏差。
+- 性能保障：依赖统计表索引、时间范围约束与分页查询控制。
 
-- 使用 Cache-Aside（查缓存 -> miss 查 DB -> 回填缓存）。
-- 缓存 key 建议：
-  - `user_report:q:summary:{sha1(params+version)}`
-  - `user_report:q:node_summary:{sha1(params+version)}`
-  - `user_report:q:traffic:{sha1(params+version)}`
-  - `user_report:q:node_fail:{sha1(params+version)}`
+### 7.1 后续扩展（预留）
 
-### 7.2 版本化失效（推荐）
-
-- 维护版本号 key：`user_report:qv:{table}:{date}:{hour}`。
-- 每次该小时数据写入后 `INCR` 对应版本。
-- 查询缓存 key 带版本号，避免全量删除和大范围 scan。
-
-### 7.3 TTL 策略
-
-- 最近 24h 查询：TTL 120s（高实时）。
-- 2~7 天查询：TTL 600s。
-- 7 天以上：TTL 1800s。
-- 空结果短缓存：30s，防穿透。
-
-### 7.4 热点预热
-
-- 每次聚合完成后，异步预热常用看板查询（最近 1h/24h、Top N 节点失败）。
+- 若后续查询压力上升，可按 Cache-Aside 增加缓存。
+- 建议缓存 key：`user_report:q:{scope}:{hash}`。
+- 建议版本键：`user_report:qv:{table}:{date}:{hour}`。
+- 建议先对 `nodeSummary/traffic/nodeFail` 开启，`summary` 继续直查。
 
 ---
 
@@ -233,7 +218,7 @@
 1. 新增 user_report Redis key 与写入逻辑（不改旧 key）。
 2. 新建 4 张统计表与索引。
 3. 实现 `user_report:aggregate`（先 OSS 后聚合）。
-4. 接入查询接口与缓存版本化策略。
+4. 接入查询接口（当前直查 DB，无缓存）。
 5. 灰度开启 `USER_REPORT_ENABLED`，双写观察。
 6. 对账（新链路与旧链路总量/趋势），通过后扩大流量。
 

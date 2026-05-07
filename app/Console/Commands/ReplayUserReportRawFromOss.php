@@ -52,7 +52,8 @@ class ReplayUserReportRawFromOss extends Command
             }
         }
 
-        $prefix = sprintf('user-report/raw/dt=%s', $date);
+        $parts = explode('-', $date);
+        $prefix = sprintf('user_report/raw/%s/%s/%s', $parts[0], $parts[1], $parts[2]);
         $files = Storage::disk('oss')->allFiles($prefix);
         if (empty($files)) {
             $this->warn('No OSS files found under: ' . $prefix);
@@ -61,7 +62,7 @@ class ReplayUserReportRawFromOss extends Command
 
         $bucketFiles = [];
         foreach ($files as $path) {
-            $meta = $this->extractBucketMeta($path);
+            $meta = $this->extractBucketMeta($path, $date);
             if ($meta === null) {
                 continue;
             }
@@ -156,16 +157,22 @@ class ReplayUserReportRawFromOss extends Command
         return self::SUCCESS;
     }
 
-    private function extractBucketMeta(string $path): ?array
+    private function extractBucketMeta(string $path, string $date): ?array
     {
-        if (preg_match('#/hour=(\d{2})/minute=(\d{2})/bucket=(\d{12})/#', $path, $m) !== 1) {
+        $name = pathinfo($path, PATHINFO_FILENAME);
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{2})_[a-f0-9]+$/', (string) $name, $m) !== 1) {
             return null;
         }
 
+        $hour = $m[1];
+        $minute = $m[2];
+        $dateCompact = str_replace('-', '', $date);
+        $bucket = $dateCompact . $hour . $minute;
+
         return [
-            'hour' => $m[1],
-            'minute' => $m[2],
-            'bucket' => $m[3],
+            'hour' => $hour,
+            'minute' => $minute,
+            'bucket' => $bucket,
         ];
     }
 }
