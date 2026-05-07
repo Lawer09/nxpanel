@@ -61,7 +61,7 @@ class AggregateUserReport extends Command
                 $flatRecords = $this->flattenPayloads($payloads);
                 $this->aggregateSummary($payloads);
                 $this->aggregateNodeSummary($flatRecords);
-                $this->aggregateTraffic($flatRecords);
+                $this->aggregateTraffic($payloads, $flatRecords);
                 $this->aggregateNodeFail($flatRecords);
                 $this->pruneNodeFail();
                 DB::commit();
@@ -362,9 +362,44 @@ class AggregateUserReport extends Command
         }
     }
 
-    private function aggregateTraffic(array $records): void
+    private function aggregateTraffic(array $payloads, array $records): void
     {
         $groups = [];
+
+        foreach ($payloads as $payload) {
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+            $userId = (int) ($payload['user_id'] ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $reportAtMs = UserReportService::resolveReportAtMs($metadata);
+            $time = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai');
+            $date = $time->toDateString();
+            $hour = (int) $time->hour;
+            $appId = (string) ($metadata['app_id'] ?? '');
+            $appVersion = (string) ($metadata['app_version'] ?? '');
+            $country = (string) ($metadata['country'] ?? '');
+
+            $key = implode('|', [$date, $hour, $userId, $appId, $appVersion, $country]);
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'date' => $date,
+                    'hour' => $hour,
+                    'user_id' => $userId,
+                    'app_id' => $appId,
+                    'app_version' => $appVersion,
+                    'country' => $country,
+                    'traffic_usage' => 0.0,
+                    'traffic_use_time' => 0,
+                    'compute_count' => 0,
+                ];
+            }
+        }
 
         foreach ($records as $row) {
             $key = implode('|', [
