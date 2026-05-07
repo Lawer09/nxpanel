@@ -830,7 +830,7 @@ class AggregatePerformanceReports extends Command
         try {
             $ok = Storage::disk('oss')->put($path, $ndjson);
             if ($ok) {
-                $this->info("Archived " . count($records) . " raw records to OSS: {$path}");
+                Log::info("Archived " . count($records) . " raw records to OSS: {$path}");
             } else {
                 Log::warning('perf:aggregate OSS upload failed', ['path' => $path]);
             }
