@@ -1159,4 +1159,5 @@ class PerformanceController extends Controller
             'granularity' => $granularity,
         ]);
     }
+
 }

@@ -168,8 +168,20 @@
 
 ## 8. 前端查询接口建议（主表）
 
-- 方法/路径：`POST /api/v3/admin/performance/mainTable/query`
+- 方法/路径：`POST /api/v3/admin/report/node/query`
 - 说明：`groupBy` 支持数组动态聚合；统一返回维度 + 指标
+
+主表请求参数由 `FormRequest` 统一校验：
+
+- `App\\Http\\Requests\\Admin\\NodeMainReportQueryRequest`
+
+实现说明（当前版本）：
+
+- 查询接口从 `v2_node_main_report_aggregated` 读取（不直接在线 join 多源明细表）
+- 聚合任务：`php artisan perf:aggregate-main-table`
+- 调度频率：每 5 分钟（聚合上一 5 分钟桶）
+- 按天重建：`php artisan perf:rebuild-main-table-day 2026-05-07`
+- 按天重建（保留已聚合数据并补算）：`php artisan perf:rebuild-main-table-day 2026-05-07 --keep-existing`
 
 请求体建议：
 
@@ -200,6 +212,56 @@
   - 例如：
     - `node_push_traffic: full | unavailable_by_group`
     - `client_report_traffic: full`
+
+---
+
+## 8.1 子表校对查询接口（用于核对口径）
+
+- 方法/路径：`POST /api/v3/admin/report/node/subtable/query`
+- 说明：从各子表直接聚合查询，便于与主表结果交叉校验
+- 请求校验：`App\\Http\\Requests\\Admin\\NodeSubReportQueryRequest`
+
+`subTable` 可选值：
+
+- `performance` -> `v2_node_performance_aggregated`
+- `probe` -> `v2_node_probe_aggregated`
+- `traffic` -> `v2_node_traffic_aggregated`
+- `server_detail` -> `v2_stat_server_detail`
+- `main_aggregated` -> `v2_node_main_report_aggregated`
+
+请求体示例：
+
+```json
+{
+  "subTable": "probe",
+  "date": "2026-05-07",
+  "hour": 13,
+  "minute": 25,
+  "groupBy": ["date", "hour", "minute", "node_id", "status", "probe_stage"],
+  "filters": {
+    "nodeIds": [12],
+    "appIds": ["com.demo.app"],
+    "platforms": ["android"],
+    "statuses": ["success", "failed", "timeout", "cancelled"],
+    "probeStages": ["node_connect", "post_connect_probe"],
+    "includeExternal": false
+  },
+  "page": 1,
+  "pageSize": 50
+}
+```
+
+返回字段包含：
+
+- `data`: 按 `groupBy` 返回聚合结果
+- `metricMap`: 当前子表返回的指标字段列表
+- `subTable/groupBy/date/hour/minute`: 本次查询上下文
+
+常见校对方式：
+
+1. 先查 `main_aggregated`，确认主表桶内结果。
+2. 再分别查 `performance/probe/traffic/server_detail` 同桶同维度。
+3. 对比主表指标与子表聚合指标是否一致（允许四舍五入差异）。
 
 ---
 

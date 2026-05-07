@@ -33,6 +33,7 @@ use App\Http\Controllers\V3\Admin\TrafficPlatformController;
 use App\Http\Controllers\V3\Admin\TrafficPlatformAccountController;
 use App\Http\Controllers\V3\Admin\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatformSyncController;
+use App\Http\Controllers\V3\Admin\ReportController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -214,6 +215,19 @@ class AdminRoute
                 $router->get('/activeUsersSummary',    [PerformanceController::class, 'getActiveUsersSummary']);
                 $router->get('/userHourlyStats',       [PerformanceController::class, 'getUserHourlyStats']);
                 $router->get('/userGrowth',            [PerformanceController::class, 'getUserGrowth']);
+
+            });
+
+            $router->group([
+                'prefix' => 'report',
+                'middleware' => ['duration']
+            ], function ($router) {
+                $router->post('/node/query', [ReportController::class, 'queryNode']);
+                $router->post('/node/subtable/query', [ReportController::class, 'queryNodeSubTable']);
+                $router->post('/userReport/summary/query', [ReportController::class, 'queryUserReportSummary']);
+                $router->post('/userReport/nodeSummary/query', [ReportController::class, 'queryUserReportNodeSummary']);
+                $router->post('/userReport/traffic/query', [ReportController::class, 'queryUserReportTraffic']);
+                $router->post('/userReport/nodeFail/query', [ReportController::class, 'queryUserReportNodeFail']);
             });
 
             // Realtime User Reports

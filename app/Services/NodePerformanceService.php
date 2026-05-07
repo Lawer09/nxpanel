@@ -41,6 +41,7 @@ class NodePerformanceService
     public static function reportPerformance(int $userId, int $nodeId, array $data, string $clientIp, $request): void
     {
         $metadata = $data['metadata'] ?? [];
+        $reportAt = UserReportService::resolveReportAtMs($metadata);
 
         $data = [
             'metadata' => $metadata,
@@ -51,7 +52,7 @@ class NodePerformanceService
             ]],
             'userId' => $userId,
             'clientIp' => $clientIp,
-            'reported_at' => $metadata['timestamp'] ?? now()->getTimestampMs(),
+            'reported_at' => $reportAt,
             'created_at' => now()->toDateTimeString(),
         ];
 
@@ -59,6 +60,19 @@ class NodePerformanceService
         Redis::rpush($key, json_encode($data, JSON_UNESCAPED_UNICODE));
         // 桶 key 设置 30 分钟过期，防止残留
         Redis::expire($key, 1800);
+
+        if (UserReportService::enabled()) {
+            $userDefault = method_exists($request, 'input') ? ($request->input('user_default') ?? []) : [];
+            UserReportService::pushRawPayload([
+                'user_id' => $userId,
+                'report_at' => $reportAt,
+                'received_at' => now()->getTimestampMs(),
+                'metadata' => $metadata,
+                'reports' => $data['reports'],
+                'user_default' => $userDefault,
+                'client_ip' => $clientIp,
+            ], $reportAt);
+        }
     }
 
     /**
@@ -67,13 +81,14 @@ class NodePerformanceService
     public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, array $userDefault, string $clientIp, $request): void
     {
         $now = now()->toDateTimeString();
+        $reportAt = UserReportService::resolveReportAtMs($metadata);
         $data = [
             'metadata' => $metadata,
             'reports' => $nodeReports,
             'user_default' => $userDefault,
             'userId' => $userId,
             'clientIp' => $clientIp,
-            'reported_at' => $metadata['timestamp'] ?? now()->getTimestampMs(),
+            'reported_at' => $reportAt,
             'created_at' => $now,
         ];
 
@@ -89,6 +104,18 @@ class NodePerformanceService
             'node_count' => count($nodeReports),
             'bucket'  => $key,
         ]);
+
+        if (UserReportService::enabled()) {
+            UserReportService::pushRawPayload([
+                'user_id' => $userId,
+                'report_at' => $reportAt,
+                'received_at' => now()->getTimestampMs(),
+                'metadata' => $metadata,
+                'reports' => $nodeReports,
+                'user_default' => $userDefault,
+                'client_ip' => $clientIp,
+            ], $reportAt);
+        }
     }
 
     /**
