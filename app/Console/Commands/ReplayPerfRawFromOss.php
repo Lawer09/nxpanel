@@ -17,6 +17,7 @@ class ReplayPerfRawFromOss extends Command
         {--hour= : Optional hour, 00-23}
         {--chunk=3000 : Replay chunk size}
         {--batch=5000 : Batch for perf:aggregate}
+        {--temp : Also write to *_temp tables}
         {--dry-run : Only count records without writing}
         {--clear-day : Clear aggregated tables for the day first}';
 
@@ -28,6 +29,7 @@ class ReplayPerfRawFromOss extends Command
         $hour = $this->option('hour');
         $chunkSize = max(100, (int) $this->option('chunk'));
         $batchSize = max(1000, (int) $this->option('batch'));
+        $writeTemp = (bool) $this->option('temp');
         $dryRun = (bool) $this->option('dry-run');
         $clearDay = (bool) $this->option('clear-day');
 
@@ -63,6 +65,13 @@ class ReplayPerfRawFromOss extends Command
             DB::table('v2_node_probe_aggregated')->where('date', $date)->delete();
             DB::table('v2_node_traffic_aggregated')->where('date', $date)->delete();
             DB::table('v3_user_report_count')->where('date', $date)->delete();
+
+            if ($writeTemp) {
+                DB::table('v2_node_performance_aggregated_temp')->where('date', $date)->delete();
+                DB::table('v2_node_probe_aggregated_temp')->where('date', $date)->delete();
+                DB::table('v2_node_traffic_aggregated_temp')->where('date', $date)->delete();
+                DB::table('v3_user_report_count_temp')->where('date', $date)->delete();
+            }
         }
 
         $targetBucketKey = NodePerformanceService::bucketKeyAt(now()->subMinutes(5));
@@ -95,14 +104,14 @@ class ReplayPerfRawFromOss extends Command
                 $totalRecords++;
 
                 if (count($buffer) >= $chunkSize) {
-                    $this->flushChunk($targetBucketKey, $buffer, $batchSize, $dryRun);
+                    $this->flushChunk($targetBucketKey, $buffer, $batchSize, $dryRun, $writeTemp);
                     $buffer = [];
                 }
             }
         }
 
         if (!empty($buffer)) {
-            $this->flushChunk($targetBucketKey, $buffer, $batchSize, $dryRun);
+            $this->flushChunk($targetBucketKey, $buffer, $batchSize, $dryRun, $writeTemp);
         }
 
         $this->info('Replay completed. Total records: ' . $totalRecords);
@@ -154,7 +163,7 @@ class ReplayPerfRawFromOss extends Command
         ];
     }
 
-    private function flushChunk(string $bucketKey, array $payloads, int $batchSize, bool $dryRun): void
+    private function flushChunk(string $bucketKey, array $payloads, int $batchSize, bool $dryRun, bool $writeTemp): void
     {
         $count = count($payloads);
         $this->line('Processing chunk: ' . $count);
@@ -169,9 +178,15 @@ class ReplayPerfRawFromOss extends Command
         }
         Redis::expire($bucketKey, 1800);
 
-        Artisan::call('perf:aggregate', [
+        $arguments = [
             '--batch' => max($batchSize, $count + 10),
-        ]);
+        ];
+
+        if ($writeTemp) {
+            $arguments['--temp'] = true;
+        }
+
+        Artisan::call('perf:aggregate', $arguments);
 
         $output = trim(Artisan::output());
         if ($output !== '') {

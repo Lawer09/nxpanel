@@ -22,13 +22,16 @@ use Illuminate\Support\Facades\Storage;
  */
 class AggregatePerformanceReports extends Command
 {
-    protected $signature = 'perf:aggregate {--batch=5000 : 每次从 Redis 弹出的最大条数}';
+    protected $signature = 'perf:aggregate
+        {--batch=5000 : 每次从 Redis 弹出的最大条数}
+        {--temp : 同时写入 *_temp 调试表}';
 
     protected $description = '聚合 Redis 中的节点性能上报数据（5 分钟粒度），原始数据归档到 OSS';
 
     public function handle(): int
     {
         $batchSize = (int) $this->option('batch');
+        $writeTemp = (bool) $this->option('temp');
 
         // 1. 计算前 5 分钟桶的 key
         $now = Carbon::now();
@@ -104,10 +107,10 @@ class AggregatePerformanceReports extends Command
         }
 
         // 5.1 探测状态/错误码聚合（用于节点错误排查）
-        $this->aggregateProbeMetrics($probeNodeRecords);
+        $this->aggregateProbeMetrics($probeNodeRecords, $writeTemp);
 
         // 5.2 节点流量聚合（用于客户端上报流量分析，按 arise_timestamp 归桶）
-        $this->aggregateTrafficMetrics($probeNodeRecords);
+        $this->aggregateTrafficMetrics($probeNodeRecords, $writeTemp);
 
         // 5. 写入 DB（upsert：同维度累加）
         foreach ($upsertData as $row) {
@@ -140,12 +143,43 @@ class AggregatePerformanceReports extends Command
                     'total_count' => DB::raw('total_count + ' . $row['total_count']),
                 ]
             );
+
+            if ($writeTemp) {
+                DB::table('v2_node_performance_aggregated_temp')->updateOrInsert(
+                    [
+                        'date'           => $row['date'],
+                        'hour'           => $row['hour'],
+                        'minute'         => $row['minute'],
+                        'node_id'        => $row['node_id'],
+                        'client_country' => $row['client_country'],
+                        'platform'       => $row['platform'],
+                        'client_isp'     => $row['client_isp'],
+                        'app_id'         => $row['app_id'],
+                        'app_version'    => $row['app_version'],
+                    ],
+                    [
+                        'avg_success_rate' => DB::raw(sprintf(
+                            'ROUND((avg_success_rate * total_count + %s * %d) / (total_count + %d), 2)',
+                            $row['avg_success_rate'],
+                            $row['total_count'],
+                            $row['total_count']
+                        )),
+                        'avg_delay' => DB::raw(sprintf(
+                            'ROUND((avg_delay * total_count + %s * %d) / (total_count + %d), 2)',
+                            $row['avg_delay'],
+                            $row['total_count'],
+                            $row['total_count']
+                        )),
+                        'total_count' => DB::raw('total_count + ' . $row['total_count']),
+                    ]
+                );
+            }
         }
 
         $this->info("Aggregated " . count($upsertData) . " dimension groups into DB.");
 
         // 6. 用户上报次数统计（按 payload 次数统计；一个 batchReport 记 1 次）
-        $this->aggregateUserReportCount($rawPayloads);
+        $this->aggregateUserReportCount($rawPayloads, $writeTemp);
 
         // 7. 清理旧数据
         $this->pruneOldData();
@@ -283,7 +317,7 @@ class AggregatePerformanceReports extends Command
     /**
      * 探测数据聚合：按节点 + 环境 + 阶段 + 状态 + 错误码汇总
      */
-    private function aggregateProbeMetrics(array $nodeRecords): void
+    private function aggregateProbeMetrics(array $nodeRecords, bool $writeTemp = false): void
     {
         $probeRecords = array_values(array_filter($nodeRecords, function ($record) {
             return !empty($record['status']) || !empty($record['error_code']) || !empty($record['probe_stage']);
@@ -348,6 +382,30 @@ class AggregatePerformanceReports extends Command
                     'total_count' => DB::raw('total_count + ' . $items->count()),
                 ]
             );
+
+            if ($writeTemp) {
+                DB::table('v2_node_probe_aggregated_temp')->updateOrInsert(
+                    [
+                        'dimension_hash' => $dimensionHash,
+                    ],
+                    [
+                        'date' => $bucket['date'],
+                        'hour' => $bucket['hour'],
+                        'minute' => $bucket['minute'],
+                        'node_id' => (int) ($first['node_id'] ?? 0),
+                        'node_ip' => $first['node_ip'] ?? null,
+                        'client_country' => $first['client_country'] ?? null,
+                        'platform' => $first['platform'] ?? null,
+                        'client_isp' => $first['client_isp'] ?? null,
+                        'app_id' => $first['app_id'] ?? null,
+                        'app_version' => $first['app_version'] ?? null,
+                        'probe_stage' => $first['probe_stage'] ?? 'unknown',
+                        'status' => $first['status'] ?? 'unknown',
+                        'error_code' => $first['error_code'] ?? null,
+                        'total_count' => DB::raw('total_count + ' . $items->count()),
+                    ]
+                );
+            }
         }
 
         $this->info('Aggregated probe metrics groups: ' . $grouped->count());
@@ -357,7 +415,7 @@ class AggregatePerformanceReports extends Command
      * 节点流量聚合：按节点 + 环境 + 时间桶汇总使用时长与流量
      * 时间桶取 arise_timestamp（用户结束使用时间），若缺失则回退 reported_at
      */
-    private function aggregateTrafficMetrics(array $nodeRecords): void
+    private function aggregateTrafficMetrics(array $nodeRecords, bool $writeTemp = false): void
     {
         $trafficRecords = array_values(array_filter($nodeRecords, function ($record) {
             $seconds = (int) ($record['vpn_user_time_seconds'] ?? 0);
@@ -428,6 +486,30 @@ class AggregatePerformanceReports extends Command
                     'report_count' => DB::raw('report_count + ' . $reportCount),
                 ]
             );
+
+            if ($writeTemp) {
+                DB::table('v2_node_traffic_aggregated_temp')->updateOrInsert(
+                    [
+                        'dimension_hash' => $dimensionHash,
+                    ],
+                    [
+                        'date' => $bucket['date'],
+                        'hour' => $bucket['hour'],
+                        'minute' => $bucket['minute'],
+                        'user_id' => (int) ($first['user_id'] ?? 0),
+                        'node_id' => (int) ($first['node_id'] ?? 0),
+                        'node_ip' => $first['node_ip'] ?? null,
+                        'client_country' => $first['client_country'] ?? null,
+                        'platform' => $first['platform'] ?? null,
+                        'client_isp' => $first['client_isp'] ?? null,
+                        'app_id' => $first['app_id'] ?? null,
+                        'app_version' => $first['app_version'] ?? null,
+                        'total_usage_seconds' => DB::raw('total_usage_seconds + ' . $totalSeconds),
+                        'total_usage_mb' => DB::raw('ROUND(total_usage_mb + ' . $totalMb . ', 3)'),
+                        'report_count' => DB::raw('report_count + ' . $reportCount),
+                    ]
+                );
+            }
         }
 
         $this->info('Aggregated traffic metrics groups: ' . $grouped->count());
@@ -437,7 +519,7 @@ class AggregatePerformanceReports extends Command
      * 按用户聚合上报次数，写入 v3_user_report_count
      * 统计口径：每个 payload（即一次 batchReport）计 1 次，不按 reports 条数累计
      */
-    private function aggregateUserReportCount(array $rawPayloads): void
+    private function aggregateUserReportCount(array $rawPayloads, bool $writeTemp = false): void
     {
         $payloadRows = [];
 
@@ -516,6 +598,26 @@ class AggregatePerformanceReports extends Command
                     'app_version'    => $last['app_version'] ?? null,
                 ]
             );
+
+            if ($writeTemp) {
+                DB::table('v3_user_report_count_temp')->updateOrInsert(
+                    [
+                        'date'    => $last['date'],
+                        'hour'    => (int) $last['hour'],
+                        'minute'  => (int) $last['minute'],
+                        'user_id' => $userId,
+                    ],
+                    [
+                        'report_count'   => DB::raw('report_count + ' . $items->count()),
+                        'node_count'     => (int) ($items->max('node_count') ?? 0),
+                        'client_country' => $last['client_country'] ?? null,
+                        'client_isp'     => $last['client_isp'] ?? null,
+                        'platform'       => $last['platform'] ?? null,
+                        'app_id'         => $last['app_id'] ?? null,
+                        'app_version'    => $last['app_version'] ?? null,
+                    ]
+                );
+            }
         }
 
         $this->info("Aggregated user report counts for " . $userGrouped->count() . " users.");
