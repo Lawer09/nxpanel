@@ -192,8 +192,8 @@ class AggregateUserReport extends Command
                 ];
             }
 
-            $vpnData = $this->extractVpnConnectionData($payload['user_default'] ?? null);
-            if (!empty($vpnData)) {
+            $vpnDataList = $this->extractVpnConnectionData($payload['user_default'] ?? null);
+            foreach ($vpnDataList as $vpnData) {
                 $nodeHost = $this->normalizeNodeHost($vpnData['vpn_node_ip'] ?? null);
                 $nodeId = $this->resolveNodeIdByHost($nodeHost);
                 $server = $nodeId > 0 ? $this->resolveServerMeta($nodeId) : null;
@@ -549,6 +549,7 @@ class AggregateUserReport extends Command
             return [];
         }
 
+        $rows = [];
         foreach ($entries as $entry) {
             if (is_string($entry)) {
                 $decoded = json_decode($entry, true);
@@ -571,11 +572,11 @@ class AggregateUserReport extends Command
             }
 
             if (is_array($data)) {
-                return $data;
+                $rows[] = $data;
             }
         }
 
-        return [];
+        return $rows;
     }
 
     private function parseUsageSeconds($value): int

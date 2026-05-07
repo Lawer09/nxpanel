@@ -212,7 +212,9 @@ class AggregatePerformanceReports extends Command
 
             $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
             $metadataTimestampMs = $this->resolveMetadataTimestampMs($metadata);
-            $vpnData = $this->extractVpnConnectData($payload);
+            $vpnDataList = $this->extractVpnConnectData($payload);
+            $primaryVpnData = $vpnDataList[0] ?? [];
+            $vpnData = $primaryVpnData;
             $vpnStatus = $this->normalizeStatus($vpnData['vpn_status'] ?? null);
             $vpnProbeStage = $this->normalizeProbeStage($vpnData['vpn_type'] ?? null);
             $vpnErrorCode = $this->normalizeErrorCode($vpnData['prohibition_connection'] ?? ($vpnData['vpn_error_msg'] ?? null));
@@ -230,7 +232,7 @@ class AggregatePerformanceReports extends Command
             }
 
             $reports = is_array($payload['reports'] ?? null) ? $payload['reports'] : [];
-            $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? ($vpnData['my_user_id'] ?? 0));
+            $userId = (int) ($payload['userId'] ?? $payload['user_id'] ?? ($primaryVpnData['my_user_id'] ?? 0));
             $clientIp = $payload['clientIp'] ?? $payload['client_ip'] ?? null;
             $eventTimestampMs = $metadataTimestampMs;
             $reportedAt = $payload['reported_at'] ?? $eventTimestampMs;
@@ -238,6 +240,59 @@ class AggregatePerformanceReports extends Command
 
             // reports 为空时也保留一条，用于用户上报次数统计
             if (empty($reports)) {
+                if (!empty($vpnDataList)) {
+                    foreach ($vpnDataList as $vpnDataItem) {
+                        $vpnStatusItem = $this->normalizeStatus($vpnDataItem['vpn_status'] ?? null);
+                        $vpnProbeStageItem = $this->normalizeProbeStage($vpnDataItem['vpn_type'] ?? null);
+                        $vpnErrorCodeItem = $this->normalizeErrorCode($vpnDataItem['prohibition_connection'] ?? ($vpnDataItem['vpn_error_msg'] ?? null));
+                        $vpnNodeIpItem = $this->normalizeNodeIp($vpnDataItem['vpn_node_ip'] ?? ($vpnDataItem['vpn_node_address'] ?? null));
+                        $vpnUserTimeSecondsItem = $this->parseUsageSeconds($vpnDataItem['vpn_user_time'] ?? null);
+                        $vpnUserTrafficMbItem = $this->parseUsageMb($vpnDataItem['vpn_user_traffic'] ?? null);
+                        $vpnAriseTimestampMsItem = $this->normalizeTimestampMs($vpnDataItem['arise_timestamp'] ?? null);
+
+                        $emptyNodeId = 0;
+                        if ($vpnNodeIpItem) {
+                            $emptyNodeId = $this->resolveNodeIdByNodeIp($vpnNodeIpItem);
+                        }
+
+                        $flattened[] = [
+                            'user_id' => $userId,
+                            'node_id' => $emptyNodeId,
+                            'node_ip' => $vpnNodeIpItem,
+                            'delay' => 0,
+                            'success_rate' => 0,
+                            'client_ip' => $clientIp,
+                            'client_country' => $metadata['country'] ?? null,
+                            'client_city' => $metadata['city'] ?? null,
+                            'client_isp' => $metadata['isp'] ?? null,
+                            'platform' => $metadata['platform'] ?? null,
+                            'brand' => $metadata['brand'] ?? null,
+                            'app_id' => $metadata['app_id'] ?? null,
+                            'app_version' => $metadata['app_version'] ?? null,
+                            'connect_country' => $metadata['connect_country'] ?? null,
+                            'status' => $vpnStatusItem,
+                            'probe_stage' => $vpnProbeStageItem,
+                            'error_code' => $vpnErrorCodeItem,
+                            'vpn_user_time_seconds' => $vpnUserTimeSecondsItem,
+                            'vpn_user_traffic_mb' => $vpnUserTrafficMbItem,
+                            'vpn_status' => $vpnDataItem['vpn_status'] ?? null,
+                            'prohibition_connection' => $vpnDataItem['prohibition_connection'] ?? null,
+                            'vpn_type' => $vpnDataItem['vpn_type'] ?? null,
+                            'vpn_error_msg' => $vpnDataItem['vpn_error_msg'] ?? null,
+                            'vpn_node_address' => $vpnDataItem['vpn_node_address'] ?? null,
+                            'vpn_source' => $vpnDataItem['vpn_source'] ?? null,
+                            'my_user_id' => isset($vpnDataItem['my_user_id']) ? (int) $vpnDataItem['my_user_id'] : null,
+                            'metadata_timestamp_ms' => $metadataTimestampMs,
+                            'event_timestamp_ms' => $eventTimestampMs,
+                            'arise_timestamp_ms' => $vpnAriseTimestampMsItem,
+                            'reported_at' => $reportedAt,
+                            'created_at' => $createdAt,
+                        ];
+                    }
+
+                    continue;
+                }
+
                 $emptyNodeId = 0;
                 if ($vpnNodeIp) {
                     $emptyNodeId = $this->resolveNodeIdByNodeIp($vpnNodeIp);
@@ -879,28 +934,44 @@ class AggregatePerformanceReports extends Command
 
     private function extractVpnConnectData(array $payload): array
     {
-        $userDefault = $payload['user_default'] ?? null;
-        if (is_string($userDefault)) {
-            $decoded = json_decode($userDefault, true);
-            $userDefault = is_array($decoded) ? $decoded : null;
+        $entries = $payload['user_default'] ?? null;
+        if (is_string($entries)) {
+            $decoded = json_decode($entries, true);
+            $entries = is_array($decoded) ? $decoded : null;
         }
 
-        if (!is_array($userDefault)) {
+        if (!is_array($entries)) {
             return [];
         }
 
-        $type = strtolower(trim((string) ($userDefault['type'] ?? '')));
-        if ($type !== 'vpn_connect') {
-            return [];
+        $rows = [];
+        foreach ($entries as $entry) {
+            if (is_string($entry)) {
+                $decoded = json_decode($entry, true);
+                $entry = is_array($decoded) ? $decoded : null;
+            }
+
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $type = strtolower(trim((string) ($entry['type'] ?? '')));
+            if (!in_array($type, ['vpn_connect', 'vpn_connection'], true)) {
+                continue;
+            }
+
+            $data = $entry['data'] ?? null;
+            if (is_string($data)) {
+                $decoded = json_decode($data, true);
+                $data = is_array($decoded) ? $decoded : [];
+            }
+
+            if (is_array($data)) {
+                $rows[] = $data;
+            }
         }
 
-        $data = $userDefault['data'] ?? null;
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            $data = is_array($decoded) ? $decoded : [];
-        }
-
-        return is_array($data) ? $data : [];
+        return $rows;
     }
 
     private function parseUsageSeconds($value): int
