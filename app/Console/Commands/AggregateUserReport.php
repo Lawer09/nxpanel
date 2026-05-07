@@ -67,7 +67,7 @@ class AggregateUserReport extends Command
 
             UserReportService::deleteBucket($bucketKey);
 
-            $this->info(sprintf('aggregate done: bucket=%s payloads=%d archive=%s', $bucketKey, count($payloads), $archivePath));
+            Log::info(sprintf('user report aggregate done: bucket=%s payloads=%d archive=%s', $bucketKey, count($payloads), $archivePath));
 
             return self::SUCCESS;
         } catch (\Throwable $e) {
