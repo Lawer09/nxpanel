@@ -60,32 +60,55 @@ class ReplayUserReportRawFromOss extends Command
             return self::SUCCESS;
         }
 
-        $bucketFiles = [];
+        sort($files);
+
+        $bucketPayloads = [];
         foreach ($files as $path) {
-            $meta = $this->extractBucketMeta($path, $date);
-            if ($meta === null) {
+            $content = Storage::disk('oss')->get($path);
+            $lines = preg_split("/\r\n|\n|\r/", trim((string) $content));
+            if (empty($lines)) {
                 continue;
             }
 
-            if ($bucketFilter !== null && $meta['bucket'] !== (string) $bucketFilter) {
-                continue;
-            }
-            if ($hour !== null && $meta['hour'] !== str_pad((string) ((int) $hour), 2, '0', STR_PAD_LEFT)) {
-                continue;
-            }
-            if ($minute !== null && $meta['minute'] !== str_pad((string) ((int) $minute), 2, '0', STR_PAD_LEFT)) {
-                continue;
-            }
+            foreach ($lines as $line) {
+                if ($line === '') {
+                    continue;
+                }
 
-            $bucketFiles[$meta['bucket']][] = $path;
+                $row = json_decode($line, true);
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $metadata = is_array($row['metadata'] ?? null) ? $row['metadata'] : [];
+                $reportAtMs = UserReportService::resolveReportAtMs($metadata);
+                $bucketTime = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai');
+                $bucketMinute = (int) floor(((int) $bucketTime->minute) / 5) * 5;
+                $bucket = $bucketTime->copy()->second(0)->minute($bucketMinute)->format('YmdHi');
+
+                if ($bucketFilter !== null && $bucket !== (string) $bucketFilter) {
+                    continue;
+                }
+
+                $bucketHour = $bucketTime->format('H');
+                $bucketMinuteText = str_pad((string) $bucketMinute, 2, '0', STR_PAD_LEFT);
+                if ($hour !== null && $bucketHour !== str_pad((string) ((int) $hour), 2, '0', STR_PAD_LEFT)) {
+                    continue;
+                }
+                if ($minute !== null && $bucketMinuteText !== str_pad((string) ((int) $minute), 2, '0', STR_PAD_LEFT)) {
+                    continue;
+                }
+
+                $bucketPayloads[$bucket][] = $row;
+            }
         }
 
-        if (empty($bucketFiles)) {
-            $this->warn('No files matched filter conditions.');
+        if (empty($bucketPayloads)) {
+            $this->warn('No payloads matched filter conditions.');
             return self::SUCCESS;
         }
 
-        ksort($bucketFiles);
+        ksort($bucketPayloads);
 
         if ($clearDay && !$dryRun) {
             $this->warn('Clearing day data before replay: ' . $date);
@@ -97,30 +120,9 @@ class ReplayUserReportRawFromOss extends Command
 
         $totalPayloads = 0;
         $totalBuckets = 0;
-        $this->info('Matched buckets: ' . count($bucketFiles));
+        $this->info('Matched buckets: ' . count($bucketPayloads));
 
-        foreach ($bucketFiles as $bucket => $paths) {
-            sort($paths);
-            $payloads = [];
-
-            foreach ($paths as $path) {
-                $content = Storage::disk('oss')->get($path);
-                $lines = preg_split("/\r\n|\n|\r/", trim((string) $content));
-                if (empty($lines)) {
-                    continue;
-                }
-
-                foreach ($lines as $line) {
-                    if ($line === '') {
-                        continue;
-                    }
-                    $row = json_decode($line, true);
-                    if (is_array($row)) {
-                        $payloads[] = $row;
-                    }
-                }
-            }
-
+        foreach ($bucketPayloads as $bucket => $payloads) {
             $count = count($payloads);
             if ($count === 0) {
                 $this->line("bucket={$bucket} payloads=0 skip");
@@ -140,9 +142,10 @@ class ReplayUserReportRawFromOss extends Command
             UserReportService::restoreBucket($bucketKey, $payloads);
 
             $aggregateBatch = max($batchSize, $count + 10);
-            Artisan::call('user_report:aggregate', [
+            $exitCode = Artisan::call('user_report:aggregate', [
                 '--bucket' => $bucket,
                 '--batch' => $aggregateBatch,
+                '--skip-archive' => true,
             ]);
 
             $output = trim(Artisan::output());
@@ -150,29 +153,15 @@ class ReplayUserReportRawFromOss extends Command
                 $this->line($output);
             }
 
+            if ($exitCode !== self::SUCCESS) {
+                $this->error("aggregate failed: bucket={$bucket}, exit={$exitCode}");
+                return self::FAILURE;
+            }
+
             $this->line("replayed bucket={$bucket} payloads={$count}");
         }
 
         $this->info("Replay done. buckets={$totalBuckets}, payloads={$totalPayloads}");
         return self::SUCCESS;
-    }
-
-    private function extractBucketMeta(string $path, string $date): ?array
-    {
-        $name = pathinfo($path, PATHINFO_FILENAME);
-        if (preg_match('/^(\d{2})-(\d{2})-(\d{2})_[a-f0-9]+$/', (string) $name, $m) !== 1) {
-            return null;
-        }
-
-        $hour = $m[1];
-        $minute = $m[2];
-        $dateCompact = str_replace('-', '', $date);
-        $bucket = $dateCompact . $hour . $minute;
-
-        return [
-            'hour' => $hour,
-            'minute' => $minute,
-            'bucket' => $bucket,
-        ];
     }
 }

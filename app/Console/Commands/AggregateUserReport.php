@@ -16,7 +16,8 @@ class AggregateUserReport extends Command
 {
     protected $signature = 'user_report:aggregate
         {--batch=10000 : 每次处理的最大 payload 数}
-        {--bucket= : 指定桶时间(yyyyMMddHHmm, UTC+8)}';
+        {--bucket= : 指定桶时间(yyyyMMddHHmm, UTC+8)}
+        {--skip-archive : 跳过OSS原始归档(用于replay)}';
 
     protected $description = '聚合用户上报数据（先OSS归档，再统计写库）';
 
@@ -45,10 +46,14 @@ class AggregateUserReport extends Command
                 return self::SUCCESS;
             }
 
-            $archivePath = $this->archiveRawPayloads($payloads, $bucketTime);
-            if ($archivePath === null) {
-                $this->error('Archive raw payloads failed, keep bucket for retry: ' . $bucketKey);
-                return self::FAILURE;
+            $skipArchive = (bool) $this->option('skip-archive');
+            $archivePath = '[skipped]';
+            if (!$skipArchive) {
+                $archivePath = $this->archiveRawPayloads($payloads, $bucketTime);
+                if ($archivePath === null) {
+                    $this->error('Archive raw payloads failed, keep bucket for retry: ' . $bucketKey);
+                    return self::FAILURE;
+                }
             }
 
             DB::beginTransaction();
@@ -85,8 +90,8 @@ class AggregateUserReport extends Command
     private function resolveTargetBucketTime(): Carbon
     {
         $bucket = $this->option('bucket');
-        if (is_string($bucket) && preg_match('/^\d{12}$/', $bucket) === 1) {
-            return Carbon::createFromFormat('YmdHi', $bucket, 'Asia/Shanghai')->second(0);
+        if ($bucket !== null && preg_match('/^\d{12}$/', (string) $bucket) === 1) {
+            return Carbon::createFromFormat('YmdHi', (string) $bucket, 'Asia/Shanghai')->second(0);
         }
 
         $nowUtc8 = Carbon::now('Asia/Shanghai');
