@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AdSpendPlatformDailyQueryRequest;
+use App\Http\Resources\CamelizeResource;
 use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
@@ -516,10 +518,24 @@ class AdSpendPlatformController extends Controller
         }
     }
 
-    public function daily(Request $request): JsonResponse
+    public function daily(AdSpendPlatformDailyQueryRequest $request, AdSpendPlatformService $service): JsonResponse
     {
-        $this->normalizeQueryParams($request);
-        return $this->dailyInternal($request, null);
+        try {
+            $result = $service->queryDaily($request->validated());
+
+            return $this->ok([
+                'data' => CamelizeResource::collection($result['data']),
+                'total' => $result['total'],
+                'page' => $result['page'],
+                'pageSize' => $result['pageSize'],
+                'dateFrom' => $result['dateFrom'],
+                'dateTo' => $result['dateTo'],
+                'groupBy' => $result['groupBy'],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AdSpendPlatform daily error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
     }
 
     public function summary(Request $request): JsonResponse

@@ -7,6 +7,89 @@ use Illuminate\Support\Facades\Http;
 
 class AdSpendPlatformService
 {
+    public function queryDaily(array $payload): array
+    {
+        $dateFrom = $payload['dateFrom'] ?? now()->subDays(1)->toDateString();
+        $dateTo = $payload['dateTo'] ?? now()->toDateString();
+        $groupBy = is_array($payload['groupBy'] ?? null) ? $payload['groupBy'] : [];
+        $filters = is_array($payload['filters'] ?? null) ? $payload['filters'] : [];
+        $page = (int) ($payload['page'] ?? 1);
+        $pageSize = (int) ($payload['pageSize'] ?? 50);
+
+        $query = \App\Models\AdSpendDailyReport::query()
+            ->leftJoin('ad_spend_platform_accounts as a', 'a.id', '=', 'ad_spend_platform_daily_reports.platform_account_id')
+            ->whereBetween('ad_spend_platform_daily_reports.report_date', [$dateFrom, $dateTo]);
+
+        $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.platform_code', $filters['platformCodes'] ?? null);
+        $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.platform_account_id', $filters['accountIds'] ?? null);
+        $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.project_code', $filters['projectCodes'] ?? null);
+        $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.country', $filters['countries'] ?? null);
+
+        if (!empty($groupBy)) {
+            $groupColumns = $this->normalizeDailyGroupBy($groupBy);
+            if (empty($groupColumns)) {
+                $groupColumns = ['ad_spend_platform_daily_reports.report_date'];
+            }
+
+            $selects = [];
+            foreach ($groupColumns as $column) {
+                if ($column === 'ad_spend_platform_daily_reports.report_date') {
+                    $selects[] = 'ad_spend_platform_daily_reports.report_date as date';
+                } else {
+                    $selects[] = $column;
+                }
+            }
+
+            if (in_array('ad_spend_platform_daily_reports.platform_account_id', $groupColumns, true)) {
+                $selects[] = 'a.account_name';
+                $groupColumns[] = 'a.account_name';
+            }
+
+            $query->selectRaw(
+                implode(', ', $selects)
+                . ', SUM(ad_spend_platform_daily_reports.impressions) as impressions'
+                . ', SUM(ad_spend_platform_daily_reports.clicks) as clicks'
+                . ', SUM(ad_spend_platform_daily_reports.spend) as spend'
+                . ', ROUND(SUM(ad_spend_platform_daily_reports.clicks) / NULLIF(SUM(ad_spend_platform_daily_reports.impressions), 0) * 100, 6) as ctr'
+                . ', ROUND(SUM(ad_spend_platform_daily_reports.spend) / NULLIF(SUM(ad_spend_platform_daily_reports.impressions), 0) * 1000, 6) as cpm'
+                . ', ROUND(SUM(ad_spend_platform_daily_reports.spend) / NULLIF(SUM(ad_spend_platform_daily_reports.clicks), 0), 6) as cpc'
+            );
+            $query->groupBy($groupColumns);
+            $query->orderByDesc('spend');
+        } else {
+            $query->select([
+                'ad_spend_platform_daily_reports.id',
+                'ad_spend_platform_daily_reports.report_date as date',
+                'ad_spend_platform_daily_reports.platform_account_id',
+                'ad_spend_platform_daily_reports.platform_code',
+                'a.account_name',
+                'ad_spend_platform_daily_reports.project_code',
+                'ad_spend_platform_daily_reports.country',
+                'ad_spend_platform_daily_reports.impressions',
+                'ad_spend_platform_daily_reports.clicks',
+                'ad_spend_platform_daily_reports.spend',
+                'ad_spend_platform_daily_reports.ctr',
+                'ad_spend_platform_daily_reports.cpm',
+                'ad_spend_platform_daily_reports.cpc',
+                'ad_spend_platform_daily_reports.updated_at',
+            ]);
+            $query->orderByDesc('ad_spend_platform_daily_reports.report_date')
+                ->orderByDesc('ad_spend_platform_daily_reports.id');
+        }
+
+        $result = $query->paginate($pageSize, ['*'], 'page', $page);
+
+        return [
+            'data' => $result->items(),
+            'total' => $result->total(),
+            'page' => $result->currentPage(),
+            'pageSize' => $result->perPage(),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'groupBy' => $groupBy,
+        ];
+    }
+
     public function login(AdSpendPlatformAccount $account, bool $forceRefresh = false): string
     {
         if (!$forceRefresh && !empty($account->access_token) && $this->tokenAvailable($account)) {
@@ -180,5 +263,49 @@ class AdSpendPlatformService
         }
 
         return 1;
+    }
+
+    private function normalizeDailyGroupBy(array $groupBy): array
+    {
+        $allowed = ['date', 'platform_code', 'platform_account_id', 'project_code', 'country'];
+        $columnMap = [
+            'date' => 'ad_spend_platform_daily_reports.report_date',
+            'platform_code' => 'ad_spend_platform_daily_reports.platform_code',
+            'platform_account_id' => 'ad_spend_platform_daily_reports.platform_account_id',
+            'project_code' => 'ad_spend_platform_daily_reports.project_code',
+            'country' => 'ad_spend_platform_daily_reports.country',
+        ];
+        $normalized = [];
+
+        foreach ($groupBy as $field) {
+            if (!is_string($field)) {
+                continue;
+            }
+
+            $trimmed = trim($field);
+            if ($trimmed !== '' && in_array($trimmed, $allowed, true)) {
+                $column = $columnMap[$trimmed] ?? null;
+                if ($column !== null && !in_array($column, $normalized, true)) {
+                    $normalized[] = $column;
+                }
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function applyWhereIn($query, string $column, ?array $values): void
+    {
+        if (empty($values)) {
+            return;
+        }
+
+        $safeValues = array_values(array_filter($values, function ($value) {
+            return $value !== null && $value !== '';
+        }));
+
+        if (!empty($safeValues)) {
+            $query->whereIn($column, $safeValues);
+        }
     }
 }

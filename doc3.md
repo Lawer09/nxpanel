@@ -447,16 +447,17 @@ GET /api/ad-spend-platform/reports/daily
 
 参数：
 
-| 参数            | 类型     | 必填 | 说明               |
-| ------------- | ------ | -: | ---------------- |
-| platform_code | string |  否 | adsmakeup        |
-| account_id    | int    |  否 | 投放账号 ID          |
-| project_code  | string |  否 | 项目代号，即 groupName |
-| country       | string |  否 | 国家，空字符串表示无国家     |
-| start_date    | string |  是 | 开始日期             |
-| end_date      | string |  是 | 结束日期             |
-| page          | int    |  否 | 默认 1             |
-| page_size     | int    |  否 | 默认 50            |
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | ---: | --- |
+| dateFrom | string | 否 | 开始日期，默认昨天 |
+| dateTo | string | 否 | 结束日期，默认今天 |
+| groupBy | string[] | 否 | 维度数组：`date`/`platform_code`/`platform_account_id`/`project_code`/`country` |
+| filters.platformCodes | string[] | 否 | 平台编码过滤 |
+| filters.accountIds | int[] | 否 | 账号 ID 过滤 |
+| filters.projectCodes | string[] | 否 | 项目代号过滤 |
+| filters.countries | string[] | 否 | 国家过滤 |
+| page | int | 否 | 默认 1 |
+| pageSize | int | 否 | 默认 50，最大 200 |
 
 返回：
 
@@ -465,14 +466,14 @@ GET /api/ad-spend-platform/reports/daily
   "code": 0,
   "msg": "success",
   "data": {
-    "list": [
+    "data": [
       {
         "id": 1,
-        "report_date": "2026-04-28",
-        "platform_account_id": 1,
-        "platform_code": "adsmakeup",
-        "account_name": "AdsMakeup 主账号",
-        "project_code": "A003",
+        "date": "2026-04-28",
+        "platformAccountId": 1,
+        "platformCode": "adsmakeup",
+        "accountName": "AdsMakeup 主账号",
+        "projectCode": "A003",
         "country": "",
         "impressions": 11425,
         "clicks": 1013,
@@ -480,13 +481,20 @@ GET /api/ad-spend-platform/reports/daily
         "ctr": "8.866500",
         "cpm": "30.139200",
         "cpc": "0.339900",
-        "updated_at": "2026-04-28 10:00:03"
+        "updatedAt": "2026-04-28 10:00:03"
       }
     ],
-    "total": 1
+    "total": 1,
+    "page": 1,
+    "pageSize": 50,
+    "dateFrom": "2026-04-28",
+    "dateTo": "2026-04-28",
+    "groupBy": []
   }
 }
 ```
+
+`groupBy` 非空时返回聚合数据，`id`/`updatedAt` 等明细字段不返回。
 
 ---
 
