@@ -75,7 +75,7 @@ class AdSpendPlatformService
             'current=' . $current,
             'size=' . $size,
         ]);
-        $url = rtrim((string) $account->base_url, '/') . '/api/ads/report/day/overall?' . $queryString;
+        $url = rtrim((string) $account->base_url, '/') . '/api/fb/report/day/overall?' . $queryString;
 
         $token = $this->login($account, false);
         $response = Http::timeout(30)
