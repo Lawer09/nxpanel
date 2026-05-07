@@ -754,7 +754,8 @@ class AggregatePerformanceReports extends Command
             $this->normalizeTimestampMs($record['metadata_timestamp_ms'] ?? null)
         );
 
-        $time = Carbon::createFromTimestampMs($timestampMs);
+        $time = Carbon::createFromTimestampMsUTC($timestampMs)
+            ->setTimezone(config('app.timezone', 'Asia/Shanghai'));
         $minute = (int) floor($time->minute / 5) * 5;
 
         return [
@@ -770,7 +771,8 @@ class AggregatePerformanceReports extends Command
             $this->normalizeTimestampMs($record['metadata_timestamp_ms'] ?? null)
         );
 
-        $time = Carbon::createFromTimestampMs($timestampMs);
+        $time = Carbon::createFromTimestampMsUTC($timestampMs)
+            ->setTimezone(config('app.timezone', 'Asia/Shanghai'));
         $minute = (int) floor($time->minute / 5) * 5;
 
         return [
@@ -786,7 +788,8 @@ class AggregatePerformanceReports extends Command
             $this->normalizeTimestampMs($metadata['timestamp'] ?? null)
         );
 
-        $time = Carbon::createFromTimestampMs($timestampMs);
+        $time = Carbon::createFromTimestampMsUTC($timestampMs)
+            ->setTimezone(config('app.timezone', 'Asia/Shanghai'));
         $minute = (int) floor($time->minute / 5) * 5;
 
         return [
