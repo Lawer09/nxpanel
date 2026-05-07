@@ -57,7 +57,10 @@ class DebugUserReportVpnFromOss extends Command
         }
 
         sort($files);
+        $this->info('Matched files: ' . count($files));
 
+        $parsedPayloads = 0;
+        $payloadsWithUserDefault = 0;
         $matchedPayloads = 0;
         $matchedVpnEntries = 0;
         $printed = 0;
@@ -78,8 +81,13 @@ class DebugUserReportVpnFromOss extends Command
                 if (!is_array($payload)) {
                     continue;
                 }
+                $parsedPayloads++;
 
-                $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+                if (array_key_exists('user_default', $payload)) {
+                    $payloadsWithUserDefault++;
+                }
+
+                $metadata = $this->resolveMetadata($payload);
                 $appId = (string) ($metadata['app_id'] ?? '');
                 if ($appIdFilter !== '' && $appId !== $appIdFilter) {
                     continue;
@@ -132,7 +140,9 @@ class DebugUserReportVpnFromOss extends Command
         }
 
         $this->info(sprintf(
-            'Done. payloads_with_vpn=%d vpn_entries=%d printed=%d',
+            'Done. parsed_payloads=%d payloads_with_user_default=%d payloads_with_vpn=%d vpn_entries=%d printed=%d',
+            $parsedPayloads,
+            $payloadsWithUserDefault,
             $matchedPayloads,
             $matchedVpnEntries,
             $printed
@@ -151,6 +161,10 @@ class DebugUserReportVpnFromOss extends Command
 
         if (!is_array($entries)) {
             return [];
+        }
+
+        if (array_key_exists('type', $entries) || array_key_exists('data', $entries)) {
+            $entries = [$entries];
         }
 
         $rows = [];
@@ -181,5 +195,22 @@ class DebugUserReportVpnFromOss extends Command
         }
 
         return $rows;
+    }
+
+    private function resolveMetadata(array $payload): array
+    {
+        $metadata = $payload['metadata'] ?? null;
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+
+        if (is_string($metadata)) {
+            $decoded = json_decode($metadata, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
     }
 }

@@ -80,7 +80,7 @@ class ReplayUserReportRawFromOss extends Command
                     continue;
                 }
 
-                $metadata = is_array($row['metadata'] ?? null) ? $row['metadata'] : [];
+                $metadata = $this->resolveMetadata($row);
                 $reportAtMs = UserReportService::resolveReportAtMs($metadata);
                 $bucketTime = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai');
                 $bucketMinute = (int) floor(((int) $bucketTime->minute) / 5) * 5;
@@ -163,5 +163,22 @@ class ReplayUserReportRawFromOss extends Command
 
         $this->info("Replay done. buckets={$totalBuckets}, payloads={$totalPayloads}");
         return self::SUCCESS;
+    }
+
+    private function resolveMetadata(array $row): array
+    {
+        $metadata = $row['metadata'] ?? null;
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+
+        if (is_string($metadata)) {
+            $decoded = json_decode($metadata, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
     }
 }

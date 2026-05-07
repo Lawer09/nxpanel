@@ -144,7 +144,7 @@ class AggregateUserReport extends Command
                 continue;
             }
 
-            $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+            $metadata = $this->resolveMetadata($payload);
             $userId = (int) ($payload['user_id'] ?? 0);
             $reportAtMs = UserReportService::resolveReportAtMs($metadata);
             $time = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai');
@@ -247,7 +247,7 @@ class AggregateUserReport extends Command
                 continue;
             }
 
-            $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+            $metadata = $this->resolveMetadata($payload);
             $userId = (int) ($payload['user_id'] ?? 0);
             if ($userId <= 0) {
                 continue;
@@ -371,7 +371,7 @@ class AggregateUserReport extends Command
                 continue;
             }
 
-            $metadata = is_array($payload['metadata'] ?? null) ? $payload['metadata'] : [];
+            $metadata = $this->resolveMetadata($payload);
             $userId = (int) ($payload['user_id'] ?? 0);
             if ($userId <= 0) {
                 continue;
@@ -617,6 +617,23 @@ class AggregateUserReport extends Command
         }
 
         return $rows;
+    }
+
+    private function resolveMetadata(array $payload): array
+    {
+        $metadata = $payload['metadata'] ?? null;
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+
+        if (is_string($metadata)) {
+            $decoded = json_decode($metadata, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
     }
 
     private function parseUsageSeconds($value): int

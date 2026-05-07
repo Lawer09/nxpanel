@@ -61,7 +61,7 @@ class UserReportController extends Controller
                 'user_id'      => $request->user()->id,
                 'ip'           => $request->getClientIp(),
                 'metadata'     => $validated['metadata'] ?? [],
-                'user_default' => $request->input('user_default') ?? [],
+                'user_default' => $validated['user_default'] ?? [],
                 'reports'      => $validated['reports'] ?? [],
                 'created_at'   => now()->toDateTimeString(),
             ];
