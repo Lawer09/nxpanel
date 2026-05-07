@@ -44,18 +44,18 @@
 
 - 不传 `groupBy`：
   - `id` `int`
-  - `user_id` `int`
-  - `app_id` `string`
-  - `app_version` `string`
+  - `userId` `int`
+  - `appId` `string`
+  - `appVersion` `string`
   - `country` `string`
   - `date` `string`
   - `hour` `int`
-  - `report_count` `int`
-  - `created_at` `string`
-  - `updated_at` `string`
+  - `reportCount` `int`
+  - `createdAt` `string`
+  - `updatedAt` `string`
 - 传 `groupBy`：
   - 返回所选维度字段
-  - `report_count` `int`（`SUM(report_count)`）
+  - `reportCount` `int`（`SUM(report_count)`）
 
 ### 2.2 节点汇总查询
 
@@ -81,22 +81,28 @@
   - `id` `int`
   - `date` `string`
   - `hour` `int`
-  - `node_id` `int`
-  - `node_host` `string`
-  - `node_type` `string`
-  - `probe_stage` `string`
-  - `avg_delay` `number`
-  - `traffic_usage` `number`
-  - `traffic_use_time` `int`
-  - `compute_count` `int`
-  - `created_at` `string`
-  - `updated_at` `string`
+  - `nodeId` `int`
+  - `nodeHost` `string`
+  - `nodeType` `string`
+  - `probeStage` `string`
+  - `avgDelay` `number`
+  - `trafficUsage` `number`
+  - `trafficUseTime` `int`
+  - `computeCount` `int`
+  - `successCount` `int`
+  - `failCount` `int`
+  - `successRate` `number`（`ROUND(100 * successCount / (successCount + failCount), 2)`）
+  - `createdAt` `string`
+  - `updatedAt` `string`
 - 传 `groupBy`：
   - 返回所选维度字段
-  - `avg_delay` `number`（按 `compute_count` 加权）
-  - `traffic_usage` `number`（求和）
-  - `traffic_use_time` `int`（求和）
-  - `compute_count` `int`（求和）
+  - `avgDelay` `number`（按 `compute_count` 加权）
+  - `trafficUsage` `number`（求和）
+  - `trafficUseTime` `int`（求和）
+  - `computeCount` `int`（求和）
+  - `successCount` `int`（`SUM(success_count)`）
+  - `failCount` `int`（`SUM(fail_count)`）
+  - `successRate` `number`（`ROUND(100 * SUM(success_count) / (SUM(success_count)+SUM(fail_count)), 2)`）
 
 ### 2.3 用户流量查询
 
@@ -122,20 +128,20 @@
   - `id` `int`
   - `date` `string`
   - `hour` `int`
-  - `user_id` `int`
-  - `app_id` `string`
-  - `app_version` `string`
+  - `userId` `int`
+  - `appId` `string`
+  - `appVersion` `string`
   - `country` `string`
-  - `traffic_usage` `number`
-  - `traffic_use_time` `int`
-  - `compute_count` `int`
-  - `created_at` `string`
-  - `updated_at` `string`
+  - `trafficUsage` `number`
+  - `trafficUseTime` `int`
+  - `computeCount` `int`
+  - `createdAt` `string`
+  - `updatedAt` `string`
 - 传 `groupBy`：
   - 返回所选维度字段
-  - `traffic_usage` `number`（求和）
-  - `traffic_use_time` `int`（求和）
-  - `compute_count` `int`（求和）
+  - `trafficUsage` `number`（求和）
+  - `trafficUseTime` `int`（求和）
+  - `computeCount` `int`（求和）
 
 ### 2.4 节点失败查询
 
@@ -161,20 +167,20 @@
   - `id` `int`
   - `date` `string`
   - `hour` `int`
-  - `report_at_ms` `int`
-  - `user_id` `int`
-  - `app_id` `string`
+  - `reportAtMs` `int`
+  - `userId` `int`
+  - `appId` `string`
   - `country` `string`
-  - `node_id` `int`
-  - `node_host` `string`
-  - `node_type` `string`
-  - `probe_stage` `string`
-  - `error_code` `string`
-  - `created_at` `string`
+  - `nodeId` `int`
+  - `nodeHost` `string`
+  - `nodeType` `string`
+  - `probeStage` `string`
+  - `errorCode` `string`
+  - `createdAt` `string`
 - 传 `groupBy`：
   - 返回所选维度字段
-  - `fail_count` `int`（`COUNT(*)`）
-  - `last_report_at_ms` `int`（`MAX(report_at_ms)`）
+  - `failCount` `int`（`COUNT(*)`）
+  - `lastReportAtMs` `int`（`MAX(report_at_ms)`）
 
 ---
 

@@ -306,6 +306,8 @@ class AggregateUserReport extends Command
                     'traffic_usage' => 0.0,
                     'traffic_use_time' => 0,
                     'compute_count' => 0,
+                    'success_count' => 0,
+                    'fail_count' => 0,
                 ];
             }
 
@@ -313,6 +315,13 @@ class AggregateUserReport extends Command
             $groups[$key]['traffic_usage'] += (float) ($row['traffic_usage'] ?? 0);
             $groups[$key]['traffic_use_time'] += (int) ($row['traffic_use_time'] ?? 0);
             $groups[$key]['compute_count'] += 1;
+
+            $status = strtolower(trim((string) ($row['status'] ?? '')));
+            if ($status === 'success') {
+                $groups[$key]['success_count'] += 1;
+            } elseif ($status === 'failed') {
+                $groups[$key]['fail_count'] += 1;
+            }
         }
 
         foreach ($groups as $group) {
@@ -339,6 +348,8 @@ class AggregateUserReport extends Command
                     'traffic_usage' => DB::raw('traffic_usage + ' . round((float) $group['traffic_usage'], 3)),
                     'traffic_use_time' => DB::raw('traffic_use_time + ' . (int) $group['traffic_use_time']),
                     'compute_count' => DB::raw('compute_count + ' . (int) $group['compute_count']),
+                    'success_count' => DB::raw('success_count + ' . (int) $group['success_count']),
+                    'fail_count' => DB::raw('fail_count + ' . (int) $group['fail_count']),
                     'updated_at' => now(),
                 ]
             );
@@ -528,28 +539,43 @@ class AggregateUserReport extends Command
 
     private function extractVpnConnectionData($userDefault): array
     {
-        $entry = $userDefault;
-        if (is_string($entry)) {
-            $decoded = json_decode($entry, true);
-            $entry = is_array($decoded) ? $decoded : null;
+        $entries = $userDefault;
+        if (is_string($entries)) {
+            $decoded = json_decode($entries, true);
+            $entries = is_array($decoded) ? $decoded : null;
         }
 
-        if (!is_array($entry)) {
+        if (!is_array($entries)) {
             return [];
         }
 
-        $type = strtolower(trim((string) ($entry['type'] ?? '')));
-        if (!in_array($type, ['vpn_connection', 'vpn_connect'], true)) {
-            return [];
+        foreach ($entries as $entry) {
+            if (is_string($entry)) {
+                $decoded = json_decode($entry, true);
+                $entry = is_array($decoded) ? $decoded : null;
+            }
+
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $type = strtolower(trim((string) ($entry['type'] ?? '')));
+            if (!in_array($type, ['vpn_connection', 'vpn_connect'], true)) {
+                continue;
+            }
+
+            $data = $entry['data'] ?? null;
+            if (is_string($data)) {
+                $decoded = json_decode($data, true);
+                $data = is_array($decoded) ? $decoded : [];
+            }
+
+            if (is_array($data)) {
+                return $data;
+            }
         }
 
-        $data = $entry['data'] ?? null;
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            $data = is_array($decoded) ? $decoded : [];
-        }
-
-        return is_array($data) ? $data : [];
+        return [];
     }
 
     private function parseUsageSeconds($value): int

@@ -64,24 +64,24 @@
 
 `data[]` 常见字段（按 `groupBy` 动态出现维度字段）：
 
-- 维度字段：`date/hour/node_id/node_name/app_id/app_version/platform/client_country/client_isp/node_host/machine_ip/machine_ip_isp/node_protocol`
+- 维度字段：`date/hour/nodeId/nodeName/appId/appVersion/platform/clientCountry/clientIsp/nodeHost/machineIp/machineIpIsp/nodeProtocol`
 - 指标字段：
-  - `avg_delay` `number`
-  - `success_count` `int`
-  - `failed_count` `int`
-  - `node_connect_error_count` `int`
-  - `post_connect_probe_error_count` `int`
-  - `client_report_traffic_usage_mb` `number`
-  - `client_report_usage_seconds` `int`
-  - `client_report_count` `int`
-  - `node_push_traffic_u_bytes` `int|null`
-  - `node_push_traffic_d_bytes` `int|null`
-  - `node_push_traffic_total_bytes` `int|null`
+  - `avgDelay` `number`
+  - `successCount` `int`
+  - `failedCount` `int`
+  - `nodeConnectErrorCount` `int`
+  - `postConnectProbeErrorCount` `int`
+  - `clientReportTrafficUsageMb` `number`
+  - `clientReportUsageSeconds` `int`
+  - `clientReportCount` `int`
+  - `nodePushTrafficUBytes` `int|null`
+  - `nodePushTrafficDBytes` `int|null`
+  - `nodePushTrafficTotalBytes` `int|null`
   - `bandwidth` `number|null`
-  - `up_bandwidth` `number|null`
-  - `down_bandwidth` `number|null`
+  - `upBandwidth` `number|null`
+  - `downBandwidth` `number|null`
 
-注：当 `groupBy` 包含客户端维度（如 `app_id/platform/client_isp`）时，`node_push_traffic_*` 会返回 `null`。
+注：当 `groupBy` 包含客户端维度（如 `app_id/platform/client_isp`）时，`nodePushTraffic*` 会返回 `null`。
 
 ---
 
@@ -136,8 +136,8 @@
 
 `data[]`：
 
-- 包含 `groupBy` 里声明的维度字段
-- 包含 `metricMap` 列出的指标字段
+- 包含 `groupBy` 里声明的维度字段（返回为 camelCase）
+- 包含 `metricMap` 列出的指标字段（返回为 camelCase）
 
 各 `subTable` 的 `metricMap`：
 

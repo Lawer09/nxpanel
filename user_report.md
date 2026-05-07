@@ -68,6 +68,8 @@
     avg_delay 报节点的平均延迟，通过reports和user_default（vpn_connection）的数据计算，user_default中data的vpn_status为2的失败节点连接延迟默认为6000，成功默认为200
     traffic_usage 节点的流量使用，通过user_default（vpn_connection）的 vpn_user_traffic， reports默认为0
     traffic_use_time 节点使用时长，通过user_default（vpn_connection）的 vpn_user_time， reports默认为0
+    success_count
+    fail_count 
     compute_count 参与计算的数据总数（同纬度下）, reports 和  user_default（vpn_connection）的总数
 
 
@@ -79,8 +81,8 @@
     app_id:string（app包名）
     app_version:string（app版本）
     country （客户端国家）必填
-    traffic_usage 节点的流量使用，通过user_default（vpn_connection）的 vpn_user_traffic， reports默认为0
-    traffic_use_time 节点使用时长，通过user_default（vpn_connection）的 vpn_user_time， reports默认为0
+    traffic_usage 节点的流量使用，通过user_default（vpn_connection）的 vpn_user_traffic
+    traffic_use_time 节点使用时长，通过user_default（vpn_connection）的 vpn_user_time
     compute_count 总数
 
 4. v3_user_report_node_fail (主要用于排查错误节点信息，仅保留一周数据)

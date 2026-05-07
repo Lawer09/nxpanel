@@ -126,6 +126,9 @@
   - `traffic_usage`
   - `traffic_use_time`
   - `compute_count`
+  - `success_count`（`status=success`）
+  - `fail_count`（`status=failed`）
+  - `success_rate`（查询时 SQL 计算：`100 * success_count / (success_count + fail_count)`）
 - 合并规则：
   - 来源 = `reports + user_default(vpn_connection)`
   - `vpn_connection` 延迟：

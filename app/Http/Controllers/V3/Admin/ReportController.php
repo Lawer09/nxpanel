@@ -163,10 +163,16 @@ class ReportController extends Controller
                 . ', SUM(traffic_usage) as traffic_usage'
                 . ', SUM(traffic_use_time) as traffic_use_time'
                 . ', SUM(compute_count) as compute_count'
+                . ', SUM(success_count) as success_count'
+                . ', SUM(fail_count) as fail_count'
+                . ', ROUND(100 * SUM(success_count) / NULLIF(SUM(success_count) + SUM(fail_count), 0), 2) as success_rate'
             );
             $query->groupBy($selects);
             $query->orderByDesc('compute_count');
         } else {
+            $query->selectRaw(
+                '*, ROUND(100 * success_count / NULLIF(success_count + fail_count, 0), 2) as success_rate'
+            );
             $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('compute_count');
         }
 
