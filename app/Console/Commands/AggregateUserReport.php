@@ -119,6 +119,7 @@ class AggregateUserReport extends Command
                 Log::warning('user_report raw archive failed', ['path' => $path]);
                 return null;
             }
+            Log::info('user_report raw archived', ['path' => $path]);
         } catch (\Throwable $e) {
             Log::error('user_report raw archive exception', [
                 'path' => $path,

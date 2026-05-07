@@ -99,11 +99,11 @@ class NodePerformanceService
             $pipe->expire($key, 1800);
         });
 
-        Log::info('Batch performance buffered to Redis', [
-            'user_id' => $userId,
-            'node_count' => count($nodeReports),
-            'bucket'  => $key,
-        ]);
+        // Log::info('Batch performance buffered to Redis', [
+        //     'user_id' => $userId,
+        //     'node_count' => count($nodeReports),
+        //     'bucket'  => $key,
+        // ]);
 
         if (UserReportService::enabled()) {
             UserReportService::pushRawPayload([
