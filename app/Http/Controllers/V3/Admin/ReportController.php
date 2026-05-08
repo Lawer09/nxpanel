@@ -11,7 +11,6 @@ use App\Http\Requests\Admin\UserReportNodeSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportTrafficQueryRequest;
 use App\Http\Resources\CamelizeResource;
-use App\Models\Server;
 use App\Services\NodeMainReportService;
 use App\Services\NodeSubReportService;
 use Illuminate\Http\JsonResponse;
@@ -80,14 +79,8 @@ class ReportController extends Controller
     public function nodeServerRealtime(NodeServerRealtimeRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $nodeId = (int) $validated['nodeId'];
         $page = (int) ($validated['page'] ?? 1);
         $pageSize = (int) ($validated['pageSize'] ?? 50);
-
-        $server = Server::query()->select(['id', 'name', 'type'])->find($nodeId);
-        if (!$server) {
-            return $this->error([404, '节点不存在']);
-        }
 
         $cacheKey = 'realtime:node_server_report:latest';
         $list = Cache::get($cacheKey, []);
@@ -95,18 +88,11 @@ class ReportController extends Controller
             $list = [];
         }
 
-        $list = array_values(array_filter($list, function ($item) use ($nodeId) {
-            return is_array($item) && (int) ($item['node_id'] ?? 0) === $nodeId;
-        }));
-
         $total = count($list);
         $offset = ($page - 1) * $pageSize;
         $items = array_slice($list, $offset, $pageSize);
 
         return $this->ok([
-            'nodeId' => $nodeId,
-            'nodeName' => $server->name,
-            'nodeType' => $server->type,
             'data' => $items,
             'total' => $total,
             'page' => $page,

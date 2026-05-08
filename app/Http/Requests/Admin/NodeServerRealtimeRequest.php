@@ -14,7 +14,6 @@ class NodeServerRealtimeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nodeId' => 'required|integer|min:1',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
         ];

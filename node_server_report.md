@@ -52,7 +52,6 @@
 
 请求参数：
 
-- `nodeId`：必填，节点 ID
 - `page`：可选，默认 `1`
 - `pageSize`：可选，默认 `50`，最大 `200`
 
@@ -60,7 +59,6 @@
 
 ```json
 {
-  "nodeId": 12,
   "page": 1,
   "pageSize": 50
 }
@@ -68,10 +66,7 @@
 
 返回字段：
 
-- `nodeId`
-- `nodeName`
-- `nodeType`
-- `data`（该节点命中的实时上报快照列表，按时间倒序）
+- `data`（实时队列内容分页，按时间倒序）
 - `total`
 - `page`
 - `pageSize`
