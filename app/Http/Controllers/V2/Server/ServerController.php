@@ -142,6 +142,31 @@ class ServerController extends Controller
            ServerService::updateMetrics($node, $metrics);
         }
 
+        // 缓存节点实时上报队列（最近 500 条）
+        $cacheKey = 'realtime:node_server_report:latest';
+        $maxItems = 500;
+        $entry = [
+            'node_id' => (int) $nodeId,
+            'node_type' => (string) $nodeType,
+            'ip' => $request->getClientIp(),
+            'traffic' => is_array($traffic) ? $traffic : [],
+            'alive' => is_array($alive) ? $alive : [],
+            'online' => is_array($online) ? $online : [],
+            'status' => is_array($status) ? $status : [],
+            'metrics' => is_array($metrics) ? $metrics : [],
+            'created_at' => now()->toDateTimeString(),
+        ];
+
+        $list = Cache::get($cacheKey, []);
+        if (!is_array($list)) {
+            $list = [];
+        }
+        array_unshift($list, $entry);
+        if (count($list) > $maxItems) {
+            $list = array_slice($list, 0, $maxItems);
+        }
+        Cache::put($cacheKey, $list, 3600);
+
         // Log::info("Received report from node {$nodeId} (type: {$nodeType})", [
         //     'traffic_count' => is_array($traffic) ? count($traffic) : 0,
         //     'alive_count' => is_array($alive) ? count($alive) : 0,

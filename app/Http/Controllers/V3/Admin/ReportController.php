@@ -4,15 +4,18 @@ namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\NodeMainReportQueryRequest;
+use App\Http\Requests\Admin\NodeServerRealtimeRequest;
 use App\Http\Requests\Admin\NodeSubReportQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeFailQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportTrafficQueryRequest;
 use App\Http\Resources\CamelizeResource;
+use App\Models\Server;
 use App\Services\NodeMainReportService;
 use App\Services\NodeSubReportService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
@@ -66,6 +69,48 @@ class ReportController extends Controller
             'date' => $result['date'],
             'hour' => $result['hour'],
             'minute' => $result['minute'],
+        ]);
+    }
+
+    /**
+     * 节点实时上报数据（缓存）
+     *
+     * POST /report/nodeServer/realtime
+     */
+    public function nodeServerRealtime(NodeServerRealtimeRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $nodeId = (int) $validated['nodeId'];
+        $page = (int) ($validated['page'] ?? 1);
+        $pageSize = (int) ($validated['pageSize'] ?? 50);
+
+        $server = Server::query()->select(['id', 'name', 'type'])->find($nodeId);
+        if (!$server) {
+            return $this->error([404, '节点不存在']);
+        }
+
+        $cacheKey = 'realtime:node_server_report:latest';
+        $list = Cache::get($cacheKey, []);
+        if (!is_array($list)) {
+            $list = [];
+        }
+
+        $list = array_values(array_filter($list, function ($item) use ($nodeId) {
+            return is_array($item) && (int) ($item['node_id'] ?? 0) === $nodeId;
+        }));
+
+        $total = count($list);
+        $offset = ($page - 1) * $pageSize;
+        $items = array_slice($list, $offset, $pageSize);
+
+        return $this->ok([
+            'nodeId' => $nodeId,
+            'nodeName' => $server->name,
+            'nodeType' => $server->type,
+            'data' => $items,
+            'total' => $total,
+            'page' => $page,
+            'pageSize' => $pageSize,
         ]);
     }
 

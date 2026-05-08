@@ -144,6 +144,13 @@
 
 前端展示建议：
 
-- 金额类字段：`adRevenue/adSpendCost/trafficCost/profit/adSpendCpi/adSpendCpc/adSpendCpm` 建议统一货币格式。
-- 比例类字段：`adCtr/adMatchRate/adShowRate` 建议展示为百分比并保留 2-4 位小数。
+- 金额类字段：`adRevenue/adSpendCost/trafficCost/profit/adSpendCpi/adSpendCpc/adSpendCpm` 建议统一货币格式，并保留 2 位小数。
+- 比例类字段：`adCtr/adMatchRate/adShowRate` 建议展示为百分比并保留 2 位小数。
+- `roi` 建议按百分比展示：`roiPercent = roi * 100`，并保留 2 位小数（例如 `1.234567 -> 123.46%`）。
 - 空值处理：接口分母为 0 时返回 `null`，前端可展示为 `--`。
+
+筛选交互建议：
+
+- 国家筛选改为手动输入（不使用下拉）。
+- 输入格式建议支持逗号分隔（如 `US,JP,BR`），前端拆分后传 `filters.countries` 数组。
+- 前端提交前建议统一转大写并去除空格；后端也会做大写归一化。
