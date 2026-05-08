@@ -70,9 +70,7 @@ class NodeMainReportService
 
         $selects = [];
         foreach ($groupBy as $dim) {
-            $selects[] = $fillUnknown
-                ? "COALESCE(NULLIF(r.{$dim}, ''), '未知') as {$dim}"
-                : "r.{$dim} as {$dim}";
+            $selects[] = $this->buildDimensionSelect($dim, $fillUnknown);
         }
 
         $selects[] = 'ROUND(SUM(r.delay_weighted_sum) / NULLIF(SUM(r.delay_weight), 0), 2) as avg_delay';
@@ -147,6 +145,32 @@ class NodeMainReportService
     private function normalizeOrderDirection($value): string
     {
         return is_string($value) && strtolower($value) === 'asc' ? 'asc' : 'desc';
+    }
+
+    private function buildDimensionSelect(string $dim, bool $fillUnknown): string
+    {
+        if (!$fillUnknown) {
+            return "r.{$dim} as {$dim}";
+        }
+
+        $stringDimensions = [
+            'node_name',
+            'app_id',
+            'app_version',
+            'platform',
+            'client_country',
+            'client_isp',
+            'node_host',
+            'machine_ip',
+            'machine_ip_isp',
+            'node_protocol',
+        ];
+
+        if (in_array($dim, $stringDimensions, true)) {
+            return "COALESCE(NULLIF(r.{$dim}, ''), '未知') as {$dim}";
+        }
+
+        return "r.{$dim} as {$dim}";
     }
 
     public function aggregateByBucket(string $date, int $hour, int $minute): void
