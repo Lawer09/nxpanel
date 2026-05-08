@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V2\Server;
 use App\Http\Controllers\Controller;
 use App\Jobs\UserAliveSyncJob;
 use App\Services\ServerService;
+use App\Services\NodeServerReportService;
 use App\Services\UserService;
 use App\Utils\CacheKey;
 use Illuminate\Http\Request;
@@ -166,6 +167,19 @@ class ServerController extends Controller
             $list = array_slice($list, 0, $maxItems);
         }
         Cache::put($cacheKey, $list, 3600);
+
+        NodeServerReportService::pushRawPayload([
+            'node_id' => (int) $nodeId,
+            'node_type' => (string) $nodeType,
+            'ip' => $request->getClientIp(),
+            'traffic' => is_array($traffic) ? $traffic : [],
+            'alive' => is_array($alive) ? $alive : [],
+            'online' => is_array($online) ? $online : [],
+            'status' => is_array($status) ? $status : [],
+            'metrics' => is_array($metrics) ? $metrics : [],
+            'report_at_ms' => now()->getTimestampMs(),
+            'created_at' => now()->toDateTimeString(),
+        ], now()->getTimestampMs());
 
         // Log::info("Received report from node {$nodeId} (type: {$nodeType})", [
         //     'traffic_count' => is_array($traffic) ? count($traffic) : 0,
