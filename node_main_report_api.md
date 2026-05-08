@@ -39,6 +39,8 @@
 - `fillUnknown` `bool|null`（默认 true，空维度填充为“未知”）
 - `page` `int|null`（默认 1）
 - `pageSize` `int|null`（默认 50，最大 200）
+- `orderBy` `string|null`，可选：维度字段和指标字段（如 `date`、`hour`、`node_id`、`avg_delay`、`success_count`、`client_report_traffic_usage_mb` 等）
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 ## 1.2 返回字段
 
@@ -118,6 +120,8 @@
   - `filters.includeExternal` `bool|null`（默认 false）
 - `page` `int|null`
 - `pageSize` `int|null`（最大 200）
+- `orderBy` `string|null`，可选：`groupBy` 中维度字段 + 当前 `subTable` 的 `metricMap` 指标字段
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 ## 2.2 返回字段
 

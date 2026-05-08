@@ -38,6 +38,8 @@ class NodeMainReportQueryRequest extends FormRequest
             'fillUnknown' => 'nullable|boolean',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
+            'orderBy' => 'nullable|string|in:date,hour,node_id,node_name,app_id,app_version,platform,client_country,client_isp,node_host,machine_ip,machine_ip_isp,node_protocol,avg_delay,success_count,failed_count,node_connect_error_count,post_connect_probe_error_count,client_report_traffic_usage_mb,client_report_usage_seconds,client_report_count,node_push_traffic_u_bytes,node_push_traffic_d_bytes,node_push_traffic_total_bytes,bandwidth,up_bandwidth,down_bandwidth',
+            'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
 }

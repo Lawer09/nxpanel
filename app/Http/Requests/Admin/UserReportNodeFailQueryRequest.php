@@ -31,6 +31,8 @@ class UserReportNodeFailQueryRequest extends FormRequest
             'filters.errorCodes.*' => 'string|max:255',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
+            'orderBy' => 'nullable|string|in:date,hour,node_id,node_host,node_type,probe_stage,error_code,report_at_ms,fail_count,last_report_at_ms,id,created_at',
+            'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
 }

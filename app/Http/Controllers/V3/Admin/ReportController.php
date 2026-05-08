@@ -85,6 +85,8 @@ class ReportController extends Controller
         $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
         $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $query = DB::table('v3_user_report_summary');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
@@ -101,9 +103,20 @@ class ReportController extends Controller
             }
             $query->selectRaw(implode(', ', $selects) . ', SUM(report_count) as report_count');
             $query->groupBy($selects);
-            $query->orderByDesc('report_count');
+
+            $sortable = array_values(array_unique(array_merge($selects, ['report_count'])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('report_count');
+            }
         } else {
-            $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('id');
+            $sortable = ['date', 'hour', 'user_id', 'app_id', 'app_version', 'country', 'report_count', 'id', 'created_at', 'updated_at'];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('id');
+            }
         }
 
         $page = $query->paginate($pageSize);
@@ -143,6 +156,8 @@ class ReportController extends Controller
         $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
         $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $query = DB::table('v3_user_report_node_summary');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
@@ -168,12 +183,36 @@ class ReportController extends Controller
                 . ', ROUND(100 * SUM(success_count) / NULLIF(SUM(success_count) + SUM(fail_count), 0), 2) as success_rate'
             );
             $query->groupBy($selects);
-            $query->orderByDesc('compute_count');
+
+            $sortable = array_values(array_unique(array_merge($selects, [
+                'avg_delay',
+                'traffic_usage',
+                'traffic_use_time',
+                'compute_count',
+                'success_count',
+                'fail_count',
+                'success_rate',
+            ])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('compute_count');
+            }
         } else {
             $query->selectRaw(
                 '*, ROUND(100 * success_count / NULLIF(success_count + fail_count, 0), 2) as success_rate'
             );
-            $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('compute_count');
+
+            $sortable = [
+                'date', 'hour', 'node_id', 'node_host', 'node_type', 'probe_stage',
+                'avg_delay', 'traffic_usage', 'traffic_use_time', 'compute_count',
+                'success_count', 'fail_count', 'success_rate', 'id', 'created_at', 'updated_at',
+            ];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('compute_count');
+            }
         }
 
         $page = $query->paginate($pageSize);
@@ -213,6 +252,8 @@ class ReportController extends Controller
         $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
         $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $query = DB::table('v3_user_report_traffic');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
@@ -234,9 +275,20 @@ class ReportController extends Controller
                 . ', SUM(compute_count) as compute_count'
             );
             $query->groupBy($selects);
-            $query->orderByDesc('traffic_usage');
+
+            $sortable = array_values(array_unique(array_merge($selects, ['traffic_usage', 'traffic_use_time', 'compute_count'])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('traffic_usage');
+            }
         } else {
-            $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('traffic_usage');
+            $sortable = ['date', 'hour', 'user_id', 'app_id', 'app_version', 'country', 'traffic_usage', 'traffic_use_time', 'compute_count', 'id', 'created_at', 'updated_at'];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('traffic_usage');
+            }
         }
 
         $page = $query->paginate($pageSize);
@@ -276,6 +328,8 @@ class ReportController extends Controller
         $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
         $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $query = DB::table('v3_user_report_node_fail');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
@@ -292,9 +346,20 @@ class ReportController extends Controller
             }
             $query->selectRaw(implode(', ', $selects) . ', COUNT(*) as fail_count, MAX(report_at_ms) as last_report_at_ms');
             $query->groupBy($selects);
-            $query->orderByDesc('fail_count')->orderByDesc('last_report_at_ms');
+
+            $sortable = array_values(array_unique(array_merge($selects, ['fail_count', 'last_report_at_ms'])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('fail_count')->orderByDesc('last_report_at_ms');
+            }
         } else {
-            $query->orderByDesc('report_at_ms')->orderByDesc('id');
+            $sortable = ['date', 'hour', 'node_id', 'node_host', 'node_type', 'probe_stage', 'error_code', 'report_at_ms', 'id', 'created_at'];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('report_at_ms')->orderByDesc('id');
+            }
         }
 
         $page = $query->paginate($pageSize);
@@ -364,6 +429,11 @@ class ReportController extends Controller
         }
 
         $query->whereIn($field, $values);
+    }
+
+    private function normalizeOrderDirection($value): string
+    {
+        return is_string($value) && strtolower($value) === 'asc' ? 'asc' : 'desc';
     }
 
 }

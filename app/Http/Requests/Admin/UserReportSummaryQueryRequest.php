@@ -31,6 +31,8 @@ class UserReportSummaryQueryRequest extends FormRequest
             'filters.countries.*' => 'string|max:16',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
+            'orderBy' => 'nullable|string|in:date,hour,user_id,app_id,app_version,country,report_count,id,created_at,updated_at',
+            'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
 }

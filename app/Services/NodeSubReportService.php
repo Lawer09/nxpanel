@@ -46,6 +46,8 @@ class NodeSubReportService
         $filters = (array) ($payload['filters'] ?? []);
         $page = (int) ($payload['page'] ?? 1);
         $pageSize = (int) ($payload['pageSize'] ?? 50);
+        $orderBy = is_string($payload['orderBy'] ?? null) ? $payload['orderBy'] : null;
+        $orderDirection = $this->normalizeOrderDirection($payload['orderDirection'] ?? null);
         $includeExternal = (bool) ($filters['includeExternal'] ?? false);
 
         [$table, $alias, $timeMode, $recordAtMode, $metricMap] = $this->resolveMeta($subTable);
@@ -97,14 +99,19 @@ class NodeSubReportService
 
         $query->selectRaw(implode(', ', $selects))->groupBy($effectiveGroupBy);
 
-        if (in_array('date', $effectiveGroupBy, true)) {
-            $query->orderByDesc('date');
-        }
-        if (in_array('hour', $effectiveGroupBy, true)) {
-            $query->orderByDesc('hour');
-        }
-        if (in_array('minute', $effectiveGroupBy, true)) {
-            $query->orderByDesc('minute');
+        $sortable = array_merge($effectiveGroupBy, array_keys($metricMap));
+        if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+            $query->orderBy($orderBy, $orderDirection);
+        } else {
+            if (in_array('date', $effectiveGroupBy, true)) {
+                $query->orderByDesc('date');
+            }
+            if (in_array('hour', $effectiveGroupBy, true)) {
+                $query->orderByDesc('hour');
+            }
+            if (in_array('minute', $effectiveGroupBy, true)) {
+                $query->orderByDesc('minute');
+            }
         }
 
         $data = $query->paginate($pageSize, ['*'], 'page', $page);
@@ -280,5 +287,10 @@ class NodeSubReportService
         ];
 
         return in_array($dimension, $supported[$subTable] ?? [], true);
+    }
+
+    private function normalizeOrderDirection($value): string
+    {
+        return is_string($value) && strtolower($value) === 'asc' ? 'asc' : 'desc';
     }
 }

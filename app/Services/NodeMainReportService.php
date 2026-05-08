@@ -32,6 +32,8 @@ class NodeMainReportService
         $fillUnknown = (bool) ($payload['fillUnknown'] ?? true);
         $page = (int) ($payload['page'] ?? 1);
         $pageSize = (int) ($payload['pageSize'] ?? 50);
+        $orderBy = is_string($payload['orderBy'] ?? null) ? $payload['orderBy'] : null;
+        $orderDirection = $this->normalizeOrderDirection($payload['orderDirection'] ?? null);
         $includeExternal = (bool) ($filters['includeExternal'] ?? false);
 
         $metricAvailability = $this->buildNodeMetricAvailability($groupBy);
@@ -90,7 +92,26 @@ class NodeMainReportService
 
         $query->selectRaw(implode(', ', $selects))->groupBy($groupBy);
 
-        if (in_array('date', $groupBy, true)) {
+        $sortable = array_merge($groupBy, [
+            'avg_delay',
+            'success_count',
+            'failed_count',
+            'node_connect_error_count',
+            'post_connect_probe_error_count',
+            'client_report_traffic_usage_mb',
+            'client_report_usage_seconds',
+            'client_report_count',
+            'node_push_traffic_u_bytes',
+            'node_push_traffic_d_bytes',
+            'node_push_traffic_total_bytes',
+            'bandwidth',
+            'up_bandwidth',
+            'down_bandwidth',
+        ]);
+
+        if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+            $query->orderBy($orderBy, $orderDirection);
+        } elseif (in_array('date', $groupBy, true)) {
             $query->orderByDesc('date');
             if (in_array('hour', $groupBy, true)) {
                 $query->orderByDesc('hour');
@@ -121,6 +142,11 @@ class NodeMainReportService
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
         ];
+    }
+
+    private function normalizeOrderDirection($value): string
+    {
+        return is_string($value) && strtolower($value) === 'asc' ? 'asc' : 'desc';
     }
 
     public function aggregateByBucket(string $date, int $hour, int $minute): void

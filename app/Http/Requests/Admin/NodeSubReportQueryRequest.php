@@ -43,6 +43,8 @@ class NodeSubReportQueryRequest extends FormRequest
             'filters.includeExternal' => 'nullable|boolean',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
+            'orderBy' => 'nullable|string|max:64',
+            'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
 }

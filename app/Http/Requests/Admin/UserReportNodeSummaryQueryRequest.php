@@ -31,6 +31,8 @@ class UserReportNodeSummaryQueryRequest extends FormRequest
             'filters.nodeTypes.*' => 'string|max:32',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
+            'orderBy' => 'nullable|string|in:date,hour,node_id,node_host,node_type,probe_stage,avg_delay,traffic_usage,traffic_use_time,compute_count,success_count,fail_count,success_rate,id,created_at,updated_at',
+            'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
 }

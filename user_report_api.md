@@ -39,6 +39,8 @@
   - `filters.countries` `string[]|null`
 - `page` `int|null`
 - `pageSize` `int|null`，1-200
+- `orderBy` `string|null`，可选：`date/hour/user_id/app_id/app_version/country/report_count/id/created_at/updated_at`
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 `data[]` 字段：
 
@@ -74,6 +76,8 @@
   - `filters.probeStages` `string[]|null`
   - `filters.nodeTypes` `string[]|null`
 - `page/pageSize`
+- `orderBy` `string|null`，可选：`date/hour/node_id/node_host/node_type/probe_stage/avg_delay/traffic_usage/traffic_use_time/compute_count/success_count/fail_count/success_rate/id/created_at/updated_at`
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 `data[]` 字段：
 
@@ -121,6 +125,8 @@
   - `filters.appVersions` `string[]|null`
   - `filters.countries` `string[]|null`
 - `page/pageSize`
+- `orderBy` `string|null`，可选：`date/hour/user_id/app_id/app_version/country/traffic_usage/traffic_use_time/compute_count/id/created_at/updated_at`
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 `data[]` 字段：
 
@@ -160,6 +166,8 @@
   - `filters.probeStages` `string[]|null`
   - `filters.errorCodes` `string[]|null`
 - `page/pageSize`
+- `orderBy` `string|null`，可选：`date/hour/node_id/node_host/node_type/probe_stage/error_code/report_at_ms/fail_count/last_report_at_ms/id/created_at`
+- `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
 `data[]` 字段：
 
