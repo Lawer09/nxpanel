@@ -228,6 +228,7 @@ class AdminRoute
                 $router->post('/userReport/nodeSummary/query', [ReportController::class, 'queryUserReportNodeSummary']);
                 $router->post('/userReport/traffic/query', [ReportController::class, 'queryUserReportTraffic']);
                 $router->post('/userReport/nodeFail/query', [ReportController::class, 'queryUserReportNodeFail']);
+                $router->post('/project/query', [ProjectAggregateController::class, 'queryDaily']);
             });
 
             // Realtime User Reports
