@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Redis;
 class NodeServerReportService
 {
     public const REDIS_RAW_PREFIX = 'node_server_report:raw:';
+    private const DEFAULT_NODE_ID = 0;
+    private const DEFAULT_NODE_TYPE = 'unknown';
+    private const DEFAULT_NODE_HOST = 'n.n.n.n';
+    private const DEFAULT_NODE_PUBLIC_IP = '0.0.0.0';
 
     public static function enabled(): bool
     {
@@ -62,6 +66,20 @@ class NodeServerReportService
         Redis::del($bucketKey);
     }
 
+    public static function restoreBucket(string $bucketKey, array $payloads): void
+    {
+        if (empty($payloads)) {
+            return;
+        }
+
+        Redis::pipeline(function ($pipe) use ($bucketKey, $payloads) {
+            foreach ($payloads as $payload) {
+                $pipe->rpush($bucketKey, json_encode($payload, JSON_UNESCAPED_UNICODE));
+            }
+            $pipe->expire($bucketKey, 3600);
+        });
+    }
+
     public function processBatch(array $payloads): array
     {
         $normalized = [];
@@ -99,8 +117,8 @@ class NodeServerReportService
         foreach ($normalized as $item) {
             $nodeMeta = $nodeMetaMap[$item['node_id']] ?? [
                 'node_type' => $item['node_type'],
-                'node_host' => '',
-                'node_public_ip' => '',
+                'node_host' => self::DEFAULT_NODE_HOST,
+                'node_public_ip' => self::DEFAULT_NODE_PUBLIC_IP,
             ];
 
             $nodeKey = implode('|', [$item['date'], $item['hour'], $item['node_id']]);
@@ -109,9 +127,9 @@ class NodeServerReportService
                     'date' => $item['date'],
                     'hour' => $item['hour'],
                     'node_id' => $item['node_id'],
-                    'node_type' => (string) ($nodeMeta['node_type'] ?? ''),
-                    'node_host' => (string) ($nodeMeta['node_host'] ?? ''),
-                    'node_public_ip' => (string) ($nodeMeta['node_public_ip'] ?? ''),
+                    'node_type' => (string) ($nodeMeta['node_type'] ?? self::DEFAULT_NODE_TYPE),
+                    'node_host' => (string) ($nodeMeta['node_host'] ?? self::DEFAULT_NODE_HOST),
+                    'node_public_ip' => (string) ($nodeMeta['node_public_ip'] ?? self::DEFAULT_NODE_PUBLIC_IP),
                     'traffic_upload' => 0,
                     'traffic_download' => 0,
                     'sum_cpu_usage' => 0.0,
@@ -133,13 +151,13 @@ class NodeServerReportService
 
             $nodeAgg[$nodeKey]['node_type'] = $nodeAgg[$nodeKey]['node_type'] !== ''
                 ? $nodeAgg[$nodeKey]['node_type']
-                : (string) ($nodeMeta['node_type'] ?? '');
+                : (string) ($nodeMeta['node_type'] ?? self::DEFAULT_NODE_TYPE);
             $nodeAgg[$nodeKey]['node_host'] = $nodeAgg[$nodeKey]['node_host'] !== ''
                 ? $nodeAgg[$nodeKey]['node_host']
-                : (string) ($nodeMeta['node_host'] ?? '');
+                : (string) ($nodeMeta['node_host'] ?? self::DEFAULT_NODE_HOST);
             $nodeAgg[$nodeKey]['node_public_ip'] = $nodeAgg[$nodeKey]['node_public_ip'] !== ''
                 ? $nodeAgg[$nodeKey]['node_public_ip']
-                : (string) ($nodeMeta['node_public_ip'] ?? '');
+                : (string) ($nodeMeta['node_public_ip'] ?? self::DEFAULT_NODE_PUBLIC_IP);
 
             $nodeAgg[$nodeKey]['traffic_upload'] += $item['traffic_upload'];
             $nodeAgg[$nodeKey]['traffic_download'] += $item['traffic_download'];
@@ -209,9 +227,9 @@ class NodeServerReportService
                     DB::table('v3_node_server_report_node')
                         ->where('id', $existing->id)
                         ->update([
-                            'node_type' => $row['node_type'] !== '' ? $row['node_type'] : (string) $existing->node_type,
-                            'node_host' => $row['node_host'] !== '' ? $row['node_host'] : (string) $existing->node_host,
-                            'node_public_ip' => $row['node_public_ip'] !== '' ? $row['node_public_ip'] : (string) $existing->node_public_ip,
+                            'node_type' => $row['node_type'] !== '' ? $row['node_type'] : ((string) $existing->node_type ?: self::DEFAULT_NODE_TYPE),
+                            'node_host' => $row['node_host'] !== '' ? $row['node_host'] : ((string) $existing->node_host ?: self::DEFAULT_NODE_HOST),
+                            'node_public_ip' => $row['node_public_ip'] !== '' ? $row['node_public_ip'] : ((string) $existing->node_public_ip ?: self::DEFAULT_NODE_PUBLIC_IP),
                             'traffic_upload' => ((int) $existing->traffic_upload) + $row['traffic_upload'],
                             'traffic_download' => ((int) $existing->traffic_download) + $row['traffic_download'],
                             'avg_cpu_usage' => $this->mergeWeightedAverage((float) $existing->avg_cpu_usage, $oldCount, $row['sum_cpu_usage'], $newCount),
@@ -311,10 +329,7 @@ class NodeServerReportService
 
     private function normalizePayload(array $payload): ?array
     {
-        $nodeId = (int) ($payload['node_id'] ?? $payload['nodeId'] ?? 0);
-        if ($nodeId <= 0) {
-            return null;
-        }
+        $nodeId = max(self::DEFAULT_NODE_ID, (int) ($payload['node_id'] ?? $payload['nodeId'] ?? self::DEFAULT_NODE_ID));
 
         $reportAtMs = $this->normalizeTimestampMs($payload['report_at_ms'] ?? $payload['reported_at'] ?? null)
             ?? now()->getTimestampMs();
@@ -347,7 +362,7 @@ class NodeServerReportService
             'date' => $time->toDateString(),
             'hour' => (int) $time->hour,
             'node_id' => $nodeId,
-            'node_type' => (string) ($payload['node_type'] ?? $payload['nodeType'] ?? ''),
+            'node_type' => (string) ($payload['node_type'] ?? $payload['nodeType'] ?? self::DEFAULT_NODE_TYPE),
             'traffic_entries' => $trafficEntries,
             'traffic_upload' => (int) $trafficUpload,
             'traffic_download' => (int) $trafficDownload,
@@ -469,9 +484,9 @@ class NodeServerReportService
         $map = [];
         foreach ($rows as $row) {
             $map[(int) $row->node_id] = [
-                'node_type' => (string) ($row->node_type ?? ''),
-                'node_host' => (string) ($row->node_host ?? ''),
-                'node_public_ip' => (string) ($row->node_public_ip ?? ''),
+                'node_type' => (string) ($row->node_type ?? self::DEFAULT_NODE_TYPE),
+                'node_host' => (string) ($row->node_host ?? self::DEFAULT_NODE_HOST),
+                'node_public_ip' => (string) ($row->node_public_ip ?? self::DEFAULT_NODE_PUBLIC_IP),
             ];
         }
 

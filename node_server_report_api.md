@@ -212,3 +212,32 @@
 - node/user 报表接口已返回 camelCase，前端可直接绑定表格字段。
 - realtime 接口是原始快照，建议前端做一次字段转换（`snake_case -> camelCase`）。
 - 流量单位均为 `bytes`，展示 GB 时建议前端统一按 `bytes / 1024 / 1024 / 1024` 转换。
+
+---
+
+## 6. 默认值与回放
+
+### 6.1 维度默认值
+
+当上报中维度缺失/为空时，落库采用以下默认值：
+
+- `nodeId` -> `0`
+- `nodeType` -> `unknown`
+- `nodeHost` -> `n.n.n.n`
+- `nodePublicIp` -> `0.0.0.0`
+
+### 6.2 OSS 回放
+
+- 命令：`php artisan node_server_report:replay-oss {date}`
+- 示例：
+
+```bash
+php artisan node_server_report:replay-oss 2026-05-08 --hour=16 --minute=20 --clear-day
+```
+
+- 常用参数：
+  - `--bucket=yyyymmddHHmm`
+  - `--batch=10000`
+  - `--chunk=1000`
+  - `--dry-run`
+  - `--clear-day`

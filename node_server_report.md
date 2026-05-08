@@ -317,3 +317,23 @@ data格式参考示例
 - CPU 字段当前按上报原值入库（未强制做 0-1/0-100 归一）；
 - `node_public_ip` 取节点绑定机器主 IP（优先 `ip_machine + v2_ip_pool.ip`，其次 `machines.ip_address`）；
 - 为保证幂等，当前采用“按维度先查后累加更新”的方式合并。
+
+7) 维度空值默认值（Phase 1.1）
+
+- `node_id` 默认 `0`（未知节点）；
+- `node_type` 默认 `unknown`；
+- `node_host` 默认 `n.n.n.n`；
+- `node_public_ip` 默认 `0.0.0.0`。
+
+8) OSS 回放命令（Phase 1.1）
+
+- 命令：`php artisan node_server_report:replay-oss {date}`
+- 代码：`app/Console/Commands/ReplayNodeServerReportRawFromOss.php`
+- 支持参数：
+  - `--hour=HH`
+  - `--minute=MM`（5 分钟对齐）
+  - `--bucket=yyyymmddHHmm`
+  - `--batch=10000`
+  - `--chunk=1000`
+  - `--dry-run`
+  - `--clear-day`
