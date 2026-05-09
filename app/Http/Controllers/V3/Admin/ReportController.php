@@ -4,77 +4,21 @@ namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\NodeReportQueryRequest;
-use App\Http\Requests\Admin\NodeMainReportQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerRealtimeRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
-use App\Http\Requests\Admin\NodeSubReportQueryRequest;
 use App\Http\Requests\Admin\UserReportHourlyQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeFailQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportTrafficQueryRequest;
 use App\Http\Resources\CamelizeResource;
-use App\Services\NodeMainReportService;
-use App\Services\NodeSubReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    public function __construct(
-        private readonly NodeMainReportService $nodeMainReportService,
-        private readonly NodeSubReportService $nodeSubReportService
-    )
-    {
-    }
-
-    /**
-     * 节点主报表查询
-     *
-     * POST /report/node/query
-     */
-    public function queryNode(NodeMainReportQueryRequest $request): JsonResponse
-    {
-        $result = $this->nodeMainReportService->query($request->validated());
-
-        return $this->ok([
-            'data' => CamelizeResource::collection($result['data']),
-            'total' => $result['total'],
-            'page' => $result['page'],
-            'pageSize' => $result['pageSize'],
-            'groupBy' => $result['groupBy'],
-            'metric_availability' => $result['metric_availability'],
-            'bandwidth_source' => $result['bandwidth_source'],
-            'dateFrom' => $result['dateFrom'],
-            'dateTo' => $result['dateTo'],
-        ]);
-    }
-
-    /**
-     * 子表校对查询
-     *
-     * POST /report/node/subtable/query
-     */
-    public function queryNodeSubTable(NodeSubReportQueryRequest $request): JsonResponse
-    {
-        $result = $this->nodeSubReportService->query($request->validated());
-
-        return $this->ok([
-            'data' => CamelizeResource::collection($result['data']),
-            'total' => $result['total'],
-            'page' => $result['page'],
-            'pageSize' => $result['pageSize'],
-            'subTable' => $result['subTable'],
-            'groupBy' => $result['groupBy'],
-            'metricMap' => $result['metricMap'],
-            'date' => $result['date'],
-            'hour' => $result['hour'],
-            'minute' => $result['minute'],
-        ]);
-    }
-
     /**
      * 节点实时上报数据（缓存）
      *

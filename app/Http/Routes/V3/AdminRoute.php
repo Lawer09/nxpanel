@@ -222,8 +222,6 @@ class AdminRoute
                 'prefix' => 'report',
                 'middleware' => ['duration']
             ], function ($router) {
-                $router->post('/node/query', [ReportController::class, 'queryNode']);
-                $router->post('/node/subtable/query', [ReportController::class, 'queryNodeSubTable']);
                 $router->post('/nodeServer/realtime', [ReportController::class, 'nodeServerRealtime']);
                 $router->post('/nodeServerReport/node/query', [ReportController::class, 'queryNodeServerReportNode']);
                 $router->post('/nodeServerReport/user/query', [ReportController::class, 'queryNodeServerReportUser']);

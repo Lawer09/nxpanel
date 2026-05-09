@@ -60,9 +60,6 @@ class Kernel extends ConsoleKernel
         // 用户上报聚合（每 5 分钟，先归档再统计）
         $schedule->command('user_report:aggregate')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
 
-        // 节点主报表快照聚合（每 5 分钟）
-        $schedule->command('perf:aggregate-main-table')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
-
         // 节点上报数据派发（每 5 分钟，先归档再投递队列）
         $schedule->command('node_server_report:dispatch')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
 

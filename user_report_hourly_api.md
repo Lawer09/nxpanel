@@ -102,3 +102,27 @@
 - 报表流量字段统一为 `KB`。
 - 节点上报流量原始单位为 `B`，查询层按 `value / 1024` 转换为 `KB`。
 - 用户上报流量原始单位为 `MB`，查询层按 `value * 1024` 转换为 `KB`。
+
+---
+
+## 4. 任务命令
+
+1. 小时聚合（重算指定小时）
+
+```bash
+php artisan report_hourly:aggregate --date=2026-05-09 --hour=10 --rebuild
+```
+
+2. 小时对账（源表 vs 小时报表）
+
+```bash
+php artisan report_hourly:reconcile 2026-05-09 --hour=10
+```
+
+3. 天级重建（重新聚合整天 24 小时）
+
+```bash
+php artisan report_hourly:rebuild 2026-05-09
+```
+
+补充：仅重建某小时可加 `--hour=10`；保留已有数据并执行 upsert 可加 `--keep-existing`。
