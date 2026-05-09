@@ -22,8 +22,8 @@
 - 新增独立聚合命令：`user_report:aggregate`。
 - 新增独立 DB 表：
   - `v3_user_report_summary`
-  - `v3_user_report_node_summary`
-  - `v3_user_report_traffic`
+  - `v3_user_report_node`
+  - `v3_user_report_user`
   - `v3_user_report_node_fail`
 - 新链路开关（建议）：`USER_REPORT_ENABLED=true`，用于灰度和快速回滚。
 
@@ -118,7 +118,7 @@
 - 口径：每个 payload 记 1 次（不是 `reports` 条数）。
 - 唯一键建议：`(date, hour, user_id, app_id, app_version, country)`
 
-### 5.3 `v3_user_report_node_summary`（节点维度）
+### 5.3 `v3_user_report_node`（节点维度）
 
 - 维度：`date, hour, node_id, node_host, node_type, probe_stage`
 - 指标：
@@ -136,7 +136,7 @@
     - 成功 -> `delay=200`
   - `reports` 的 `traffic_usage/traffic_use_time` 默认 0
 
-### 5.4 `v3_user_report_traffic`（用户流量）
+### 5.4 `v3_user_report_user`（用户流量）
 
 - 维度：`date, hour, user_id, app_id, app_version, country`
 - 指标：`traffic_usage, traffic_use_time, compute_count`
@@ -168,10 +168,10 @@
 - `v3_user_report_summary`
   - `UNIQUE(date, hour, user_id, app_id, app_version, country)`
   - `INDEX(user_id, date)`
-- `v3_user_report_node_summary`
+- `v3_user_report_node`
   - `UNIQUE(date, hour, node_id, node_host, node_type, probe_stage)`
   - `INDEX(node_id, date, hour)`
-- `v3_user_report_traffic`
+- `v3_user_report_user`
   - `UNIQUE(date, hour, user_id, app_id, app_version, country)`
   - `INDEX(user_id, date)`
 - `v3_user_report_node_fail`

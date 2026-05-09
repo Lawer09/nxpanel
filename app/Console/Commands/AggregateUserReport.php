@@ -334,7 +334,7 @@ class AggregateUserReport extends Command
                 ? round($group['delay_sum'] / $group['compute_count'], 2)
                 : 0;
 
-            DB::table('v3_user_report_node_summary')->updateOrInsert(
+            DB::table('v3_user_report_node')->updateOrInsert(
                 [
                     'date' => $group['date'],
                     'hour' => $group['hour'],
@@ -358,7 +358,7 @@ class AggregateUserReport extends Command
                     'updated_at' => now(),
                 ]
             );
-            $this->bumpCacheVersion('v3_user_report_node_summary', $group['date'], (int) $group['hour']);
+            $this->bumpCacheVersion('v3_user_report_node', $group['date'], (int) $group['hour']);
         }
     }
 
@@ -431,7 +431,7 @@ class AggregateUserReport extends Command
         }
 
         foreach ($groups as $group) {
-            DB::table('v3_user_report_traffic')->updateOrInsert(
+            DB::table('v3_user_report_user')->updateOrInsert(
                 [
                     'date' => $group['date'],
                     'hour' => $group['hour'],
@@ -447,7 +447,7 @@ class AggregateUserReport extends Command
                     'updated_at' => now(),
                 ]
             );
-            $this->bumpCacheVersion('v3_user_report_traffic', $group['date'], (int) $group['hour']);
+            $this->bumpCacheVersion('v3_user_report_user', $group['date'], (int) $group['hour']);
         }
     }
 

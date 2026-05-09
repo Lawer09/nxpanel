@@ -8,8 +8,8 @@
 - [ ] 执行迁移：`2026_05_07_200000_create_v3_user_report_tables.php`。
 - [ ] 确认 4 张表索引生效：
   - `v3_user_report_summary`
-  - `v3_user_report_node_summary`
-  - `v3_user_report_traffic`
+  - `v3_user_report_node`
+  - `v3_user_report_user`
   - `v3_user_report_node_fail`
 
 ## 3) 上报写入链路

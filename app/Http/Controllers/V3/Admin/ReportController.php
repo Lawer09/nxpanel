@@ -192,7 +192,7 @@ class ReportController extends Controller
         $orderBy = $validated['orderBy'] ?? null;
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
-        $query = DB::table('v3_user_report_node_summary');
+        $query = DB::table('v3_user_report_node');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
 
         $this->applyWhereIn($query, 'node_id', $filters['nodeIds'] ?? null);
@@ -288,7 +288,7 @@ class ReportController extends Controller
         $orderBy = $validated['orderBy'] ?? null;
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
-        $query = DB::table('v3_user_report_traffic');
+        $query = DB::table('v3_user_report_user');
         $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
 
         $this->applyWhereIn($query, 'user_id', $filters['userIds'] ?? null);

@@ -24,7 +24,7 @@ return new class extends Migration {
             $table->index(['date', 'hour'], 'idx_ur_sum_date_hour');
         });
 
-        Schema::create('v3_user_report_node_summary', function (Blueprint $table) {
+        Schema::create('v3_user_report_node', function (Blueprint $table) {
             $table->id();
             $table->date('date')->comment('UTC+8 日期');
             $table->unsignedTinyInteger('hour')->comment('UTC+8 小时');
@@ -44,7 +44,7 @@ return new class extends Migration {
             $table->index(['date', 'hour'], 'idx_ur_node_sum_date_hour');
         });
 
-        Schema::create('v3_user_report_traffic', function (Blueprint $table) {
+        Schema::create('v3_user_report_user', function (Blueprint $table) {
             $table->id();
             $table->date('date')->comment('UTC+8 日期');
             $table->unsignedTinyInteger('hour')->comment('UTC+8 小时');
@@ -88,8 +88,8 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::dropIfExists('v3_user_report_node_fail');
-        Schema::dropIfExists('v3_user_report_traffic');
-        Schema::dropIfExists('v3_user_report_node_summary');
+        Schema::dropIfExists('v3_user_report_user');
+        Schema::dropIfExists('v3_user_report_node');
         Schema::dropIfExists('v3_user_report_summary');
     }
 };

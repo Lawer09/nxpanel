@@ -57,7 +57,7 @@
     report_count 该小时内的上报次数, 每一条代表上报一次
 
 
-2. v3_user_report_node_summary (主要用于统计节点情况)
+2. v3_user_report_node (主要用于统计节点情况)
     id
     date 来自 metadata 中的 timestamp, 转为UTC8
     hour 来自 metadata 中的 timestamp, 转为UTC8
@@ -73,7 +73,7 @@
     compute_count 参与计算的数据总数（同纬度下）, reports 和  user_default（vpn_connection）的总数
 
 
-3. v3_user_report_traffic (主要用于统计用户流量)
+3. v3_user_report_user (主要用于统计用户流量)
     id
     date 来自 metadata 中的 timestamp, 转为UTC8
     hour 来自 metadata 中的 timestamp, 转为UTC8

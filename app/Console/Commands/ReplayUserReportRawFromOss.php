@@ -113,8 +113,8 @@ class ReplayUserReportRawFromOss extends Command
         if ($clearDay && !$dryRun) {
             $this->warn('Clearing day data before replay: ' . $date);
             DB::table('v3_user_report_summary')->where('date', $date)->delete();
-            DB::table('v3_user_report_node_summary')->where('date', $date)->delete();
-            DB::table('v3_user_report_traffic')->where('date', $date)->delete();
+            DB::table('v3_user_report_node')->where('date', $date)->delete();
+            DB::table('v3_user_report_user')->where('date', $date)->delete();
             DB::table('v3_user_report_node_fail')->where('date', $date)->delete();
         }
 
