@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\NodeReportQueryRequest;
 use App\Http\Requests\Admin\NodeMainReportQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerRealtimeRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
 use App\Http\Requests\Admin\NodeSubReportQueryRequest;
+use App\Http\Requests\Admin\UserReportHourlyQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeFailQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportSummaryQueryRequest;
@@ -592,6 +594,198 @@ class ReportController extends Controller
             'total' => $result['total'],
             'page' => $result['page'],
             'pageSize' => $result['pageSize'],
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'hourFrom' => $hourFrom,
+            'hourTo' => $hourTo,
+            'groupBy' => $groupBy,
+        ]);
+    }
+
+    /**
+     * 统一节点小时报表查询
+     *
+     * POST /report/nodeReport/query
+     */
+    public function queryNodeReport(NodeReportQueryRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $dateFrom = $validated['dateFrom'] ?? now()->subDays(1)->toDateString();
+        $dateTo = $validated['dateTo'] ?? now()->toDateString();
+        $hourFrom = $validated['hourFrom'] ?? null;
+        $hourTo = $validated['hourTo'] ?? null;
+        $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
+        $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
+        $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
+
+        $query = DB::table('v3_report_node_hourly');
+        $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
+
+        $this->applyWhereIn($query, 'node_id', $filters['nodeIds'] ?? null);
+        $this->applyWhereIn($query, 'node_type', $filters['nodeTypes'] ?? null);
+        $this->applyWhereIn($query, 'node_host', $filters['nodeHosts'] ?? null);
+        $this->applyWhereIn($query, 'node_public_ip', $filters['nodePublicIps'] ?? null);
+        $this->applyWhereIn($query, 'probe_stage', $filters['probeStages'] ?? null);
+
+        if (!empty($groupBy)) {
+            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip', 'probe_stage']);
+            if (empty($selects)) {
+                $selects = ['date', 'hour'];
+            }
+
+            $query->selectRaw(
+                implode(', ', $selects)
+                . ', SUM(traffic_upload) as traffic_upload'
+                . ', SUM(traffic_download) as traffic_download'
+                . ', ROUND(SUM(avg_cpu_usage * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_cpu_usage'
+                . ', ROUND(SUM(avg_mem_usage * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_mem_usage'
+                . ', MAX(max_cpu_usage) as max_cpu_usage'
+                . ', MAX(max_mem_usage) as max_mem_usage'
+                . ', ROUND(SUM(avg_disk_usage * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_disk_usage'
+                . ', ROUND(SUM(avg_inbound_speed * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_inbound_speed'
+                . ', ROUND(SUM(avg_outbound_speed * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_outbound_speed'
+                . ', MAX(max_inbound_speed) as max_inbound_speed'
+                . ', MAX(max_outbound_speed) as max_outbound_speed'
+                . ', ROUND(SUM(avg_tcp_connections * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_tcp_connections'
+                . ', MAX(max_tcp_connections) as max_tcp_connections'
+                . ', ROUND(SUM(avg_alive_users * report_count_node) / NULLIF(SUM(report_count_node), 0), 6) as avg_alive_users'
+                . ', MAX(max_alive_users) as max_alive_users'
+                . ', ROUND(SUM(avg_delay * report_count_user) / NULLIF(SUM(report_count_user), 0), 2) as avg_delay'
+                . ', SUM(traffic_usage) as traffic_usage'
+                . ', SUM(traffic_use_time) as traffic_use_time'
+                . ', SUM(success_count) as success_count'
+                . ', SUM(fail_count) as fail_count'
+                . ', ROUND(100 * SUM(success_count) / NULLIF(SUM(success_count) + SUM(fail_count), 0), 2) as success_rate'
+                . ', SUM(report_count_node) as report_count_node'
+                . ', SUM(report_count_user) as report_count_user'
+            );
+            $query->groupBy($selects);
+
+            $sortable = array_values(array_unique(array_merge($selects, [
+                'traffic_upload', 'traffic_download',
+                'avg_cpu_usage', 'avg_mem_usage', 'max_cpu_usage', 'max_mem_usage',
+                'avg_disk_usage', 'avg_inbound_speed', 'avg_outbound_speed',
+                'max_inbound_speed', 'max_outbound_speed',
+                'avg_tcp_connections', 'max_tcp_connections',
+                'avg_alive_users', 'max_alive_users',
+                'avg_delay', 'traffic_usage', 'traffic_use_time',
+                'success_count', 'fail_count', 'success_rate',
+                'report_count_node', 'report_count_user',
+            ])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('report_count_node');
+            }
+        } else {
+            $sortable = [
+                'date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip', 'probe_stage',
+                'traffic_upload', 'traffic_download',
+                'avg_cpu_usage', 'avg_mem_usage', 'max_cpu_usage', 'max_mem_usage',
+                'avg_disk_usage', 'avg_inbound_speed', 'avg_outbound_speed',
+                'max_inbound_speed', 'max_outbound_speed',
+                'avg_tcp_connections', 'max_tcp_connections',
+                'avg_alive_users', 'max_alive_users',
+                'avg_delay', 'traffic_usage', 'traffic_use_time',
+                'success_count', 'fail_count', 'success_rate',
+                'report_count_node', 'report_count_user',
+                'id', 'created_at', 'updated_at',
+            ];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('report_count_node');
+            }
+        }
+
+        $page = $query->paginate($pageSize);
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($page->items()),
+            'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'pageSize' => $page->perPage(),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'hourFrom' => $hourFrom,
+            'hourTo' => $hourTo,
+            'groupBy' => $groupBy,
+        ]);
+    }
+
+    /**
+     * 统一用户小时报表查询
+     *
+     * POST /report/userReport/query
+     */
+    public function queryUserReportHourly(UserReportHourlyQueryRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $dateFrom = $validated['dateFrom'] ?? now()->subDays(1)->toDateString();
+        $dateTo = $validated['dateTo'] ?? now()->toDateString();
+        $hourFrom = $validated['hourFrom'] ?? null;
+        $hourTo = $validated['hourTo'] ?? null;
+        $groupBy = is_array($validated['groupBy'] ?? null) ? $validated['groupBy'] : [];
+        $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
+        $pageSize = (int) ($validated['pageSize'] ?? 50);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
+
+        $query = DB::table('v3_report_user_hourly');
+        $this->applyTimeRange($query, $dateFrom, $dateTo, $hourFrom, $hourTo);
+
+        $this->applyWhereIn($query, 'user_id', $filters['userIds'] ?? null);
+        $this->applyWhereIn($query, 'app_id', $filters['appIds'] ?? null);
+        $this->applyWhereIn($query, 'app_version', $filters['appVersions'] ?? null);
+        $this->applyWhereIn($query, 'country', $filters['countries'] ?? null);
+
+        if (!empty($groupBy)) {
+            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'user_id', 'app_id', 'app_version', 'country']);
+            if (empty($selects)) {
+                $selects = ['date', 'hour'];
+            }
+            $query->selectRaw(
+                implode(', ', $selects)
+                . ', SUM(traffic_usage) as traffic_usage'
+                . ', SUM(traffic_use_time) as traffic_use_time'
+                . ', SUM(traffic_upload) as traffic_upload'
+                . ', SUM(traffic_download) as traffic_download'
+                . ', SUM(report_count_user) as report_count_user'
+                . ', SUM(report_count_node) as report_count_node'
+            );
+            $query->groupBy($selects);
+
+            $sortable = array_values(array_unique(array_merge($selects, ['traffic_usage', 'traffic_use_time', 'traffic_upload', 'traffic_download', 'report_count_user', 'report_count_node'])));
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('traffic_download');
+            }
+        } else {
+            $sortable = [
+                'date', 'hour', 'user_id', 'app_id', 'app_version', 'country',
+                'traffic_usage', 'traffic_use_time', 'traffic_upload', 'traffic_download',
+                'report_count_user', 'report_count_node',
+                'id', 'created_at', 'updated_at',
+            ];
+            if (is_string($orderBy) && in_array($orderBy, $sortable, true)) {
+                $query->orderBy($orderBy, $orderDirection);
+            } else {
+                $query->orderByDesc('date')->orderByDesc('hour')->orderByDesc('traffic_download');
+            }
+        }
+
+        $page = $query->paginate($pageSize);
+
+        return $this->ok([
+            'data' => CamelizeResource::collection($page->items()),
+            'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'pageSize' => $page->perPage(),
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'hourFrom' => $hourFrom,

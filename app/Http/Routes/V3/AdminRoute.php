@@ -227,6 +227,8 @@ class AdminRoute
                 $router->post('/nodeServer/realtime', [ReportController::class, 'nodeServerRealtime']);
                 $router->post('/nodeServerReport/node/query', [ReportController::class, 'queryNodeServerReportNode']);
                 $router->post('/nodeServerReport/user/query', [ReportController::class, 'queryNodeServerReportUser']);
+                $router->post('/nodeReport/query', [ReportController::class, 'queryNodeReport']);
+                $router->post('/userReport/query', [ReportController::class, 'queryUserReportHourly']);
                 $router->post('/userReport/summary/query', [ReportController::class, 'queryUserReportSummary']);
                 $router->post('/userReport/nodeSummary/query', [ReportController::class, 'queryUserReportNodeSummary']);
                 $router->post('/userReport/traffic/query', [ReportController::class, 'queryUserReportTraffic']);

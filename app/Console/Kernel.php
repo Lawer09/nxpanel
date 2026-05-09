@@ -66,6 +66,9 @@ class Kernel extends ConsoleKernel
         // 节点上报数据派发（每 5 分钟，先归档再投递队列）
         $schedule->command('node_server_report:dispatch')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
 
+        // 统一小时报表聚合（每 5 分钟，重算当前小时和上一小时）
+        $schedule->command('report_hourly:aggregate')->everyFiveMinutes()->onOneServer()->withoutOverlapping(5);
+
         // 项目日报聚合（每 5 分钟刷新当天）
         $schedule->command('project:aggregate-daily')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
 
