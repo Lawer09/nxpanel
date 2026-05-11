@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\DB;
 class RebuildReportHourlyByDay extends Command
 {
     protected $signature = 'report_hourly:rebuild
-        {date : YYYY-MM-DD}
+        {date : YYYY-MM-DD start date}
+        {--to= : Optional end date YYYY-MM-DD (default: same as date)}
         {--hour= : Optional hour 0-23}
         {--keep-existing : Keep existing rows and upsert only}';
 
@@ -18,12 +19,19 @@ class RebuildReportHourlyByDay extends Command
 
     public function handle(): int
     {
-        $dateArg = (string) $this->argument('date');
+        $dateFrom = (string) $this->argument('date');
+        $dateTo = $this->option('to') ?? $dateFrom;
 
         try {
-            $date = Carbon::createFromFormat('Y-m-d', $dateArg)->toDateString();
+            $start = Carbon::createFromFormat('Y-m-d', $dateFrom);
+            $end = Carbon::createFromFormat('Y-m-d', $dateTo);
         } catch (\Throwable $e) {
-            $this->error('date 参数格式错误，请使用 YYYY-MM-DD');
+            $this->error('date/--to 格式错误，请使用 YYYY-MM-DD');
+            return self::FAILURE;
+        }
+
+        if ($start->gt($end)) {
+            $this->error('date 不能晚于 --to');
             return self::FAILURE;
         }
 
@@ -43,30 +51,37 @@ class RebuildReportHourlyByDay extends Command
 
         $keepExisting = (bool) $this->option('keep-existing');
 
-        if (!$keepExisting) {
-            DB::table('v3_report_user_hourly')->where('date', $date)->whereIn('hour', $hours)->delete();
-            DB::table('v3_report_node_hourly')->where('date', $date)->whereIn('hour', $hours)->delete();
-            $this->info('Deleted existing hourly rows for target range.');
-        }
+        $current = clone $start;
+        while ($current->lte($end)) {
+            $date = $current->toDateString();
 
-        foreach ($hours as $hour) {
-            $exitCode = Artisan::call('report_hourly:aggregate', [
-                '--date' => $date,
-                '--hour' => $hour,
-            ]);
-
-            $output = trim(Artisan::output());
-            if ($output !== '') {
-                $this->line($output);
+            if (!$keepExisting) {
+                DB::table('v3_report_user_hourly')->where('date', $date)->whereIn('hour', $hours)->delete();
+                DB::table('v3_report_node_hourly')->where('date', $date)->whereIn('hour', $hours)->delete();
+                $this->line("Cleared hourly rows for: {$date}");
             }
 
-            if ($exitCode !== self::SUCCESS) {
-                $this->error(sprintf('aggregate failed at %s %02d', $date, $hour));
-                return self::FAILURE;
+            foreach ($hours as $hour) {
+                $exitCode = Artisan::call('report_hourly:aggregate', [
+                    '--date' => $date,
+                    '--hour' => $hour,
+                ]);
+
+                $output = trim(Artisan::output());
+                if ($output !== '') {
+                    $this->line($output);
+                }
+
+                if ($exitCode !== self::SUCCESS) {
+                    $this->error(sprintf('aggregate failed at %s %02d', $date, $hour));
+                    return self::FAILURE;
+                }
             }
+
+            $this->info(sprintf('rebuild finished: %s hours=%d', $date, count($hours)));
+            $current->addDay();
         }
 
-        $this->info(sprintf('rebuild finished: %s hours=%d', $date, count($hours)));
         return self::SUCCESS;
     }
 }

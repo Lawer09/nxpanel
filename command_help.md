@@ -27,6 +27,9 @@ php artisan user_report:aggregate --bucket=202605111005 --skip-archive
 # 回放某天全部
 php artisan user_report:replay-oss 2026-05-01 --clear-day
 
+# 回放日期范围
+php artisan user_report:replay-oss 2026-05-01 --to=2026-05-05 --clear-day
+
 # 回放某小时
 php artisan user_report:replay-oss 2026-05-01 --hour=10 --clear-day
 
@@ -37,8 +40,9 @@ php artisan user_report:replay-oss 2026-05-01 --bucket=202605011005
 php artisan user_report:replay-oss 2026-05-01 --dry-run
 ```
 
-**流程：** 读 OSS NDJSON → 按 `report_at_ms` 还原到 Redis bucket → 调 `user_report:aggregate --skip-archive` → 聚合写表
+**流程：** 读 OSS NDJSON → 按 metadata.timestamp 还原到 Redis bucket → 调 `user_report:aggregate --skip-archive` → 聚合写表
 
+**`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
 **`--clear-day`：** 清空 `v3_user_report_node` 当日数据后再回放（用于 app_id/app_version 存量拆分）。
 
 ---
@@ -67,6 +71,9 @@ php artisan node_server_report:dispatch --bucket=202605111005
 # 回放某天全部
 php artisan node_server_report:replay-oss 2026-05-01 --clear-day
 
+# 回放日期范围
+php artisan node_server_report:replay-oss 2026-05-01 --to=2026-05-05 --clear-day
+
 # 回放某小时+分钟
 php artisan node_server_report:replay-oss 2026-05-01 --hour=10 --minute=05 --clear-day
 
@@ -76,6 +83,8 @@ php artisan node_server_report:replay-oss 2026-05-01 --bucket=202605011005
 # 预览
 php artisan node_server_report:replay-oss 2026-05-01 --dry-run
 ```
+
+**`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
 
 ---
 
@@ -126,12 +135,17 @@ php artisan report_hourly:reconcile 2026-05-09 --hour=10
 # 重建整天
 php artisan report_hourly:rebuild 2026-05-09
 
+# 重建日期范围
+php artisan report_hourly:rebuild 2026-05-09 --to=2026-05-11
+
 # 重建某小时
 php artisan report_hourly:rebuild 2026-05-09 --hour=10
 
 # 不删已有数据，仅 upsert
 php artisan report_hourly:rebuild 2026-05-09 --keep-existing
 ```
+
+**`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
 
 ---
 
@@ -154,11 +168,11 @@ php artisan report_hourly:rebuild 2026-05-09 --keep-existing
 php artisan migrate
 
 # 2. 回放 node 端（拆分 app_id/app_version）
-php artisan node_server_report:replay-oss 2026-05-01 --clear-day
+php artisan node_server_report:replay-oss 2026-05-01 --to=2026-05-11 --clear-day
 
 # 3. 回放 user 端（拆分 app_id/app_version）
-php artisan user_report:replay-oss 2026-05-01 --clear-day
+php artisan user_report:replay-oss 2026-05-01 --to=2026-05-11 --clear-day
 
 # 4. 重建小时表
-php artisan report_hourly:rebuild 2026-05-01
+php artisan report_hourly:rebuild 2026-05-01 --to=2026-05-11
 ```
