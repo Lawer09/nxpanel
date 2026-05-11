@@ -175,6 +175,7 @@ class AggregateReportHourly extends Command
             ->where('hour', $hour)
             ->select([
                 'date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip',
+                'app_id', 'app_version',
                 'traffic_upload', 'traffic_download',
                 'avg_cpu_usage', 'avg_mem_usage', 'max_cpu_usage', 'max_mem_usage', 'avg_disk_usage',
                 'avg_inbound_speed', 'avg_outbound_speed', 'max_inbound_speed', 'max_outbound_speed',
@@ -186,8 +187,8 @@ class AggregateReportHourly extends Command
         $userSourceRows = DB::table('v3_user_report_node')
             ->where('date', $date)
             ->where('hour', $hour)
-            ->selectRaw('date, hour, node_id, node_type, node_host, probe_stage, ROUND(SUM(avg_delay * compute_count) / NULLIF(SUM(compute_count), 0), 2) as avg_delay, SUM(traffic_usage) as traffic_usage_mb, SUM(traffic_use_time) as traffic_use_time, SUM(success_count) as success_count, SUM(fail_count) as fail_count, SUM(compute_count) as report_count_user')
-            ->groupBy(['date', 'hour', 'node_id', 'node_type', 'node_host', 'probe_stage'])
+            ->selectRaw('date, hour, node_id, node_type, node_host, probe_stage, app_id, app_version, ROUND(SUM(avg_delay * compute_count) / NULLIF(SUM(compute_count), 0), 2) as avg_delay, SUM(traffic_usage) as traffic_usage_mb, SUM(traffic_use_time) as traffic_use_time, SUM(success_count) as success_count, SUM(fail_count) as fail_count, SUM(compute_count) as report_count_user')
+            ->groupBy(['date', 'hour', 'node_id', 'node_type', 'node_host', 'probe_stage', 'app_id', 'app_version'])
             ->get();
 
         $nodeMetaByNode = [];
@@ -201,7 +202,7 @@ class AggregateReportHourly extends Command
                 'node_public_ip' => (string) $row->node_public_ip,
             ];
 
-            $key = $this->nodeKey($row->date, (int) $row->hour, $nodeId, (string) $row->node_type, (string) $row->node_host, (string) $row->node_public_ip, 'post_connect_probe');
+            $key = $this->nodeKey($row->date, (int) $row->hour, $nodeId, (string) $row->node_type, (string) $row->node_host, (string) $row->node_public_ip, 'post_connect_probe', (string) $row->app_id, (string) $row->app_version);
             $merged[$key] = [
                 'date' => $row->date,
                 'hour' => (int) $row->hour,
@@ -210,6 +211,8 @@ class AggregateReportHourly extends Command
                 'node_host' => (string) $row->node_host,
                 'node_public_ip' => (string) $row->node_public_ip,
                 'probe_stage' => 'post_connect_probe',
+                'app_id' => (string) $row->app_id,
+                'app_version' => (string) $row->app_version,
                 'traffic_upload' => round(((float) $row->traffic_upload) / 1024, 3),
                 'traffic_download' => round(((float) $row->traffic_download) / 1024, 3),
                 'avg_cpu_usage' => (float) $row->avg_cpu_usage,
@@ -245,7 +248,7 @@ class AggregateReportHourly extends Command
             $nodePublicIp = (string) ($nodeMeta['node_public_ip'] ?? '0.0.0.0');
             $probeStage = (string) ($row->probe_stage ?: 'post_connect_probe');
 
-            $key = $this->nodeKey($row->date, (int) $row->hour, $nodeId, $nodeType, $nodeHost, $nodePublicIp, $probeStage);
+            $key = $this->nodeKey($row->date, (int) $row->hour, $nodeId, $nodeType, $nodeHost, $nodePublicIp, $probeStage, (string) $row->app_id, (string) $row->app_version);
             if (!isset($merged[$key])) {
                 $merged[$key] = [
                     'date' => $row->date,
@@ -255,6 +258,8 @@ class AggregateReportHourly extends Command
                     'node_host' => $nodeHost,
                     'node_public_ip' => $nodePublicIp,
                     'probe_stage' => $probeStage,
+                    'app_id' => (string) $row->app_id,
+                    'app_version' => (string) $row->app_version,
                     'traffic_upload' => 0.0,
                     'traffic_download' => 0.0,
                     'avg_cpu_usage' => 0.0,
@@ -303,6 +308,8 @@ class AggregateReportHourly extends Command
                     'node_host' => $row['node_host'],
                     'node_public_ip' => $row['node_public_ip'],
                     'probe_stage' => $row['probe_stage'],
+                    'app_id' => $row['app_id'],
+                    'app_version' => $row['app_version'],
                 ],
                 [
                     'traffic_upload' => $row['traffic_upload'],
@@ -339,8 +346,8 @@ class AggregateReportHourly extends Command
         return implode('|', [$date, $hour, $userId, $appId, $appVersion, $country]);
     }
 
-    private function nodeKey(string $date, int $hour, int $nodeId, string $nodeType, string $nodeHost, string $nodePublicIp, string $probeStage): string
+    private function nodeKey(string $date, int $hour, int $nodeId, string $nodeType, string $nodeHost, string $nodePublicIp, string $probeStage, string $appId = '', string $appVersion = ''): string
     {
-        return implode('|', [$date, $hour, $nodeId, $nodeType, $nodeHost, $nodePublicIp, $probeStage]);
+        return implode('|', [$date, $hour, $nodeId, $nodeType, $nodeHost, $nodePublicIp, $probeStage, $appId, $appVersion]);
     }
 }

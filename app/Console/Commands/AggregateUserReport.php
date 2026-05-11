@@ -297,6 +297,8 @@ class AggregateUserReport extends Command
                 (string) $row['node_host'],
                 (string) $row['node_type'],
                 (string) $row['probe_stage'],
+                (string) $row['app_id'],
+                (string) $row['app_version'],
             ]);
 
             if (!isset($groups[$key])) {
@@ -307,6 +309,8 @@ class AggregateUserReport extends Command
                     'node_host' => (string) $row['node_host'],
                     'node_type' => (string) $row['node_type'],
                     'probe_stage' => (string) $row['probe_stage'],
+                    'app_id' => (string) $row['app_id'],
+                    'app_version' => (string) $row['app_version'],
                     'delay_sum' => 0,
                     'traffic_usage' => 0.0,
                     'traffic_use_time' => 0,
@@ -342,6 +346,8 @@ class AggregateUserReport extends Command
                     'node_host' => $group['node_host'],
                     'node_type' => $group['node_type'],
                     'probe_stage' => $group['probe_stage'],
+                    'app_id' => $group['app_id'],
+                    'app_version' => $group['app_version'],
                 ],
                 [
                     'avg_delay' => DB::raw(sprintf(

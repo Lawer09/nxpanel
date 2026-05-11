@@ -111,7 +111,8 @@ class NodeServerReportService
         $nodeMetaMap = $this->loadNodeMeta(array_values($nodeIds));
         $userMetaMap = $this->loadUserMeta(array_values($userIds));
 
-        $nodeAgg = [];
+        $nodeSysAgg = [];
+        $nodeTrafficByApp = [];
         $userAgg = [];
 
         foreach ($normalized as $item) {
@@ -122,16 +123,16 @@ class NodeServerReportService
             ];
 
             $nodeKey = implode('|', [$item['date'], $item['hour'], $item['node_id']]);
-            if (!isset($nodeAgg[$nodeKey])) {
-                $nodeAgg[$nodeKey] = [
+
+            // 1. System metrics per node (from payload status/metrics)
+            if (!isset($nodeSysAgg[$nodeKey])) {
+                $nodeSysAgg[$nodeKey] = [
                     'date' => $item['date'],
                     'hour' => $item['hour'],
                     'node_id' => $item['node_id'],
                     'node_type' => (string) ($nodeMeta['node_type'] ?? self::DEFAULT_NODE_TYPE),
                     'node_host' => (string) ($nodeMeta['node_host'] ?? self::DEFAULT_NODE_HOST),
                     'node_public_ip' => (string) ($nodeMeta['node_public_ip'] ?? self::DEFAULT_NODE_PUBLIC_IP),
-                    'traffic_upload' => 0,
-                    'traffic_download' => 0,
                     'sum_cpu_usage' => 0.0,
                     'sum_mem_usage' => 0.0,
                     'sum_disk_usage' => 0.0,
@@ -149,33 +150,62 @@ class NodeServerReportService
                 ];
             }
 
-            $nodeAgg[$nodeKey]['node_type'] = $nodeAgg[$nodeKey]['node_type'] !== ''
-                ? $nodeAgg[$nodeKey]['node_type']
+            $nodeSysAgg[$nodeKey]['node_type'] = $nodeSysAgg[$nodeKey]['node_type'] !== ''
+                ? $nodeSysAgg[$nodeKey]['node_type']
                 : (string) ($nodeMeta['node_type'] ?? self::DEFAULT_NODE_TYPE);
-            $nodeAgg[$nodeKey]['node_host'] = $nodeAgg[$nodeKey]['node_host'] !== ''
-                ? $nodeAgg[$nodeKey]['node_host']
+            $nodeSysAgg[$nodeKey]['node_host'] = $nodeSysAgg[$nodeKey]['node_host'] !== ''
+                ? $nodeSysAgg[$nodeKey]['node_host']
                 : (string) ($nodeMeta['node_host'] ?? self::DEFAULT_NODE_HOST);
-            $nodeAgg[$nodeKey]['node_public_ip'] = $nodeAgg[$nodeKey]['node_public_ip'] !== ''
-                ? $nodeAgg[$nodeKey]['node_public_ip']
+            $nodeSysAgg[$nodeKey]['node_public_ip'] = $nodeSysAgg[$nodeKey]['node_public_ip'] !== ''
+                ? $nodeSysAgg[$nodeKey]['node_public_ip']
                 : (string) ($nodeMeta['node_public_ip'] ?? self::DEFAULT_NODE_PUBLIC_IP);
 
-            $nodeAgg[$nodeKey]['traffic_upload'] += $item['traffic_upload'];
-            $nodeAgg[$nodeKey]['traffic_download'] += $item['traffic_download'];
-            $nodeAgg[$nodeKey]['sum_cpu_usage'] += $item['cpu_usage'];
-            $nodeAgg[$nodeKey]['sum_mem_usage'] += $item['mem_usage'];
-            $nodeAgg[$nodeKey]['sum_disk_usage'] += $item['disk_usage'];
-            $nodeAgg[$nodeKey]['sum_inbound_speed'] += $item['inbound_speed'];
-            $nodeAgg[$nodeKey]['sum_outbound_speed'] += $item['outbound_speed'];
-            $nodeAgg[$nodeKey]['sum_tcp_connections'] += $item['tcp_connections'];
-            $nodeAgg[$nodeKey]['sum_alive_users'] += $item['alive_users'];
-            $nodeAgg[$nodeKey]['max_cpu_usage'] = max($nodeAgg[$nodeKey]['max_cpu_usage'], $item['cpu_usage']);
-            $nodeAgg[$nodeKey]['max_mem_usage'] = max($nodeAgg[$nodeKey]['max_mem_usage'], $item['mem_usage']);
-            $nodeAgg[$nodeKey]['max_inbound_speed'] = max($nodeAgg[$nodeKey]['max_inbound_speed'], $item['inbound_speed']);
-            $nodeAgg[$nodeKey]['max_outbound_speed'] = max($nodeAgg[$nodeKey]['max_outbound_speed'], $item['outbound_speed']);
-            $nodeAgg[$nodeKey]['max_tcp_connections'] = max($nodeAgg[$nodeKey]['max_tcp_connections'], $item['tcp_connections']);
-            $nodeAgg[$nodeKey]['max_alive_users'] = max($nodeAgg[$nodeKey]['max_alive_users'], $item['alive_users']);
-            $nodeAgg[$nodeKey]['compute_count']++;
+            $nodeSysAgg[$nodeKey]['sum_cpu_usage'] += $item['cpu_usage'];
+            $nodeSysAgg[$nodeKey]['sum_mem_usage'] += $item['mem_usage'];
+            $nodeSysAgg[$nodeKey]['sum_disk_usage'] += $item['disk_usage'];
+            $nodeSysAgg[$nodeKey]['sum_inbound_speed'] += $item['inbound_speed'];
+            $nodeSysAgg[$nodeKey]['sum_outbound_speed'] += $item['outbound_speed'];
+            $nodeSysAgg[$nodeKey]['sum_tcp_connections'] += $item['tcp_connections'];
+            $nodeSysAgg[$nodeKey]['sum_alive_users'] += $item['alive_users'];
+            $nodeSysAgg[$nodeKey]['max_cpu_usage'] = max($nodeSysAgg[$nodeKey]['max_cpu_usage'], $item['cpu_usage']);
+            $nodeSysAgg[$nodeKey]['max_mem_usage'] = max($nodeSysAgg[$nodeKey]['max_mem_usage'], $item['mem_usage']);
+            $nodeSysAgg[$nodeKey]['max_inbound_speed'] = max($nodeSysAgg[$nodeKey]['max_inbound_speed'], $item['inbound_speed']);
+            $nodeSysAgg[$nodeKey]['max_outbound_speed'] = max($nodeSysAgg[$nodeKey]['max_outbound_speed'], $item['outbound_speed']);
+            $nodeSysAgg[$nodeKey]['max_tcp_connections'] = max($nodeSysAgg[$nodeKey]['max_tcp_connections'], $item['tcp_connections']);
+            $nodeSysAgg[$nodeKey]['max_alive_users'] = max($nodeSysAgg[$nodeKey]['max_alive_users'], $item['alive_users']);
+            $nodeSysAgg[$nodeKey]['compute_count']++;
 
+            // 2. Traffic per app from traffic entries + userMetaMap
+            foreach ($item['traffic_entries'] as $entry) {
+                $uid = $entry['user_id'];
+                if ($uid <= 0) {
+                    continue;
+                }
+
+                $meta = $userMetaMap[$uid] ?? ['app_id' => '', 'app_version' => ''];
+                $appId = (string) ($meta['app_id'] ?? '');
+                $appVersion = (string) ($meta['app_version'] ?? '');
+                $appKey = $nodeKey . '|' . $appId . '|' . $appVersion;
+
+                if (!isset($nodeTrafficByApp[$appKey])) {
+                    $nodeTrafficByApp[$appKey] = [
+                        'date' => $item['date'],
+                        'hour' => $item['hour'],
+                        'node_id' => $item['node_id'],
+                        'app_id' => $appId,
+                        'app_version' => $appVersion,
+                        'traffic_upload' => 0,
+                        'traffic_download' => 0,
+                        'compute_count' => 0,
+                    ];
+                }
+
+                $nodeTrafficByApp[$appKey]['traffic_upload'] += $entry['upload'];
+                $nodeTrafficByApp[$appKey]['traffic_download'] += $entry['download'];
+                $nodeTrafficByApp[$appKey]['compute_count']++;
+            }
+
+            // 3. Per-user traffic (unchanged)
             foreach ($item['traffic_entries'] as $entry) {
                 if ($entry['user_id'] <= 0) {
                     continue;
@@ -209,75 +239,71 @@ class NodeServerReportService
             }
         }
 
-        DB::transaction(function () use ($nodeAgg, $userAgg) {
+        DB::transaction(function () use ($nodeSysAgg, $nodeTrafficByApp, $userAgg) {
             $now = now();
 
-            foreach ($nodeAgg as $row) {
-                $existing = DB::table('v3_node_server_report_node')
-                    ->where('date', $row['date'])
-                    ->where('hour', $row['hour'])
-                    ->where('node_id', $row['node_id'])
-                    ->first();
+            // Merge nodeSysAgg + nodeTrafficByApp → per-app rows in v3_node_server_report_node
+            foreach ($nodeSysAgg as $nodeKey => $sysRow) {
+                $sysCount = max(1, (int) $sysRow['compute_count']);
+                $avgCpu = round($sysRow['sum_cpu_usage'] / $sysCount, 6);
+                $avgMem = round($sysRow['sum_mem_usage'] / $sysCount, 6);
+                $avgDisk = round($sysRow['sum_disk_usage'] / $sysCount, 6);
+                $avgInbound = round($sysRow['sum_inbound_speed'] / $sysCount, 6);
+                $avgOutbound = round($sysRow['sum_outbound_speed'] / $sysCount, 6);
+                $avgTcp = round($sysRow['sum_tcp_connections'] / $sysCount, 6);
+                $avgAlive = round($sysRow['sum_alive_users'] / $sysCount, 6);
 
-                if ($existing) {
-                    $oldCount = (int) $existing->compute_count;
-                    $newCount = (int) $row['compute_count'];
-                    $mergedCount = $oldCount + $newCount;
-
-                    DB::table('v3_node_server_report_node')
-                        ->where('id', $existing->id)
-                        ->update([
-                            'node_type' => $row['node_type'] !== '' ? $row['node_type'] : ((string) $existing->node_type ?: self::DEFAULT_NODE_TYPE),
-                            'node_host' => $row['node_host'] !== '' ? $row['node_host'] : ((string) $existing->node_host ?: self::DEFAULT_NODE_HOST),
-                            'node_public_ip' => $row['node_public_ip'] !== '' ? $row['node_public_ip'] : ((string) $existing->node_public_ip ?: self::DEFAULT_NODE_PUBLIC_IP),
-                            'traffic_upload' => ((int) $existing->traffic_upload) + $row['traffic_upload'],
-                            'traffic_download' => ((int) $existing->traffic_download) + $row['traffic_download'],
-                            'avg_cpu_usage' => $this->mergeWeightedAverage((float) $existing->avg_cpu_usage, $oldCount, $row['sum_cpu_usage'], $newCount),
-                            'avg_mem_usage' => $this->mergeWeightedAverage((float) $existing->avg_mem_usage, $oldCount, $row['sum_mem_usage'], $newCount),
-                            'max_cpu_usage' => max((float) $existing->max_cpu_usage, $row['max_cpu_usage']),
-                            'max_mem_usage' => max((float) $existing->max_mem_usage, $row['max_mem_usage']),
-                            'avg_disk_usage' => $this->mergeWeightedAverage((float) $existing->avg_disk_usage, $oldCount, $row['sum_disk_usage'], $newCount),
-                            'avg_inbound_speed' => $this->mergeWeightedAverage((float) $existing->avg_inbound_speed, $oldCount, $row['sum_inbound_speed'], $newCount),
-                            'avg_outbound_speed' => $this->mergeWeightedAverage((float) $existing->avg_outbound_speed, $oldCount, $row['sum_outbound_speed'], $newCount),
-                            'max_inbound_speed' => max((float) $existing->max_inbound_speed, $row['max_inbound_speed']),
-                            'max_outbound_speed' => max((float) $existing->max_outbound_speed, $row['max_outbound_speed']),
-                            'avg_tcp_connections' => $this->mergeWeightedAverage((float) $existing->avg_tcp_connections, $oldCount, $row['sum_tcp_connections'], $newCount),
-                            'max_tcp_connections' => max((float) $existing->max_tcp_connections, $row['max_tcp_connections']),
-                            'avg_alive_users' => $this->mergeWeightedAverage((float) $existing->avg_alive_users, $oldCount, $row['sum_alive_users'], $newCount),
-                            'max_alive_users' => max((float) $existing->max_alive_users, $row['max_alive_users']),
-                            'compute_count' => $mergedCount,
-                            'updated_at' => $now,
-                        ]);
-                    continue;
+                $nodePrefix = $nodeKey . '|';
+                $appRows = [];
+                foreach ($nodeTrafficByApp as $appKey => $trafficRow) {
+                    if (str_starts_with($appKey, $nodePrefix)) {
+                        $appRows[] = $trafficRow;
+                    }
                 }
 
-                $count = max(1, (int) $row['compute_count']);
-                DB::table('v3_node_server_report_node')->insert([
-                    'date' => $row['date'],
-                    'hour' => $row['hour'],
-                    'node_id' => $row['node_id'],
-                    'node_type' => $row['node_type'],
-                    'node_host' => $row['node_host'],
-                    'node_public_ip' => $row['node_public_ip'],
-                    'traffic_upload' => $row['traffic_upload'],
-                    'traffic_download' => $row['traffic_download'],
-                    'avg_cpu_usage' => round($row['sum_cpu_usage'] / $count, 6),
-                    'avg_mem_usage' => round($row['sum_mem_usage'] / $count, 6),
-                    'max_cpu_usage' => $row['max_cpu_usage'],
-                    'max_mem_usage' => $row['max_mem_usage'],
-                    'avg_disk_usage' => round($row['sum_disk_usage'] / $count, 6),
-                    'avg_inbound_speed' => round($row['sum_inbound_speed'] / $count, 6),
-                    'avg_outbound_speed' => round($row['sum_outbound_speed'] / $count, 6),
-                    'max_inbound_speed' => $row['max_inbound_speed'],
-                    'max_outbound_speed' => $row['max_outbound_speed'],
-                    'avg_tcp_connections' => round($row['sum_tcp_connections'] / $count, 6),
-                    'max_tcp_connections' => $row['max_tcp_connections'],
-                    'avg_alive_users' => round($row['sum_alive_users'] / $count, 6),
-                    'max_alive_users' => $row['max_alive_users'],
-                    'compute_count' => $row['compute_count'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
+                if (empty($appRows)) {
+                    $appRows[] = [
+                        'app_id' => '',
+                        'app_version' => '',
+                        'traffic_upload' => 0,
+                        'traffic_download' => 0,
+                        'compute_count' => 0,
+                    ];
+                }
+
+                foreach ($appRows as $trafficRow) {
+                    DB::table('v3_node_server_report_node')->updateOrInsert(
+                        [
+                            'date' => $sysRow['date'],
+                            'hour' => $sysRow['hour'],
+                            'node_id' => $sysRow['node_id'],
+                            'app_id' => $trafficRow['app_id'],
+                            'app_version' => $trafficRow['app_version'],
+                        ],
+                        [
+                            'node_type' => $sysRow['node_type'],
+                            'node_host' => $sysRow['node_host'],
+                            'node_public_ip' => $sysRow['node_public_ip'],
+                            'traffic_upload' => DB::raw('traffic_upload + ' . (int) $trafficRow['traffic_upload']),
+                            'traffic_download' => DB::raw('traffic_download + ' . (int) $trafficRow['traffic_download']),
+                            'avg_cpu_usage' => $avgCpu,
+                            'avg_mem_usage' => $avgMem,
+                            'max_cpu_usage' => DB::raw('GREATEST(max_cpu_usage, ' . (float) $sysRow['max_cpu_usage'] . ')'),
+                            'max_mem_usage' => DB::raw('GREATEST(max_mem_usage, ' . (float) $sysRow['max_mem_usage'] . ')'),
+                            'avg_disk_usage' => $avgDisk,
+                            'avg_inbound_speed' => $avgInbound,
+                            'avg_outbound_speed' => $avgOutbound,
+                            'max_inbound_speed' => DB::raw('GREATEST(max_inbound_speed, ' . (float) $sysRow['max_inbound_speed'] . ')'),
+                            'max_outbound_speed' => DB::raw('GREATEST(max_outbound_speed, ' . (float) $sysRow['max_outbound_speed'] . ')'),
+                            'avg_tcp_connections' => $avgTcp,
+                            'max_tcp_connections' => DB::raw('GREATEST(max_tcp_connections, ' . (float) $sysRow['max_tcp_connections'] . ')'),
+                            'avg_alive_users' => $avgAlive,
+                            'max_alive_users' => DB::raw('GREATEST(max_alive_users, ' . (float) $sysRow['max_alive_users'] . ')'),
+                            'compute_count' => DB::raw('compute_count + ' . (int) $trafficRow['compute_count']),
+                            'updated_at' => $now,
+                        ]
+                    );
+                }
             }
 
             foreach ($userAgg as $row) {
@@ -322,7 +348,8 @@ class NodeServerReportService
 
         return [
             'payloads' => count($normalized),
-            'node_rows' => count($nodeAgg),
+            'node_rows' => count($nodeSysAgg),
+            'node_app_rows' => count($nodeTrafficByApp),
             'user_rows' => count($userAgg),
         ];
     }
