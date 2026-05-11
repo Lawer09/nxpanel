@@ -19,13 +19,15 @@
 - `dateFrom/dateTo` `string|null`
 - `hourFrom/hourTo` `int|null`，范围 `0-23`
 - `groupBy` `string[]|null`，可选：
-  - `date` `hour` `node_id` `node_type` `node_host` `node_public_ip` `probe_stage`
+  - `date` `hour` `node_id` `node_type` `node_host` `node_public_ip` `probe_stage` `app_id` `app_version`
 - `filters` `object|null`
   - `filters.nodeIds` `int[]|null`
   - `filters.nodeTypes` `string[]|null`
   - `filters.nodeHosts` `string[]|null`
   - `filters.nodePublicIps` `string[]|null`
   - `filters.probeStages` `string[]|null`
+  - `filters.appIds` `string[]|null`
+  - `filters.appVersions` `string[]|null`
 - `page/pageSize` `int|null`（`pageSize` 最大 `200`）
 - `orderBy` `string|null`
 - `orderDirection` `asc|desc|null`
@@ -68,7 +70,7 @@
 
 `data[]`：
 
-- 维度字段：`date/hour/nodeId/nodeType/nodeHost/nodePublicIp/probeStage`
+- 维度字段：`date/hour/nodeId/nodeType/nodeHost/nodePublicIp/probeStage/appId/appVersion`
 - 指标字段：
   - `trafficUpload` `number`（KB，节点上报原始单位 B，按 `/1024` 转换）
   - `trafficDownload` `number`（KB，节点上报原始单位 B，按 `/1024` 转换）
@@ -107,6 +109,8 @@
 | nodeHost | node_host | 节点 host |
 | nodePublicIp | node_public_ip | 节点公网 IP |
 | probeStage | probe_stage | 探测阶段，默认 `post_connect_probe` |
+| appId | app_id | 应用 ID |
+| appVersion | app_version | 应用版本 |
 | trafficUpload | traffic_upload | 上传流量（KB，节点上报原始单位 B，按 `/1024` 转换） |
 | trafficDownload | traffic_download | 下载流量（KB，节点上报原始单位 B，按 `/1024` 转换） |
 | avgCpuUsage | avg_cpu_usage | 平均 CPU 使用率 |
@@ -137,6 +141,7 @@
 
 - 节点指标（CPU/内存/连接数/在线数/上下行速率）来自 `v3_node_server_report_node`。
 - 业务指标（延迟/成功失败/流量使用）来自 `v3_user_report_node`。
+- 两张源表与 `v3_report_node_hourly` 均已按 `app_id`/`app_version` 拆分维度，服务端聚合时系统指标重复存储（同一节点下各 app 行系统值相同）。
 - `report_count_node` 与 `report_count_user` 分别表示两侧样本计数，不做字段合并。
 - 报表流量字段统一为 `KB`。
 - 节点上报流量原始单位为 `B`，查询层按 `value / 1024` 转换为 `KB`。
@@ -165,3 +170,16 @@ php artisan report_hourly:rebuild 2026-05-09
 ```
 
 补充：仅重建某小时可加 `--hour=10`；保留已有数据并执行 upsert 可加 `--keep-existing`。
+
+### 4.1 OSS 回放（存量重建）
+
+```bash
+# 回放 node 端（v3_node_server_report_node）
+php artisan node_server_report:replay-oss 2026-05-01 --clear-day
+
+# 回放 user 端（v3_user_report_node）
+php artisan user_report:replay-oss 2026-05-01 --clear-day
+
+# 重建小时表
+php artisan report_hourly:rebuild 2026-05-01
+```

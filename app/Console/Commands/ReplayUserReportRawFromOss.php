@@ -14,11 +14,9 @@ class ReplayUserReportRawFromOss extends Command
     protected $signature = 'user_report:replay-oss
         {date : YYYY-MM-DD}
         {--hour= : Optional hour 00-23}
-        {--minute= : Optional minute 00/05/10...55}
         {--bucket= : Optional bucket yyyymmddHHmm}
-        {--batch=10000 : Batch size for aggregate command}
-        {--dry-run : Only count records, no write}
-        {--clear-day : Clear v3 user report tables for this day before replay}';
+        {--clear-day : Clear v3_user_report_node for this day before replay}
+        {--dry-run : Only count records, no write}';
 
     protected $description = 'Replay user-report raw NDJSON from OSS and re-aggregate';
 
@@ -26,30 +24,19 @@ class ReplayUserReportRawFromOss extends Command
     {
         $date = (string) $this->argument('date');
         $hour = $this->option('hour');
-        $minute = $this->option('minute');
         $bucketFilter = $this->option('bucket');
-        $batchSize = max(1000, (int) $this->option('batch'));
         $dryRun = (bool) $this->option('dry-run');
-        $clearDay = (bool) $this->option('clear-day');
 
         try {
             Carbon::createFromFormat('Y-m-d', $date);
         } catch (\Throwable $e) {
-            $this->error('Invalid date format. Use YYYY-MM-DD, e.g. 2026-05-07');
+            $this->error('Invalid date format. Use YYYY-MM-DD');
             return self::FAILURE;
         }
 
         if ($bucketFilter !== null && preg_match('/^\d{12}$/', (string) $bucketFilter) !== 1) {
             $this->error('Invalid --bucket. Expected yyyymmddHHmm');
             return self::FAILURE;
-        }
-
-        if ($minute !== null) {
-            $minuteInt = (int) $minute;
-            if ($minuteInt < 0 || $minuteInt > 59 || $minuteInt % 5 !== 0) {
-                $this->error('Invalid --minute. Expected 0..59 and divisible by 5');
-                return self::FAILURE;
-            }
         }
 
         $parts = explode('-', $date);
@@ -61,6 +48,8 @@ class ReplayUserReportRawFromOss extends Command
         }
 
         sort($files);
+
+        $clearDay = (bool) $this->option('clear-day');
 
         $bucketPayloads = [];
         foreach ($files as $path) {
@@ -80,8 +69,7 @@ class ReplayUserReportRawFromOss extends Command
                     continue;
                 }
 
-                $metadata = $this->resolveMetadata($row);
-                $reportAtMs = UserReportService::resolveReportAtMs($metadata);
+                $reportAtMs = $this->resolveReportAtMs($row);
                 $bucketTime = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai');
                 $bucketMinute = (int) floor(((int) $bucketTime->minute) / 5) * 5;
                 $bucket = $bucketTime->copy()->second(0)->minute($bucketMinute)->format('YmdHi');
@@ -91,16 +79,17 @@ class ReplayUserReportRawFromOss extends Command
                 }
 
                 $bucketHour = $bucketTime->format('H');
-                $bucketMinuteText = str_pad((string) $bucketMinute, 2, '0', STR_PAD_LEFT);
                 if ($hour !== null && $bucketHour !== str_pad((string) ((int) $hour), 2, '0', STR_PAD_LEFT)) {
-                    continue;
-                }
-                if ($minute !== null && $bucketMinuteText !== str_pad((string) ((int) $minute), 2, '0', STR_PAD_LEFT)) {
                     continue;
                 }
 
                 $bucketPayloads[$bucket][] = $row;
             }
+        }
+
+        if ($clearDay && !$dryRun) {
+            $this->warn('Clearing v3_user_report_node for date: ' . $date);
+            DB::table('v3_user_report_node')->where('date', $date)->delete();
         }
 
         if (empty($bucketPayloads)) {
@@ -109,14 +98,6 @@ class ReplayUserReportRawFromOss extends Command
         }
 
         ksort($bucketPayloads);
-
-        if ($clearDay && !$dryRun) {
-            $this->warn('Clearing day data before replay: ' . $date);
-            DB::table('v3_user_report_summary')->where('date', $date)->delete();
-            DB::table('v3_user_report_node')->where('date', $date)->delete();
-            DB::table('v3_user_report_user')->where('date', $date)->delete();
-            DB::table('v3_user_report_node_fail')->where('date', $date)->delete();
-        }
 
         $totalPayloads = 0;
         $totalBuckets = 0;
@@ -141,10 +122,8 @@ class ReplayUserReportRawFromOss extends Command
             UserReportService::deleteBucket($bucketKey);
             UserReportService::restoreBucket($bucketKey, $payloads);
 
-            $aggregateBatch = max($batchSize, $count + 10);
             $exitCode = Artisan::call('user_report:aggregate', [
                 '--bucket' => $bucket,
-                '--batch' => $aggregateBatch,
                 '--skip-archive' => true,
             ]);
 
@@ -165,20 +144,24 @@ class ReplayUserReportRawFromOss extends Command
         return self::SUCCESS;
     }
 
-    private function resolveMetadata(array $row): array
+    private function resolveReportAtMs(array $row): int
     {
         $metadata = $row['metadata'] ?? null;
-        if (is_array($metadata)) {
-            return $metadata;
-        }
-
         if (is_string($metadata)) {
             $decoded = json_decode($metadata, true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
+            $metadata = is_array($decoded) ? $decoded : [];
         }
 
-        return [];
+        $reportAtMs = $metadata['report_at_ms'] ?? $row['report_at_ms'] ?? null;
+        if (!is_numeric($reportAtMs)) {
+            return now()->getTimestampMs();
+        }
+
+        $int = (int) $reportAtMs;
+        if ($int <= 0) {
+            return now()->getTimestampMs();
+        }
+
+        return $int < 1000000000000 ? $int * 1000 : $int;
     }
 }

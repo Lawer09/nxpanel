@@ -56,12 +56,14 @@
 - `dateFrom/dateTo` `string|null`
 - `hourFrom/hourTo` `int|null`，范围 `0-23`
 - `groupBy` `string[]|null`，可选：
-  - `date` `hour` `node_id` `node_type` `node_host` `node_public_ip`
+  - `date` `hour` `node_id` `node_type` `node_host` `node_public_ip` `app_id` `app_version`
 - `filters` `object|null`
   - `filters.nodeIds` `int[]|null`
   - `filters.nodeTypes` `string[]|null`
   - `filters.nodeHosts` `string[]|null`
   - `filters.nodePublicIps` `string[]|null`
+  - `filters.appIds` `string[]|null`
+  - `filters.appVersions` `string[]|null`
 - `page/pageSize` `int|null`（`pageSize` 最大 `200`）
 - `orderBy` `string|null`
 - `orderDirection` `asc|desc|null`
@@ -80,7 +82,7 @@
 
 `data[]`：
 
-- 维度字段：`date/hour/nodeId/nodeType/nodeHost/nodePublicIp`
+- 维度字段：`date/hour/nodeId/nodeType/nodeHost/nodePublicIp/appId/appVersion`
 - 指标字段：
   - `trafficUpload` `int`
   - `trafficDownload` `int`
@@ -157,6 +159,8 @@
 | nodeType | node_type | 节点类型 |
 | nodeHost | node_host | 节点 host |
 | nodePublicIp | node_public_ip | 节点公网 IP |
+| appId | app_id | 应用 ID |
+| appVersion | app_version | 应用版本 |
 | trafficUpload | traffic_upload | 上传流量（bytes） |
 | trafficDownload | traffic_download | 下载流量（bytes） |
 | avgCpuUsage | avg_cpu_usage | 平均 CPU 使用率 |
@@ -228,16 +232,22 @@
 
 ### 6.2 OSS 回放
 
-- 命令：`php artisan node_server_report:replay-oss {date}`
+- node 端：`php artisan node_server_report:replay-oss {date}`
+- user 端：`php artisan user_report:replay-oss {date}`
 - 示例：
 
 ```bash
 php artisan node_server_report:replay-oss 2026-05-08 --hour=16 --minute=20 --clear-day
+php artisan user_report:replay-oss 2026-05-08 --clear-day
 ```
 
-- 常用参数：
+- 常用参数（node 端）：
   - `--bucket=yyyymmddHHmm`
   - `--batch=10000`
   - `--chunk=1000`
+  - `--dry-run`
+  - `--clear-day`
+- 常用参数（user 端）：
+  - `--bucket=yyyymmddHHmm`
   - `--dry-run`
   - `--clear-day`

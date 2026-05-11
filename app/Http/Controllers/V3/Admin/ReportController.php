@@ -145,9 +145,11 @@ class ReportController extends Controller
         $this->applyWhereIn($query, 'node_host', $filters['nodeHosts'] ?? null);
         $this->applyWhereIn($query, 'probe_stage', $filters['probeStages'] ?? null);
         $this->applyWhereIn($query, 'node_type', $filters['nodeTypes'] ?? null);
+        $this->applyWhereIn($query, 'app_id', $filters['appIds'] ?? null);
+        $this->applyWhereIn($query, 'app_version', $filters['appVersions'] ?? null);
 
         if (!empty($groupBy)) {
-            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'node_id', 'node_host', 'node_type', 'probe_stage']);
+            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'node_id', 'node_host', 'node_type', 'probe_stage', 'app_id', 'app_version']);
             if (empty($selects)) {
                 $selects = ['date', 'hour'];
             }
@@ -184,6 +186,7 @@ class ReportController extends Controller
 
             $sortable = [
                 'date', 'hour', 'node_id', 'node_host', 'node_type', 'probe_stage',
+                'app_id', 'app_version',
                 'avg_delay', 'traffic_usage', 'traffic_use_time', 'compute_count',
                 'success_count', 'fail_count', 'success_rate', 'id', 'created_at', 'updated_at',
             ];
@@ -388,9 +391,11 @@ class ReportController extends Controller
         $this->applyWhereIn($query, 'node_type', $filters['nodeTypes'] ?? null);
         $this->applyWhereIn($query, 'node_host', $filters['nodeHosts'] ?? null);
         $this->applyWhereIn($query, 'node_public_ip', $filters['nodePublicIps'] ?? null);
+        $this->applyWhereIn($query, 'app_id', $filters['appIds'] ?? null);
+        $this->applyWhereIn($query, 'app_version', $filters['appVersions'] ?? null);
 
         if (!empty($groupBy)) {
-            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip']);
+            $selects = $this->normalizeGroupBy($groupBy, ['date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip', 'app_id', 'app_version']);
             if (empty($selects)) {
                 $selects = ['date', 'hour'];
             }
@@ -432,6 +437,7 @@ class ReportController extends Controller
         } else {
             $sortable = [
                 'date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip',
+                'app_id', 'app_version',
                 'traffic_upload', 'traffic_download', 'avg_cpu_usage', 'avg_mem_usage',
                 'max_cpu_usage', 'max_mem_usage', 'avg_disk_usage',
                 'avg_inbound_speed', 'avg_outbound_speed', 'max_inbound_speed', 'max_outbound_speed',

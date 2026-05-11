@@ -126,3 +126,13 @@ php artisan report_hourly:rebuild 2026-05-09
 ```
 
 补充：仅重建某小时可加 `--hour=10`；保留已有数据并执行 upsert 可加 `--keep-existing`。
+
+### 4.1 OSS 回放（存量重建）
+
+```bash
+# 回放 user 端（v3_user_report_node 按 app 拆分）
+php artisan user_report:replay-oss 2026-05-01 --clear-day
+
+# 重建小时表
+php artisan report_hourly:rebuild 2026-05-01
+```
