@@ -15,7 +15,8 @@ class DispatchNodeServerReport extends Command
     protected $signature = 'node_server_report:dispatch
         {--batch=10000 : 每次读取 Redis 的最大 payload 条数}
         {--chunk=1000 : 每个队列任务包含的 payload 条数}
-        {--bucket= : 指定桶时间(yyyyMMddHHmm, UTC+8)}';
+        {--bucket= : 指定桶时间(yyyyMMddHHmm, UTC+8)}
+        {--skip-archive : 跳过 OSS 归档（用于回放重算）}';
 
     protected $description = '节点上报数据派发（先归档OSS，再投递队列处理）';
 
@@ -28,6 +29,7 @@ class DispatchNodeServerReport extends Command
 
         $batch = max(100, (int) $this->option('batch'));
         $chunkSize = max(100, (int) $this->option('chunk'));
+        $skipArchive = (bool) $this->option('skip-archive');
 
         $bucketTime = $this->resolveTargetBucketTime();
         $bucketKey = NodeServerReportService::bucketKeyAtUtc8($bucketTime);
@@ -46,10 +48,13 @@ class DispatchNodeServerReport extends Command
                 return self::SUCCESS;
             }
 
-            $archivePath = $this->archiveRawPayloads($payloads);
-            if ($archivePath === null) {
-                $this->error('Archive raw payloads failed, keep bucket for retry: ' . $bucketKey);
-                return self::FAILURE;
+            $archivePath = '[skipped]';
+            if (!$skipArchive) {
+                $archivePath = $this->archiveRawPayloads($payloads);
+                if ($archivePath === null) {
+                    $this->error('Archive raw payloads failed, keep bucket for retry: ' . $bucketKey);
+                    return self::FAILURE;
+                }
             }
 
             foreach (array_chunk($payloads, $chunkSize) as $chunk) {
@@ -70,6 +75,7 @@ class DispatchNodeServerReport extends Command
             Log::error('node_server_report:dispatch failed', [
                 'bucket_key' => $bucketKey,
                 'error' => $e->getMessage(),
+                'skip_archive' => $skipArchive,
             ]);
             $this->error($e->getMessage());
             return self::FAILURE;

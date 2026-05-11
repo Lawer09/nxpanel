@@ -157,11 +157,12 @@ class ReplayNodeServerReportRawFromOss extends Command
                 NodeServerReportService::restoreBucket($bucketKey, $payloads);
 
                 $dispatchBatch = max($batchSize, $count + 10);
-                $exitCode = Artisan::call('node_server_report:dispatch', [
-                    '--bucket' => $bucket,
-                    '--batch' => $dispatchBatch,
-                    '--chunk' => $chunkSize,
-                ]);
+            $exitCode = Artisan::call('node_server_report:dispatch', [
+                '--bucket' => $bucket,
+                '--batch' => $dispatchBatch,
+                '--chunk' => $chunkSize,
+                '--skip-archive' => true,
+            ]);
 
                 $output = trim(Artisan::output());
                 if ($output !== '') {
