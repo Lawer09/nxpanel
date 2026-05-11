@@ -90,14 +90,14 @@ php artisan node_server_report:replay-oss 2026-05-01 --dry-run
 
 清理 OSS 归档中的重复文件（修复 `--skip-archive` 前回放产生的重复归档）。
 
-**原理：** 归档路径用 `now()`，payload 内 `report_at_ms` 是数据时间。归档日期 > 数据日期 → 回放产物。
+**原理：** 对比文件 OSS `lastModified` 与 payload 内 `report_at_ms`。若归档时间 - 数据时间 > threshold（默认 30 分钟），则判定为回放产物。
 
 ```bash
-# 预览某归档日期的重复文件
-php artisan node_server_report:cleanup-archive --date=2026-05-12 --dry-run
-
-# 预览日期范围
+# 默认 30 分钟阈值预览
 php artisan node_server_report:cleanup-archive --from=2026-05-12 --to=2026-05-13 --dry-run
+
+# 调整阈值（归档比数据晚超过 60 分钟才算重复）
+php artisan node_server_report:cleanup-archive --from=2026-05-12 --threshold=60 --dry-run
 
 # 确认删除
 php artisan node_server_report:cleanup-archive --from=2026-05-12
@@ -106,7 +106,7 @@ php artisan node_server_report:cleanup-archive --from=2026-05-12
 php artisan node_server_report:cleanup-archive --date=2026-05-12 --force
 ```
 
-**安全策略：** 先 `--dry-run` 预览，确认无误后去掉 `--dry-run` 执行删除。
+**安全策略：** 先 `--dry-run` 预览，确认无误后去掉 `--dry-run` 执行删除。--threshold 默认 30 分钟，可根据实际回放时间窗口调整。
 
 ---
 

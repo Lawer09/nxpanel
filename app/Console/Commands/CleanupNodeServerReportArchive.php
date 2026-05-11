@@ -12,16 +12,18 @@ class CleanupNodeServerReportArchive extends Command
         {--date= : 清理指定归档日期 YYYY-MM-DD 下的文件}
         {--from= : 起始归档日期 YYYY-MM-DD}
         {--to= : 截止归档日期 YYYY-MM-DD}
+        {--threshold=30 : 归档时间超过数据时间的阈值(分钟)，默认30}
         {--dry-run : 仅统计，不删除}
         {--force : 跳过确认提示}';
 
-    protected $description = '清理 node_server_report OSS 归档中的重复文件（归档日期 > 数据日期 = replay 产物）';
+    protected $description = '清理 node_server_report OSS 归档中的重复文件（归档时间 - 数据时间 > threshold 分钟 = replay 产物）';
 
     public function handle(): int
     {
         $date = $this->option('date');
         $from = $this->option('from');
         $to = $this->option('to');
+        $threshold = max(1, (int) $this->option('threshold'));
         $dryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
 
@@ -50,6 +52,12 @@ class CleanupNodeServerReportArchive extends Command
 
             foreach ($files as $path) {
                 $totalFiles++;
+                $archiveTs = Storage::disk('oss')->lastModified($path);
+                if ($archiveTs === null) {
+                    $this->warn("Cannot get lastModified: {$path}");
+                    continue;
+                }
+
                 $content = Storage::disk('oss')->get($path);
                 $lines = preg_split("/\r\n|\n|\r/", trim((string) $content));
                 if (empty($lines)) {
@@ -57,8 +65,7 @@ class CleanupNodeServerReportArchive extends Command
                 }
 
                 $size = strlen((string) $content);
-                $earliestDataDate = null;
-                $latestDataDate = null;
+                $latestDataMs = null;
                 $linesChecked = 0;
 
                 foreach ($lines as $line) {
@@ -72,13 +79,8 @@ class CleanupNodeServerReportArchive extends Command
                     }
 
                     $reportAtMs = $this->resolveReportAtMs($row);
-                    $dataDate = Carbon::createFromTimestampMsUTC($reportAtMs)->setTimezone('Asia/Shanghai')->toDateString();
-
-                    if ($earliestDataDate === null || $dataDate < $earliestDataDate) {
-                        $earliestDataDate = $dataDate;
-                    }
-                    if ($latestDataDate === null || $dataDate > $latestDataDate) {
-                        $latestDataDate = $dataDate;
+                    if ($latestDataMs === null || $reportAtMs > $latestDataMs) {
+                        $latestDataMs = $reportAtMs;
                     }
 
                     $linesChecked++;
@@ -87,16 +89,23 @@ class CleanupNodeServerReportArchive extends Command
                     }
                 }
 
-                if ($earliestDataDate === null || $latestDataDate === null) {
-                    $this->warn("Cannot parse data date in: {$path}");
+                if ($latestDataMs === null) {
+                    $this->warn("Cannot parse data timestamp in: {$path}");
                     continue;
                 }
 
-                if ($archiveDate > $latestDataDate) {
+                $dataTs = (int) ($latestDataMs / 1000);
+                $diffMinutes = ($archiveTs - $dataTs) / 60;
+
+                if ($diffMinutes > $threshold) {
+                    $latestDataTime = Carbon::createFromTimestamp($dataTs)->setTimezone('Asia/Shanghai');
+                    $archiveTime = Carbon::createFromTimestamp($archiveTs)->setTimezone('Asia/Shanghai');
+
                     $duplicateFiles[] = [
                         'path' => $path,
-                        'archive_date' => $archiveDate,
-                        'data_date_range' => "{$earliestDataDate} ~ {$latestDataDate}",
+                        'archive_time' => $archiveTime->toDateTimeString(),
+                        'data_time' => $latestDataTime->toDateTimeString(),
+                        'diff_minutes' => round($diffMinutes, 1),
                         'size' => $size,
                         'lines' => count($lines),
                     ];
@@ -105,15 +114,16 @@ class CleanupNodeServerReportArchive extends Command
         }
 
         if (empty($duplicateFiles)) {
-            $this->info("No duplicate archive files found. total_files={$totalFiles}");
+            $this->info("No duplicate archive files found (threshold={$threshold}min). total_files={$totalFiles}");
             return self::SUCCESS;
         }
 
         $this->table(
-            ['Archive Date', 'Data Date Range', 'Lines', 'Size', 'Path'],
+            ['Archive Time', 'Data Time', 'Diff(min)', 'Lines', 'Size', 'Path'],
             collect($duplicateFiles)->map(fn($f) => [
-                $f['archive_date'],
-                $f['data_date_range'],
+                $f['archive_time'],
+                $f['data_time'],
+                $f['diff_minutes'],
                 $f['lines'],
                 $this->formatBytes($f['size']),
                 $f['path'],
@@ -122,8 +132,9 @@ class CleanupNodeServerReportArchive extends Command
 
         $totalDuplicateSize = array_sum(array_column($duplicateFiles, 'size'));
         $this->info(sprintf(
-            'Found %d duplicate files, total size %s (total files scanned: %d)',
+            'Found %d duplicate files (threshold=%d min), total size %s (total files scanned: %d)',
             count($duplicateFiles),
+            $threshold,
             $this->formatBytes($totalDuplicateSize),
             $totalFiles
         ));
