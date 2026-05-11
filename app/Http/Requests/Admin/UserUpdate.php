@@ -32,7 +32,8 @@ class UserUpdate extends FormRequest
             'commission_balance' => 'numeric',
             'remarks' => 'nullable',
             'speed_limit' => 'nullable|integer',
-            'device_limit' => 'nullable|integer'
+            'device_limit' => 'nullable|integer',
+            'register_metadata' => 'nullable|array'
         ];
     }
 

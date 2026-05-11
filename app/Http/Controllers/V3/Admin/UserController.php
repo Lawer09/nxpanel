@@ -25,11 +25,25 @@ class UserController extends V2UserController
      */
     public function fetch(Request $request): JsonResponse
     {
-        $current  = (int) $request->input('current', 1);
-        $pageSize = (int) $request->input('pageSize', 10);
-
         $userModel = User::with(['plan:id,name', 'invite_user:id,email', 'group:id,name'])
             ->select(DB::raw('*, (u+d) as total_used'));
+
+        $metadataFilters = $request->input('meta') ?? $request->input('register_metadata');
+        if (is_array($metadataFilters)) {
+            foreach ($metadataFilters as $key => $value) {
+                if (is_string($value) || is_numeric($value)) {
+                    $userModel->where("register_metadata->{$key}", $value);
+                }
+            }
+        }
+
+        if ($request->filled('id')) {
+            $ids = is_array($id = $request->input('id')) ? $id : explode(',', $id);
+            $userModel->whereIn('id', $ids);
+        }
+
+        $current  = (int) $request->input('current', 1);
+        $pageSize = (int) $request->input('pageSize', 10);
 
         $this->applyFiltersAndSortsPublic($request, $userModel);
 
@@ -131,6 +145,11 @@ class UserController extends V2UserController
         }
         if (isset($params['commission_balance'])) {
             $params['commission_balance'] = $params['commission_balance'] * 100;
+        }
+        if (isset($params['register_metadata'])) {
+            if (is_string($params['register_metadata'])) {
+                $params['register_metadata'] = json_decode($params['register_metadata'], true);
+            }
         }
         try {
             $user->update($params);
