@@ -86,6 +86,28 @@ php artisan node_server_report:replay-oss 2026-05-01 --dry-run
 
 **`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
 
+### 2.3 node_server_report:cleanup-archive
+
+清理 OSS 归档中的重复文件（修复 `--skip-archive` 前回放产生的重复归档）。
+
+**原理：** 归档路径用 `now()`，payload 内 `report_at_ms` 是数据时间。归档日期 > 数据日期 → 回放产物。
+
+```bash
+# 预览某归档日期的重复文件
+php artisan node_server_report:cleanup-archive --date=2026-05-12 --dry-run
+
+# 预览日期范围
+php artisan node_server_report:cleanup-archive --from=2026-05-12 --to=2026-05-13 --dry-run
+
+# 确认删除
+php artisan node_server_report:cleanup-archive --from=2026-05-12
+
+# 跳过确认直接删
+php artisan node_server_report:cleanup-archive --date=2026-05-12 --force
+```
+
+**安全策略：** 先 `--dry-run` 预览，确认无误后去掉 `--dry-run` 执行删除。
+
 ---
 
 ## 3. 小时报表命令
