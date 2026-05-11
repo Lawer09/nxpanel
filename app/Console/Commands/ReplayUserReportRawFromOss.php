@@ -151,17 +151,10 @@ class ReplayUserReportRawFromOss extends Command
             $decoded = json_decode($metadata, true);
             $metadata = is_array($decoded) ? $decoded : [];
         }
-
-        $reportAtMs = $metadata['report_at_ms'] ?? $row['report_at_ms'] ?? null;
-        if (!is_numeric($reportAtMs)) {
-            return now()->getTimestampMs();
+        if (!is_array($metadata)) {
+            $metadata = [];
         }
 
-        $int = (int) $reportAtMs;
-        if ($int <= 0) {
-            return now()->getTimestampMs();
-        }
-
-        return $int < 1000000000000 ? $int * 1000 : $int;
+        return UserReportService::resolveReportAtMs($metadata);
     }
 }
