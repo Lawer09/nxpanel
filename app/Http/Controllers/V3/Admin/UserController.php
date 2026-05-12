@@ -8,7 +8,6 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Services\NodeSyncService;
-use App\Services\UserService;
 use App\Http\Resources\CamelizeResource;
 use App\Utils\Helper;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,10 +18,7 @@ use Illuminate\Support\Facades\Log;
 
 class UserController extends V2UserController
 {
-    /**
-     * 用户列表（分页）
-     * 覆盖 V2：统一分页格式 {data, total, page, pageSize}
-     */
+
     public function fetch(Request $request): JsonResponse
     {
         $userModel = User::with(['plan:id,name', 'invite_user:id,email', 'group:id,name'])
@@ -78,10 +74,6 @@ class UserController extends V2UserController
         ]);
     }
 
-    /**
-     * 用户详情
-     * 覆盖 V2：使用 ok/error 格式
-     */
     public function getUserInfoById(Request $request): JsonResponse
     {
         $request->validate([
@@ -96,10 +88,6 @@ class UserController extends V2UserController
         return $this->ok($user->load('invite_user'));
     }
 
-    /**
-     * 更新用户信息
-     * 覆盖 V2：使用 ok/error 格式
-     */
     public function update(UserUpdate $request): JsonResponse
     {
         $params = $request->validated();
@@ -162,7 +150,6 @@ class UserController extends V2UserController
 
     /**
      * 重置订阅密钥
-     * 覆盖 V2：使用 ok/error 格式
      */
     public function resetSecret(Request $request): JsonResponse
     {
@@ -177,7 +164,6 @@ class UserController extends V2UserController
 
     /**
      * 封禁用户
-     * 覆盖 V2：使用 ok/error 格式
      */
     public function ban(Request $request): JsonResponse
     {
@@ -197,7 +183,6 @@ class UserController extends V2UserController
 
     /**
      * 删除用户
-     * 覆盖 V2：使用 ok/error 格式
      */
     public function destroy(Request $request): JsonResponse
     {
