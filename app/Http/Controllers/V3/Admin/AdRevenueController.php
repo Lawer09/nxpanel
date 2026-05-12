@@ -188,7 +188,7 @@ class AdRevenueController extends Controller
             $page     = (int) ($params['page'] ?? 1);
             $pageSize = (int) ($params['pageSize'] ?? 20);
 
-            $query = AdPlatformApp::query()->with('account:id,account_name');
+            $query = AdPlatformApp::query()->with('account:id,account_name,account_label');
 
             if (!empty($params['sourcePlatform'])) {
                 $query->where('source_platform', $params['sourcePlatform']);
