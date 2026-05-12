@@ -43,7 +43,7 @@ php artisan user_report:replay-oss 2026-05-01 --dry-run
 **流程：** 读 OSS NDJSON → 按 metadata.timestamp 还原到 Redis bucket → 调 `user_report:aggregate --skip-archive` → 聚合写表
 
 **`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
-**`--clear-day`：** 清空 `v3_user_report_node` 当日数据后再回放（用于 app_id/app_version 存量拆分）。
+**`--clear-day`：** 清空 `v3_user_report_node`、`v3_user_report_user`、`v3_user_report_summary`、`v3_user_report_node_fail` 当日数据后再回放（避免 replay 累加导致翻倍）。
 
 ---
 
@@ -107,6 +107,20 @@ php artisan node_server_report:cleanup-archive --date=2026-05-12 --force
 ```
 
 **安全策略：** 先 `--dry-run` 预览，确认无误后去掉 `--dry-run` 执行删除。--threshold 默认 30 分钟，可根据实际回放时间窗口调整。
+
+---
+
+## 2.4 user_report:cleanup-archive
+
+与 `node_server_report:cleanup-archive` 同名，清理 `user_report/raw/` 下因回放产生的重复归档。
+
+```bash
+# 预览
+php artisan user_report:cleanup-archive --from=2026-05-10 --to=2026-05-11 --dry-run
+
+# 删除
+php artisan user_report:cleanup-archive --from=2026-05-10 --to=2026-05-11 --force
+```
 
 ---
 

@@ -16,7 +16,7 @@ class ReplayUserReportRawFromOss extends Command
         {--to= : Optional end date YYYY-MM-DD (default: same as date)}
         {--hour= : Optional hour 00-23}
         {--bucket= : Optional bucket yyyymmddHHmm}
-        {--clear-day : Clear v3_user_report_node for replay dates}
+        {--clear-day : Clear v3_user_report_node/v3_user_report_user/v3_user_report_summary/v3_user_report_node_fail for replay dates}
         {--dry-run : Only count records, no write}';
 
     protected $description = 'Replay user-report raw NDJSON from OSS and re-aggregate';
@@ -104,8 +104,11 @@ class ReplayUserReportRawFromOss extends Command
             }
 
             if ($clearDay && !$dryRun && !empty($bucketPayloads)) {
-                $this->line('Clearing v3_user_report_node for date: ' . $date);
+                $this->line('Clearing source tables for date: ' . $date);
                 DB::table('v3_user_report_node')->where('date', $date)->delete();
+                DB::table('v3_user_report_user')->where('date', $date)->delete();
+                DB::table('v3_user_report_summary')->where('date', $date)->delete();
+                DB::table('v3_user_report_node_fail')->where('date', $date)->delete();
             }
 
             if (empty($bucketPayloads)) {
