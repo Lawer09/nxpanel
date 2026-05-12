@@ -384,6 +384,8 @@ class ProjectAggregateController extends Controller
                 'adCtr' => $this->formatDecimal($row->ad_ctr ?? null),
                 'adMatchRate' => $this->formatDecimal($row->ad_match_rate ?? null),
                 'adShowRate' => $this->formatDecimal($row->ad_show_rate ?? null),
+                'impressionsPerUser' => $this->ratio((float) ($row->ad_impressions ?? 0), (float) ($row->dau_users ?? 0)),
+                'arpu' => $this->ratio((float) ($row->ad_revenue ?? 0), (float) ($row->dau_users ?? 0)),
                 'adSpendCost' => $this->formatDecimal($row->ad_spend_cost ?? null),
                 'adSpendCpi' => $this->formatDecimal($row->ad_spend_cpi ?? null),
                 'adSpendCpc' => $this->formatDecimal($row->ad_spend_cpc ?? null),

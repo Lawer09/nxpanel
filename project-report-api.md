@@ -24,7 +24,7 @@
 - `pageSize` `int|null`，默认 `50`，范围 `1-200`
 - `orderBy` `string|null`，可选：
   - 维度字段：`reportDate/projectCode/country`
-  - 指标字段：`newUsers/reportNewUsers/dauUsers/adRevenue/adRequests/adMatchedRequests/adImpressions/adClicks/adEcpm/adCtr/adMatchRate/adShowRate/adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm/trafficUsageMb/trafficCost/totalCost/profit/roi`
+  - 指标字段：`newUsers/reportNewUsers/dauUsers/adRevenue/adRequests/adMatchedRequests/adImpressions/adClicks/adEcpm/adCtr/adMatchRate/adShowRate/adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm/trafficUsageMb/trafficCost/totalCost/impressionsPerUser/arpu/profit/roi`
   - 其它：`id/updatedAt`
 - `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
@@ -71,6 +71,8 @@
   - `trafficUsageMb` `string|null`（6位小数）
   - `trafficCost` `string|null`（6位小数）
   - `totalCost` `string|null`（6位小数，`adSpendCost + trafficCost`）
+  - `impressionsPerUser` `string|null`（6位小数，`adImpressions / dauUsers`）
+  - `arpu` `string|null`（6位小数，`adRevenue / dauUsers`）
   - `profit` `string|null`（6位小数）
   - `roi` `string|null`（6位小数）
 - 其它字段：`id`（仅明细行可用）、`updatedAt`
@@ -139,6 +141,8 @@
 | 流量使用量 | `trafficUsageMb` | string/null | MB，6 位小数 |
 | 流量成本 | `trafficCost` | string/null | 金额，6 位小数 |
 | 总花费 | `totalCost` | string/null | 金额（adSpendCost + trafficCost），6 位小数 |
+| 人均展示 | `impressionsPerUser` | string/null | 展示数/DAU，6 位小数 |
+| 每用户平均收入 | `arpu` | string/null | 广告收入/DAU，6 位小数 |
 | 利润 | `profit` | string/null | 金额，6 位小数 |
 | ROI | `roi` | string/null | 收入/总成本，6 位小数 |
 | 记录 ID | `id` | int/null | 仅明细查询通常有值 |
