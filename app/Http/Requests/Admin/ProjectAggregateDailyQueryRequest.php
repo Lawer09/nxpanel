@@ -25,7 +25,7 @@ class ProjectAggregateDailyQueryRequest extends FormRequest
             'filters.countries.*' => 'string|max:50',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
-            'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,dauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,profit,roi,id,updatedAt',
+            'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,dauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,profit,roi,id,updatedAt',
             'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }

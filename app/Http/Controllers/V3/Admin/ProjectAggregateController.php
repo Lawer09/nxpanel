@@ -297,7 +297,7 @@ class ProjectAggregateController extends Controller
         }
 
         if (empty($groupBy)) {
-            $sortable = array_keys($metricMap);
+            $sortable = array_merge(array_keys($metricMap), ['totalCost']);
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'reportDate';
             $orderColumn = $orderKey === 'reportDate' ? 'report_date' : $metricMap[$orderKey];
 
@@ -347,7 +347,7 @@ class ProjectAggregateController extends Controller
                 'newUsers', 'reportNewUsers', 'dauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
                 'adImpressions', 'adClicks', 'adEcpm', 'adCtr', 'adMatchRate', 'adShowRate',
                 'adSpendCost', 'adSpendCpi', 'adSpendCpc', 'adSpendCpm', 'trafficUsageMb',
-                'trafficCost', 'profit', 'roi', 'updatedAt',
+                'trafficCost', 'totalCost', 'profit', 'roi', 'updatedAt',
             ])));
 
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'adRevenue';
@@ -390,6 +390,7 @@ class ProjectAggregateController extends Controller
                 'adSpendCpm' => $this->formatDecimal($row->ad_spend_cpm ?? null),
                 'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb ?? null),
                 'trafficCost' => $this->formatDecimal($row->traffic_cost ?? null),
+                'totalCost' => $this->formatDecimal(($row->ad_spend_cost ?? 0) + ($row->traffic_cost ?? 0)),
                 'profit' => $this->formatDecimal($row->profit ?? null),
                 'roi' => $this->formatDecimal($row->roi ?? null),
                 'updatedAt' => $row->updated_at ?? null,

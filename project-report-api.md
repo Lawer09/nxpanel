@@ -24,7 +24,7 @@
 - `pageSize` `int|null`，默认 `50`，范围 `1-200`
 - `orderBy` `string|null`，可选：
   - 维度字段：`reportDate/projectCode/country`
-  - 指标字段：`newUsers/reportNewUsers/dauUsers/adRevenue/adRequests/adMatchedRequests/adImpressions/adClicks/adEcpm/adCtr/adMatchRate/adShowRate/adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm/trafficUsageMb/trafficCost/profit/roi`
+  - 指标字段：`newUsers/reportNewUsers/dauUsers/adRevenue/adRequests/adMatchedRequests/adImpressions/adClicks/adEcpm/adCtr/adMatchRate/adShowRate/adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm/trafficUsageMb/trafficCost/totalCost/profit/roi`
   - 其它：`id/updatedAt`
 - `orderDirection` `string|null`，`asc|desc`，默认 `desc`
 
@@ -70,6 +70,7 @@
   - `adSpendCpm` `string|null`（6位小数）
   - `trafficUsageMb` `string|null`（6位小数）
   - `trafficCost` `string|null`（6位小数）
+  - `totalCost` `string|null`（6位小数，`adSpendCost + trafficCost`）
   - `profit` `string|null`（6位小数）
   - `roi` `string|null`（6位小数）
 - 其它字段：`id`（仅明细行可用）、`updatedAt`
@@ -137,6 +138,7 @@
 | 花费 CPM | `adSpendCpm` | string/null | 金额/千次展示，6 位小数 |
 | 流量使用量 | `trafficUsageMb` | string/null | MB，6 位小数 |
 | 流量成本 | `trafficCost` | string/null | 金额，6 位小数 |
+| 总花费 | `totalCost` | string/null | 金额（adSpendCost + trafficCost），6 位小数 |
 | 利润 | `profit` | string/null | 金额，6 位小数 |
 | ROI | `roi` | string/null | 收入/总成本，6 位小数 |
 | 记录 ID | `id` | int/null | 仅明细查询通常有值 |
@@ -144,7 +146,7 @@
 
 前端展示建议：
 
-- 金额类字段：`adRevenue/adSpendCost/trafficCost/profit/adSpendCpi/adSpendCpc/adSpendCpm` 建议统一货币格式，并保留 2 位小数。
+- 金额类字段：`adRevenue/adSpendCost/trafficCost/totalCost/profit/adSpendCpi/adSpendCpc/adSpendCpm` 建议统一货币格式，并保留 2 位小数。
 - 比例类字段：`adCtr/adMatchRate/adShowRate` 建议展示为百分比并保留 2 位小数。
 - `roi` 建议按百分比展示：`roiPercent = roi * 100`，并保留 2 位小数（例如 `1.234567 -> 123.46%`）。
 - 空值处理：接口分母为 0 时返回 `null`，前端可展示为 `--`。
