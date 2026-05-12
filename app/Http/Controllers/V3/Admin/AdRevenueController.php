@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\AdRevenueTopRank;
 use App\Http\Requests\Admin\AdRevenueTrend;
 use App\Http\Resources\AdRevenueDailyResource;
 use App\Http\Resources\CamelizeResource;
+use App\Models\AdPlatformApp;
 use App\Models\AdRevenueDaily;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -173,6 +174,77 @@ class AdRevenueController extends Controller
         $data = $query->first();
 
         return $this->ok($data ? CamelizeResource::make($data) : null);
+    }
+
+    /**
+     * ad_platform_app 列表查询
+     */
+    public function fetchApps(Request $request): JsonResponse
+    {
+        try {
+            $params = $request->validate([
+                'sourcePlatform' => 'nullable|string|max:32',
+                'accountId'      => 'nullable|integer',
+                'keyword'        => 'nullable|string|max:128',
+                'page'           => 'nullable|integer|min:1',
+                'pageSize'       => 'nullable|integer|min:1|max:200',
+            ]);
+
+            $page     = (int) ($params['page'] ?? 1);
+            $pageSize = (int) ($params['pageSize'] ?? 20);
+
+            $query = AdPlatformApp::query()->with('account:id,account_name');
+
+            if (!empty($params['sourcePlatform'])) {
+                $query->where('source_platform', $params['sourcePlatform']);
+            }
+            if (!empty($params['accountId'])) {
+                $query->where('account_id', (int) $params['accountId']);
+            }
+            if (!empty($params['keyword'])) {
+                $keyword = $params['keyword'];
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('provider_app_name', 'like', "%{$keyword}%")
+                        ->orWhere('app_store_id', 'like', "%{$keyword}%")
+                        ->orWhere('provider_app_id', 'like', "%{$keyword}%");
+                });
+            }
+
+            $total = $query->count();
+            $rows  = $query->orderByDesc('id')
+                ->offset(($page - 1) * $pageSize)
+                ->limit($pageSize)
+                ->get();
+
+            $list = $rows->map(function ($row) {
+                return [
+                    'id'               => (int) $row->id,
+                    'sourcePlatform'   => $row->source_platform,
+                    'accountId'        => (int) $row->account_id,
+                    'accountName'      => $row->relationLoaded('account') && $row->account
+                        ? $row->account->account_name : null,
+                    'providerAppId'    => $row->provider_app_id,
+                    'providerAppName'  => $row->provider_app_name,
+                    'devicePlatform'   => $row->device_platform,
+                    'appStoreId'       => $row->app_store_id,
+                    'appApprovalState' => $row->app_approval_state,
+                    'createdAt'        => $row->created_at,
+                    'updatedAt'        => $row->updated_at,
+                ];
+            });
+
+            return $this->ok([
+                'data'     => $list,
+                'total'    => $total,
+                'page'     => $page,
+                'pageSize' => $pageSize,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, $e->getMessage()]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('AdRevenue fetchApps error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
     }
 
     /**

@@ -109,6 +109,10 @@ class AggregateProjectDailyData extends Command
             }
         }
 
+        DB::table('project_daily_aggregates')
+            ->where('report_date', '=', $date)
+            ->delete();
+
         if (empty($allKeys)) {
             $this->info("No aggregate rows for {$date}");
             return;
@@ -277,8 +281,22 @@ class AggregateProjectDailyData extends Command
 
     private function queryAdSpendMetrics(string $date): array
     {
+        $activeProjectCodes = DB::table('project_ad_platform_accounts')
+            ->where('enabled', '=', 1)
+            ->whereNotNull('project_code')
+            ->where('project_code', '!=', '')
+            ->pluck('project_code')
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($activeProjectCodes)) {
+            return [];
+        }
+
         $rows = DB::table('ad_spend_platform_daily_reports')
             ->where('report_date', '=', $date)
+            ->whereIn('project_code', $activeProjectCodes)
             ->selectRaw('report_date as report_date')
             ->selectRaw('project_code as project_code')
             ->selectRaw('UPPER(COALESCE(country, "")) as country')

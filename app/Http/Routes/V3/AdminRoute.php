@@ -344,6 +344,7 @@ class AdminRoute
             // Ad Revenue Report
             $router->group(['prefix' => 'ad-revenue'], function ($router) {
                 $router->get('/fetch',     [AdRevenueController::class, 'fetch']);
+                $router->get('/apps',      [AdRevenueController::class, 'fetchApps']);
                 $router->post('/aggregate', [AdRevenueController::class, 'aggregate']);
                 $router->get('/trend',     [AdRevenueController::class, 'trend']);
                 $router->get('/summary',   [AdRevenueController::class, 'summary']);
