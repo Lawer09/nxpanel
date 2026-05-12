@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AdPlatformAppFetch;
 use App\Http\Requests\Admin\AdRevenueAggregate;
 use App\Http\Requests\Admin\AdRevenueFetch;
 use App\Http\Requests\Admin\AdRevenueSummary;
@@ -179,16 +180,10 @@ class AdRevenueController extends Controller
     /**
      * ad_platform_app 列表查询
      */
-    public function fetchApps(Request $request): JsonResponse
+    public function fetchApps(AdPlatformAppFetch $request): JsonResponse
     {
         try {
-            $params = $request->validate([
-                'sourcePlatform' => 'nullable|string|max:32',
-                'accountId'      => 'nullable|integer',
-                'keyword'        => 'nullable|string|max:128',
-                'page'           => 'nullable|integer|min:1',
-                'pageSize'       => 'nullable|integer|min:1|max:200',
-            ]);
+            $params = $request->validated();
 
             $page     = (int) ($params['page'] ?? 1);
             $pageSize = (int) ($params['pageSize'] ?? 20);
@@ -239,8 +234,6 @@ class AdRevenueController extends Controller
                 'page'     => $page,
                 'pageSize' => $pageSize,
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, $e->getMessage()]);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('AdRevenue fetchApps error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
