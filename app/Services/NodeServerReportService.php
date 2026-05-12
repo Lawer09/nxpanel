@@ -267,7 +267,7 @@ class NodeServerReportService
                         'app_version' => '',
                         'traffic_upload' => 0,
                         'traffic_download' => 0,
-                        'compute_count' => 0,
+                        'compute_count' => $sysCount,
                     ];
                 }
 
