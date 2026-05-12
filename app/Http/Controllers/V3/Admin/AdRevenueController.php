@@ -218,6 +218,8 @@ class AdRevenueController extends Controller
                     'accountId'        => (int) $row->account_id,
                     'accountName'      => $row->relationLoaded('account') && $row->account
                         ? $row->account->account_name : null,
+                    'accountLabel'      => $row->relationLoaded('account') && $row->account
+                        ? $row->account->account_label : null,
                     'providerAppId'    => $row->provider_app_id,
                     'providerAppName'  => $row->provider_app_name,
                     'devicePlatform'   => $row->device_platform,

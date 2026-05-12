@@ -250,6 +250,7 @@
       "sourcePlatform": "google",
       "accountId": 1,
       "accountName": "Google Ads Account",
+      "accountLabel": "A001",
       "providerAppId": "com.example.app",
       "providerAppName": "Example App",
       "devicePlatform": "android",
@@ -273,6 +274,7 @@
 | sourcePlatform | string | 来源平台 |
 | accountId | int | 账号 ID |
 | accountName | string/null | 账号名称（来自 `ad_platform_account`） |
+| accountLabel | string/null | 账号Label（来自 `ad_platform_account`） |
 | providerAppId | string | 应用 ID |
 | providerAppName | string | 应用名称 |
 | devicePlatform | string | 设备平台 |
