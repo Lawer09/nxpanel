@@ -41,6 +41,7 @@ use App\Http\Controllers\V3\Admin\FirebaseAnalyticsAppOpenController;
 use App\Http\Controllers\V3\Admin\FirebaseAnalyticsApiErrorController;
 use App\Http\Controllers\V3\Admin\FirebaseAnalyticsEventController;
 use App\Http\Controllers\V3\Admin\FirebaseAnalyticsFilterController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsNodeController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -363,6 +364,7 @@ class AdminRoute
                 $router->get('/app-open/version-rank', [FirebaseAnalyticsAppOpenController::class, 'versionRank']);
 
                 $router->get('/errors/top', [FirebaseAnalyticsApiErrorController::class, 'errorsTop']);
+                $router->get('/nodes/quality-rank', [FirebaseAnalyticsNodeController::class, 'qualityRank']);
                 $router->get('/server-api-error/summary', [FirebaseAnalyticsApiErrorController::class, 'summary']);
                 $router->get('/server-api-error/trend', [FirebaseAnalyticsApiErrorController::class, 'trend']);
                 $router->get('/server-api-error/http-status-distribution', [FirebaseAnalyticsApiErrorController::class, 'httpStatusDistribution']);

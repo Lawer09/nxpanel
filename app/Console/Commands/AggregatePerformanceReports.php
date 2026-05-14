@@ -786,7 +786,15 @@ class AggregatePerformanceReports extends Command
         }
 
         $errorCode = strtolower(trim($errorCode));
-        return $errorCode !== '' ? $errorCode : null;
+        if ($errorCode === '') {
+            return null;
+        }
+
+        if (strlen($errorCode) > 64) {
+            $errorCode = substr($errorCode, 0, 64);
+        }
+
+        return $errorCode;
     }
 
     private function normalizeNodeIp($nodeIp): ?string

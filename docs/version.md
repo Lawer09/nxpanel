@@ -299,6 +299,7 @@ Agent 维护本文件时禁止：
 - 新增 Firebase Analytics 模块接口文档，覆盖 Dashboard、VPN、测速、API 错误、明细与筛选项接口（docs/api/firebase_analytics.md）
 - 补充 Firebase Analytics 接口统计口径/数据来源说明，并标注缓存建议（docs/api/firebase_analytics.md）
 - 补充 Firebase 事件表 migration，包含表与索引创建，并在存在时跳过（database/migrations/2026_05_14_120000_create_firebase_event_tables.php）
+- 补齐节点质量排行接口路由与 Controller（app/Http/Controllers/V3/Admin/FirebaseAnalyticsNodeController.php, app/Http/Routes/V3/AdminRoute.php）
 
 ### Bug 修复
 
