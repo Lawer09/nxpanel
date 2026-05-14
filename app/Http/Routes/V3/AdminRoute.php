@@ -34,6 +34,13 @@ use App\Http\Controllers\V3\Admin\TrafficPlatformAccountController;
 use App\Http\Controllers\V3\Admin\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\ReportController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsDashboardController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsVpnSessionController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsVpnProbeController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsAppOpenController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsApiErrorController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsEventController;
+use App\Http\Controllers\V3\Admin\FirebaseAnalyticsFilterController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -231,7 +238,6 @@ class AdminRoute
                 $router->post('/userReport/nodeSummary/query', [ReportController::class, 'queryUserReportNodeSummary']);
                 $router->post('/userReport/traffic/query', [ReportController::class, 'queryUserReportTraffic']);
                 $router->post('/userReport/nodeFail/query', [ReportController::class, 'queryUserReportNodeFail']);
-                $router->post('/project/query', [ProjectAggregateController::class, 'queryDaily']);
             });
 
             // Realtime User Reports
@@ -298,37 +304,74 @@ class AdminRoute
 
             // Project Aggregates
             $router->group(['prefix' => 'project-aggregates'], function ($router) {
-                $router->post('/aggregate', [ProjectAggregateController::class, 'aggregate']);
+                $router->post('/aggregate',       [ProjectAggregateController::class, 'aggregate']);
                 $router->post('/aggregate-async', [ProjectAggregateController::class, 'aggregateAsync']);
-                $router->get('/daily',   [ProjectAggregateController::class, 'daily']);
-                $router->get('/summary', [ProjectAggregateController::class, 'summary']);
-                $router->get('/trend',   [ProjectAggregateController::class, 'trend']);
+                $router->post('/daily',           [ProjectAggregateController::class, 'daily']);
+                $router->get('/summary',          [ProjectAggregateController::class, 'summary']);
+                $router->get('/trend',            [ProjectAggregateController::class, 'trend']);
+                $router->post('/query',           [ProjectAggregateController::class, 'queryDaily']);
             });
     
             // Project Management
             $router->group(['prefix' => 'projects'], function ($router) {
-                $router->get('/',               [ProjectController::class, 'fetch']);
-                $router->get('/{id}',           [ProjectController::class, 'detail']);
-                $router->post('/',              [ProjectController::class, 'save']);
-                $router->put('/{id}',           [ProjectController::class, 'update']);
-                $router->patch('/{id}/status',  [ProjectController::class, 'updateStatus']);
+                $router->get('/',              [ProjectController::class, 'index']);
+                $router->get('/detail',        [ProjectController::class, 'detail']);
+                $router->post('/create',       [ProjectController::class, 'store']);
+                $router->post('/update',       [ProjectController::class, 'update']);
+                $router->post('/update-status', [ProjectController::class, 'updateStatus']);
 
-                $router->get('/{id}/traffic-accounts',                    [ProjectTrafficAccountController::class, 'fetch']);
-                $router->post('/{id}/traffic-accounts',                   [ProjectTrafficAccountController::class, 'save']);
-                $router->put('/{id}/traffic-accounts/{relationId}',       [ProjectTrafficAccountController::class, 'update']);
-                $router->delete('/{id}/traffic-accounts/{relationId}',    [ProjectTrafficAccountController::class, 'drop']);
+                $router->get('/traffic-accounts',                    [ProjectTrafficAccountController::class, 'index']);
+                $router->post('/traffic-accounts/create',            [ProjectTrafficAccountController::class, 'store']);
+                $router->post('/traffic-accounts/update',            [ProjectTrafficAccountController::class, 'update']);
+                $router->post('/traffic-accounts/delete',            [ProjectTrafficAccountController::class, 'destroy']);
 
-                $router->get('/{id}/ad-accounts',                         [ProjectAdAccountController::class, 'fetch']);
-                $router->post('/{id}/ad-accounts',                        [ProjectAdAccountController::class, 'save']);
-                $router->put('/{id}/ad-accounts/{relationId}',            [ProjectAdAccountController::class, 'update']);
-                $router->delete('/{id}/ad-accounts/{relationId}',         [ProjectAdAccountController::class, 'drop']);
+                $router->get('/ad-accounts',                         [ProjectAdAccountController::class, 'index']);
+                $router->post('/ad-accounts/create',                 [ProjectAdAccountController::class, 'store']);
+                $router->post('/ad-accounts/update',                 [ProjectAdAccountController::class, 'update']);
+                $router->post('/ad-accounts/delete',                 [ProjectAdAccountController::class, 'destroy']);
 
-                $router->get('/{id}/user-apps',                           [ProjectUserAppMapController::class, 'fetch']);
-                $router->post('/{id}/user-apps',                          [ProjectUserAppMapController::class, 'save']);
-                $router->put('/{id}/user-apps/{relationId}',              [ProjectUserAppMapController::class, 'update']);
-                $router->delete('/{id}/user-apps/{relationId}',           [ProjectUserAppMapController::class, 'drop']);
+                $router->get('/user-apps',                           [ProjectUserAppMapController::class, 'index']);
+                $router->post('/user-apps/create',                   [ProjectUserAppMapController::class, 'store']);
+                $router->post('/user-apps/update',                   [ProjectUserAppMapController::class, 'update']);
+                $router->post('/user-apps/delete',                   [ProjectUserAppMapController::class, 'destroy']);
 
-                $router->get('/{projectCode}/ad-spend-daily',              [AdSpendPlatformController::class, 'projectDaily']);
+                $router->get('/ad-spend-daily',                      [AdSpendPlatformController::class, 'projectDaily']);
+            });
+
+            // Firebase Analytics
+            $router->group(['prefix' => 'firebase-analytics'], function ($router) {
+                $router->get('/dashboard/summary', [FirebaseAnalyticsDashboardController::class, 'summary']);
+                $router->get('/dashboard/event-trend', [FirebaseAnalyticsDashboardController::class, 'eventTrend']);
+                $router->get('/dashboard/region-quality', [FirebaseAnalyticsDashboardController::class, 'regionQuality']);
+
+                $router->get('/vpn-session/quality-trend', [FirebaseAnalyticsVpnSessionController::class, 'qualityTrend']);
+                $router->get('/vpn-session/summary', [FirebaseAnalyticsVpnSessionController::class, 'summary']);
+                $router->get('/vpn-session/fail-stage-distribution', [FirebaseAnalyticsVpnSessionController::class, 'failStageDistribution']);
+                $router->get('/vpn-session/error-stage-distribution', [FirebaseAnalyticsVpnSessionController::class, 'errorStageDistribution']);
+                $router->get('/vpn-session/connect-type-analysis', [FirebaseAnalyticsVpnSessionController::class, 'connectTypeAnalysis']);
+                $router->get('/vpn-session/protocol-quality', [FirebaseAnalyticsVpnSessionController::class, 'protocolQuality']);
+
+                $router->get('/vpn-probe/summary', [FirebaseAnalyticsVpnProbeController::class, 'summary']);
+                $router->get('/vpn-probe/trend', [FirebaseAnalyticsVpnProbeController::class, 'trend']);
+                $router->get('/vpn-probe/trigger-distribution', [FirebaseAnalyticsVpnProbeController::class, 'triggerDistribution']);
+                $router->get('/vpn-probe/type-distribution', [FirebaseAnalyticsVpnProbeController::class, 'typeDistribution']);
+                $router->get('/vpn-probe/node-rank', [FirebaseAnalyticsVpnProbeController::class, 'nodeRank']);
+
+                $router->get('/app-open/summary', [FirebaseAnalyticsAppOpenController::class, 'summary']);
+                $router->get('/app-open/trend', [FirebaseAnalyticsAppOpenController::class, 'trend']);
+                $router->get('/app-open/open-type-distribution', [FirebaseAnalyticsAppOpenController::class, 'openTypeDistribution']);
+                $router->get('/app-open/version-rank', [FirebaseAnalyticsAppOpenController::class, 'versionRank']);
+
+                $router->get('/errors/top', [FirebaseAnalyticsApiErrorController::class, 'errorsTop']);
+                $router->get('/server-api-error/summary', [FirebaseAnalyticsApiErrorController::class, 'summary']);
+                $router->get('/server-api-error/trend', [FirebaseAnalyticsApiErrorController::class, 'trend']);
+                $router->get('/server-api-error/http-status-distribution', [FirebaseAnalyticsApiErrorController::class, 'httpStatusDistribution']);
+                $router->get('/server-api-error/api-rank', [FirebaseAnalyticsApiErrorController::class, 'apiRank']);
+
+                $router->get('/events', [FirebaseAnalyticsEventController::class, 'events']);
+                $router->get('/events/{event_id}', [FirebaseAnalyticsEventController::class, 'detail']);
+
+                $router->get('/filters/options', [FirebaseAnalyticsFilterController::class, 'options']);
             });
 
             // Sync Servers

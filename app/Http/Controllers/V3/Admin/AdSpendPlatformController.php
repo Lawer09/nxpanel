@@ -649,9 +649,10 @@ class AdSpendPlatformController extends Controller
         }
     }
 
-    public function projectDaily(Request $request, string $projectCode): JsonResponse
+    public function projectDaily(Request $request): JsonResponse
     {
         $this->normalizeQueryParams($request);
+        $projectCode = $request->input('project_code');
         return $this->dailyInternal($request, $projectCode);
     }
 

@@ -296,6 +296,9 @@ Agent 维护本文件时禁止：
 
 - 重构项目 CRUD 接口：Controller 拆出业务逻辑到 ProjectService，新增 FormRequest 校验层（ProjectFetchRequest/ProjectSaveRequest/ProjectUpdateRequest/ProjectUpdateStatusRequest），新增 ProjectResource 统一格式化返回字段（app/Http/Controllers/V3/Admin/ProjectController.php, app/Services/ProjectService.php, app/Http/Requests/Admin/Project*.php, app/Http/Resources/ProjectResource.php）
 - 新增项目管理接口文档，包含列表、详情、新增、修改、状态变更共 5 个接口的完整说明（docs/api/project.md）
+- 新增 Firebase Analytics 模块接口文档，覆盖 Dashboard、VPN、测速、API 错误、明细与筛选项接口（docs/api/firebase_analytics.md）
+- 补充 Firebase Analytics 接口统计口径/数据来源说明，并标注缓存建议（docs/api/firebase_analytics.md）
+- 补充 Firebase 事件表 migration，包含表与索引创建，并在存在时跳过（database/migrations/2026_05_14_120000_create_firebase_event_tables.php）
 
 ### Bug 修复
 

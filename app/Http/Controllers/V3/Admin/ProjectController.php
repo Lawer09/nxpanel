@@ -9,16 +9,20 @@ use App\Http\Requests\Admin\ProjectUpdateRequest;
 use App\Http\Requests\Admin\ProjectUpdateStatusRequest;
 use App\Http\Resources\ProjectResource;
 use App\Services\ProjectService;
+use App\Services\ProjectTrafficAccountService;
+use App\Services\ProjectUserAppMapService;
+use App\Services\ProjectAdAccountService;
 use Illuminate\Http\JsonResponse;
 use App\Exceptions\BusinessException;
+use App\Http\Requests\Admin\IdRequest;
 
 class ProjectController extends Controller
 {
     public function __construct(
-        protected ProjectService $projectService
+        protected ProjectService $projectService,
     ) {}
 
-    public function fetch(ProjectFetchRequest $request): JsonResponse
+    public function index(ProjectFetchRequest $request): JsonResponse
     {
         $data = $this->projectService->fetch($request->validated());
 
@@ -30,9 +34,10 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function detail(int $id): JsonResponse
+    public function detail(IdRequest $request): JsonResponse
     {
         try {
+            $id = (int) $request->validated()['id'];
             $project = $this->projectService->detail($id);
             return $this->ok(ProjectResource::make($project));
         } catch (BusinessException $e) {
@@ -40,7 +45,7 @@ class ProjectController extends Controller
         }
     }
 
-    public function save(ProjectSaveRequest $request): JsonResponse
+    public function store(ProjectSaveRequest $request): JsonResponse
     {
         try {
             $project = $this->projectService->save($request->validated());
@@ -50,20 +55,25 @@ class ProjectController extends Controller
         }
     }
 
-    public function update(ProjectUpdateRequest $request, int $id): JsonResponse
+    public function update(ProjectUpdateRequest $request): JsonResponse
     {
         try {
-            $project = $this->projectService->update($id, $request->validated());
+            $params = $request->validated();
+            $id = (int) $params['id'];
+            unset($params['id']);
+            $project = $this->projectService->update($id, $params);
             return $this->ok(ProjectResource::make($project));
         } catch (BusinessException $e) {
             return $this->error([$e->getCode(), $e->getMessage()]);
         }
     }
 
-    public function updateStatus(ProjectUpdateStatusRequest $request, int $id): JsonResponse
+    public function updateStatus(ProjectUpdateStatusRequest $request): JsonResponse
     {
         try {
-            $project = $this->projectService->updateStatus($id, $request->validated()['status']);
+            $params = $request->validated();
+            $id = (int) $params['id'];
+            $project = $this->projectService->updateStatus($id, $params['status']);
             return $this->ok(ProjectResource::make($project));
         } catch (BusinessException $e) {
             return $this->error([$e->getCode(), $e->getMessage()]);

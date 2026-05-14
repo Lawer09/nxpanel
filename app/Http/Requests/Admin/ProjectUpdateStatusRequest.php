@@ -14,6 +14,7 @@ class ProjectUpdateStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'id'     => 'required|integer|min:1',
             'status' => 'required|string|in:active,inactive,archived',
         ];
     }
