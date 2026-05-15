@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V3\Admin;
+namespace App\Http\Controllers\V3\Admin\Project;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;

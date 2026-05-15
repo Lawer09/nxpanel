@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\V3\Admin;
+namespace App\Http\Controllers\V3\Admin\AdRevenuePlatform;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdAccountFetch;
