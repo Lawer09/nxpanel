@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Models\AdSpendPlatformAccount;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class AdSpendPlatformService
 {
+    private const TOKEN_CACHE_TTL_SECONDS = 3600;
+
     public function queryDaily(array $payload): array
     {
         $dateFrom = $payload['dateFrom'] ?? now()->subDays(1)->toDateString();
@@ -92,8 +95,16 @@ class AdSpendPlatformService
 
     public function login(AdSpendPlatformAccount $account, bool $forceRefresh = false): string
     {
-        if (!$forceRefresh && !empty($account->access_token) && $this->tokenAvailable($account)) {
-            return $account->access_token;
+        if (!$forceRefresh) {
+            $cachedToken = $this->getCachedToken($account);
+            if ($cachedToken !== '') {
+                return $cachedToken;
+            }
+
+            if (!empty($account->access_token) && $this->tokenAvailable($account)) {
+                $this->cacheToken($account, (string) $account->access_token);
+                return (string) $account->access_token;
+            }
         }
 
         $baseUrl = rtrim((string) $account->base_url, '/');
@@ -115,6 +126,12 @@ class AdSpendPlatformService
         }
 
         $expiredAt = $this->extractTokenExpiredAt($body);
+        if (!$expiredAt) {
+            $expiredAt = now()->addSeconds(self::TOKEN_CACHE_TTL_SECONDS)->format('Y-m-d H:i:s');
+        }
+
+        $this->cacheToken($account, $token);
+
         $account->update([
             'access_token' => $token,
             'token_expired_at' => $expiredAt,
@@ -189,6 +206,40 @@ class AdSpendPlatformService
         }
 
         return $account->token_expired_at->isFuture();
+    }
+
+    /**
+     * 读取 ad-spend 平台账号的 Redis token。
+     */
+    private function getCachedToken(AdSpendPlatformAccount $account): string
+    {
+        $cached = Cache::store('redis')->get($this->tokenCacheKey($account));
+
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        return '';
+    }
+
+    /**
+     * 写入 ad-spend 平台账号 token 到 Redis，默认 1 小时过期。
+     */
+    private function cacheToken(AdSpendPlatformAccount $account, string $token): void
+    {
+        Cache::store('redis')->put(
+            $this->tokenCacheKey($account),
+            $token,
+            now()->addSeconds(self::TOKEN_CACHE_TTL_SECONDS)
+        );
+    }
+
+    /**
+     * 生成 ad-spend 平台账号 token 的 Redis key。
+     */
+    private function tokenCacheKey(AdSpendPlatformAccount $account): string
+    {
+        return sprintf('ad_spend:platform:token:%d', (int) $account->id);
     }
 
     private function extractToken(array $body): string

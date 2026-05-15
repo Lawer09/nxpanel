@@ -89,3 +89,18 @@
 - `perf:aggregate` 聚合探测数据时对 `error_code` 超长内容做 64 字符截断，避免写入 v2_node_probe_aggregated 失败
 - 影响范围：app/Console/Commands/AggregatePerformanceReports.php
 - 迁移说明：无需数据库迁移；无回滚要求
+
+### Ad Spend 定时拉取 token Redis 缓存
+
+- `ad-spend:sync` 定时拉取流程登录 token 新增 Redis 缓存：key `ad_spend:platform:token:{accountId}`，TTL 固定 1 小时
+- 拉取报表时优先读取 Redis token；Redis 失效后自动重新登录并写回 Redis，再继续拉取
+- 登录接口未返回过期时间时，统一按 1 小时写入数据库 `token_expired_at`，保持数据库与 Redis 过期策略一致
+
+### 影响范围
+
+- `app/Services/AdSpendPlatformService.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
