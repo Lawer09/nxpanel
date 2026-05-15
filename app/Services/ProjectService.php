@@ -32,7 +32,8 @@ class ProjectService
         $pageSize = (int) ($params['pageSize'] ?? 20);
 
         $total = $query->count();
-        $items = $query->orderByDesc('id')
+        $items = $query->with(['trafficAccounts', 'adAccounts', 'userApps'])
+            ->orderByDesc('id')
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->get();

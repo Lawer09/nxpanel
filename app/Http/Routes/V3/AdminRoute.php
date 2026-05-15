@@ -304,16 +304,6 @@ class AdminRoute
                 $router->get('/project-codes',       [AdSpendPlatformController::class, 'projectCodes']);
             });
 
-            // Project Aggregates
-            $router->group(['prefix' => 'project-aggregates'], function ($router) {
-                $router->post('/aggregate',       [ProjectAggregateController::class, 'aggregate']);
-                $router->post('/aggregate-async', [ProjectAggregateController::class, 'aggregateAsync']);
-                $router->post('/daily',           [ProjectAggregateController::class, 'daily']);
-                $router->get('/summary',          [ProjectAggregateController::class, 'summary']);
-                $router->get('/trend',            [ProjectAggregateController::class, 'trend']);
-                $router->post('/query',           [ProjectAggregateController::class, 'queryDaily']);
-            });
-    
             // Project Management
             $router->group(['prefix' => 'projects'], function ($router) {
                 $router->get('/',              [ProjectController::class, 'index']);
@@ -321,6 +311,8 @@ class AdminRoute
                 $router->post('/create',       [ProjectController::class, 'store']);
                 $router->post('/update',       [ProjectController::class, 'update']);
                 $router->post('/update-status', [ProjectController::class, 'updateStatus']);
+                $router->post('/aggregate',       [ProjectController::class, 'aggregate']);
+                $router->post('/aggregate-async', [ProjectController::class, 'aggregateAsync']);
 
                 $router->get('/traffic-accounts',                    [ProjectTrafficAccountController::class, 'index']);
                 $router->post('/traffic-accounts/create',            [ProjectTrafficAccountController::class, 'store']);
@@ -337,7 +329,6 @@ class AdminRoute
                 $router->post('/user-apps/update',                   [ProjectUserAppMapController::class, 'update']);
                 $router->post('/user-apps/delete',                   [ProjectUserAppMapController::class, 'destroy']);
 
-                $router->get('/ad-spend-daily',                      [AdSpendPlatformController::class, 'projectDaily']);
             });
 
             // Firebase Analytics
