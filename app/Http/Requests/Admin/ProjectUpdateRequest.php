@@ -32,13 +32,4 @@ class ProjectUpdateRequest extends FormRequest
             'remark.max'      => '备注不能超过255个字符',
         ];
     }
-
-    public function messages(): array
-    {
-        return [
-            'projectName.max' => '项目名称不能超过100个字符',
-            'status.in'       => '状态格式有误，可选值：active, inactive, archived',
-            'remark.max'      => '备注不能超过255个字符',
-        ];
-    }
 }

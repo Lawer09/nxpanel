@@ -58,7 +58,7 @@
 
 ### 文档
 
-- 新建 `docs/api/project.md`：项目接口文档
+- 新建 `docs/api/project.md`：项目接口文档（后更名为 `docs/api/project_api.md`）
 
 **迁移说明**：
 - 旧的 PUT/PATCH/DELETE 路由不再可用
@@ -66,7 +66,17 @@
 - 无需数据库迁移
 - 无需回滚
 
-## 2026-05-14
+## 2026-05-15
+
+### Project 基础 CRUD 接口文档
+- 新建 `docs/api/project_api.md`：涵盖列表（GET /）、详情（GET /detail）、创建（POST /create）、编辑（POST /update）、更新状态（POST /update-status），共 5 个 endpoint
+
+### 修复
+- 修复 `ProjectUpdateRequest` 中 `messages()` 方法重复定义的问题
+
+### 影响范围
+- `docs/api/project_api.md`
+- `app/Http/Requests/Admin/ProjectUpdateRequest.php`
 
 ### Firebase Analytics 后端设计落地
 
