@@ -34,14 +34,14 @@ use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAccountControll
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\ReportController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsDashboardController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsVpnSessionController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsVpnProbeController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsAppOpenController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsApiErrorController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsEventController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsFilterController;
-use App\Http\Controllers\V3\Admin\FirebaseAnalyticsNodeController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsDashboardController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnSessionController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnProbeController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsAppOpenController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsApiErrorController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsEventController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsFilterController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsNodeController;
 use Illuminate\Contracts\Routing\Registrar;
 
 

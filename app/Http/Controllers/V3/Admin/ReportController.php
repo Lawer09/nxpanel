@@ -973,4 +973,22 @@ class ReportController extends Controller
         return is_string($value) && strtolower($value) === 'asc' ? 'asc' : 'desc';
     }
 
+    private function ratio(float $a, float $b): ?string
+    {
+        if ($b == 0.0) {
+            return null;
+        }
+
+        return $this->formatDecimal($a / $b);
+    }
+
+    private function formatDecimal($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return number_format((float) $value, 6, '.', '');
+    }
+
 }
