@@ -14,6 +14,7 @@ class TrafficPlatformAccount extends Model
     protected $casts = [
         'credential_json' => 'array',
         'enabled'         => 'integer',
+        'balance'         => 'integer',
         'last_sync_at'    => 'datetime',
         'created_at'      => 'datetime',
         'updated_at'      => 'datetime',

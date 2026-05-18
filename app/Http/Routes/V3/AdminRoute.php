@@ -398,20 +398,20 @@ class AdminRoute
 
                 // 平台配置
                 $router->group(['prefix' => 'platforms'], function ($router) {
-                    $router->get('/',              [TrafficPlatformController::class, 'fetch']);
-                    $router->post('/',             [TrafficPlatformController::class, 'save']);
-                    $router->put('/{id}',          [TrafficPlatformController::class, 'update']);
-                    $router->patch('/{id}/status', [TrafficPlatformController::class, 'updateStatus']);
+                    $router->get('/',                 [TrafficPlatformController::class, 'index']);
+                    $router->post('/create',          [TrafficPlatformController::class, 'store']);
+                    $router->post('/update',          [TrafficPlatformController::class, 'update']);
+                    $router->post('/update-status',   [TrafficPlatformController::class, 'updateStatus']);
                 });
 
                 // 平台账号
                 $router->group(['prefix' => 'accounts'], function ($router) {
-                    $router->get('/',              [TrafficPlatformAccountController::class, 'fetch']);
-                    $router->get('/{id}',          [TrafficPlatformAccountController::class, 'detail']);
-                    $router->post('/',             [TrafficPlatformAccountController::class, 'save']);
-                    $router->put('/{id}',          [TrafficPlatformAccountController::class, 'update']);
-                    $router->patch('/{id}/status', [TrafficPlatformAccountController::class, 'updateStatus']);
-                    $router->post('/{id}/test',    [TrafficPlatformAccountController::class, 'test']);
+                    $router->get('/',                 [TrafficPlatformAccountController::class, 'index']);
+                    $router->get('/detail',           [TrafficPlatformAccountController::class, 'detail']);
+                    $router->post('/create',          [TrafficPlatformAccountController::class, 'store']);
+                    $router->post('/update',          [TrafficPlatformAccountController::class, 'update']);
+                    $router->post('/update-status',   [TrafficPlatformAccountController::class, 'updateStatus']);
+                    $router->post('/test',            [TrafficPlatformAccountController::class, 'test']);
                 });
 
                 // 流量查询
@@ -425,8 +425,8 @@ class AdminRoute
 
                 // 同步
                 $router->post('/sync',           [TrafficPlatformSyncController::class, 'trigger']);
-                $router->get('/sync-jobs',       [TrafficPlatformSyncController::class, 'fetch']);
-                $router->get('/sync-jobs/{id}',  [TrafficPlatformSyncController::class, 'detail']);
+                $router->get('/sync-jobs',       [TrafficPlatformSyncController::class, 'index']);
+                $router->get('/sync-jobs/detail', [TrafficPlatformSyncController::class, 'detail']);
             });
         });
     }

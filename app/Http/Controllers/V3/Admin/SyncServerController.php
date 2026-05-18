@@ -11,6 +11,7 @@ use App\Models\SyncServer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class SyncServerController extends Controller
 {
@@ -155,9 +156,9 @@ class SyncServerController extends Controller
             $port = $server->port ?: 8080;
             $url  = "http://{$server->host_ip}:{$port}/api/sync/trigger";
 
-            $response = Http::timeout(10)->post($url, [
-                'key' => $server->secret_key,
-            ]);
+            $response = Http::timeout(10)
+                ->withHeaders(['Authorization' => $server->secret_key])
+                ->post($url);
             
 
             return $this->ok([
@@ -176,15 +177,31 @@ class SyncServerController extends Controller
     /**
      * 按日期范围同步收入数据
      * POST /admin/sync-servers/{server_id}/sync-revenue
-     * Query: start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+     * Query(可选): start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
      */
     public function syncRevenueByDate(Request $request, string $serverId)
     {
         try {
-            $request->validate([
-                'start_date' => 'required|date_format:Y-m-d',
-                'end_date'   => 'required|date_format:Y-m-d|after_or_equal:start_date',
-            ]);
+            $startDate = trim((string) $request->input('start_date', ''));
+            $endDate = trim((string) $request->input('end_date', ''));
+
+            if (($startDate === '') xor ($endDate === '')) {
+                return $this->error([422, 'start_date 和 end_date 需同时传入']);
+            }
+
+            if ($startDate !== '' && $endDate !== '') {
+                $validator = Validator::make([
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                ], [
+                    'start_date' => 'required|date_format:Y-m-d',
+                    'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+                ]);
+
+                if ($validator->fails()) {
+                    return $this->error([422, '日期格式有误']);
+                }
+            }
 
             $server = SyncServer::where('server_id', $serverId)->first();
             if (!$server) {
@@ -199,22 +216,25 @@ class SyncServerController extends Controller
             }
 
             $port = $server->port ?: 8080;
-            $url  = "http://{$server->host_ip}:{$port}/api/sync/revenue";
+            $baseUrl  = "http://{$server->host_ip}:{$port}/api/sync/revenue";
+            $query = [];
+            if ($startDate !== '' && $endDate !== '') {
+                $query = [
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                ];
+            }
+            $url = empty($query) ? $baseUrl : ($baseUrl . '?' . http_build_query($query));
 
             $response = Http::timeout(30)
                 ->withHeaders(['Authorization' => $server->secret_key])
-                ->post($url, [
-                    'start_date' => $request->input('start_date'),
-                    'end_date'   => $request->input('end_date'),
-                ]);
+                ->post($url);
 
             return $this->ok([
                 'url'        => $url,
                 'httpStatus' => $response->status(),
                 'body'       => $response->json() ?? $response->body(),
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, '日期格式有误']);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             return $this->error([504, '连接超时: ' . $e->getMessage()]);
         } catch (\Exception $e) {

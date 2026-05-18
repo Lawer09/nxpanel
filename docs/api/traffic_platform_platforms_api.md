@@ -2,7 +2,7 @@
 
 ## 1. 基础信息
 
-- 接口前缀：`/v3/`
+- 接口前缀：`/api/v3/admin/{securePath}/traffic-platform`
 - 管理端鉴权：需管理员登录态
 - 统一返回：
 
@@ -20,7 +20,7 @@
 
 ### 2.1 平台列表
 
-`GET /traffic-platform/platforms`
+`GET /platforms`
 
 Query 参数：
 
@@ -31,7 +31,7 @@ Query 参数：
 
 ### 2.2 新增平台
 
-`POST /traffic-platform/platforms`
+`POST /platforms/create`
 
 Body：
 
@@ -46,12 +46,13 @@ Body：
 
 ### 2.3 修改平台
 
-`PUT /traffic-platform/platforms/{id}`
+`POST /platforms/update`
 
-Body（可选字段）：
+Body（可选字段，必须包含 id）：
 
 ```json
 {
+  "id": 1,
   "name": "KKOIP",
   "baseUrl": "https://www.kkoip.com",
   "enabled": 1
@@ -60,12 +61,13 @@ Body（可选字段）：
 
 ### 2.4 启用/禁用平台
 
-`PATCH /traffic-platform/platforms/{id}/status`
+`POST /platforms/update-status`
 
 Body：
 
 ```json
 {
+  "id": 1,
   "enabled": 1
 }
 ```
@@ -76,7 +78,7 @@ Body：
 
 ### 3.1 账号列表
 
-`GET /traffic-platform/accounts`
+`GET /accounts`
 
 Query 参数：
 
@@ -88,13 +90,21 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认20，最大200 |
 
+返回字段（data 每项）新增：
+
+- `balance`：账号剩余可用流量（MB，int）
+
 ### 3.2 账号详情
 
-`GET /traffic-platform/accounts/{id}`
+`GET /accounts/detail?id=1`
+
+返回字段包含：
+
+- `balance`：账号剩余可用流量（MB，int）
 
 ### 3.3 新增账号
 
-`POST /traffic-platform/accounts`
+`POST /accounts/create`
 
 Body：
 
@@ -103,6 +113,7 @@ Body：
   "platformCode": "kkoip",
   "accountName": "kkoip-main",
   "externalAccountId": "3494058",
+  "balance": 10240,
   "credential": {
     "accessid": "3494058",
     "secret": "******"
@@ -114,14 +125,16 @@ Body：
 
 ### 3.4 修改账号
 
-`PUT /traffic-platform/accounts/{id}`
+`POST /accounts/update`
 
-Body（可选字段）：
+Body（可选字段，必须包含 id）：
 
 ```json
 {
+  "id": 1,
   "accountName": "kkoip-main",
   "externalAccountId": "3494058",
+  "balance": 10240,
   "credential": {
     "secret": "******"
   },
@@ -132,19 +145,28 @@ Body（可选字段）：
 
 ### 3.5 启用/禁用账号
 
-`PATCH /traffic-platform/accounts/{id}/status`
+`POST /accounts/update-status`
 
 Body：
 
 ```json
 {
+  "id": 1,
   "enabled": 1
 }
 ```
 
 ### 3.6 测试账号连接
 
-`POST /traffic-platform/accounts/{id}/test`
+`POST /accounts/test`
+
+Body：
+
+```json
+{
+  "id": 1
+}
+```
 
 说明：用于测试账号连通与实时接口返回，不直接代表统计报表已入库。
 
@@ -173,6 +195,7 @@ Query 参数：
 
 - `platformAccountId`
 - `platformCode`
+- `balance`（账号剩余可用流量，MB）
 - `externalUid`
 - `externalUsername`
 - `statTime`
@@ -291,7 +314,7 @@ Query 参数：
 
 ### 5.1 手动触发同步
 
-`POST /traffic-platform/sync`
+`POST /sync`
 
 Body：
 
@@ -318,7 +341,7 @@ Body：
 
 ### 5.2 同步任务列表
 
-`GET /traffic-platform/sync-jobs`
+`GET /sync-jobs`
 
 Query 参数：
 
@@ -334,4 +357,4 @@ Query 参数：
 
 ### 5.3 同步任务详情
 
-`GET /traffic-platform/sync-jobs/{id}`
+`GET /sync-jobs/detail?id=1`

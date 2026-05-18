@@ -2,108 +2,72 @@
 
 namespace App\Http\Controllers\V3\Admin\TrafficPlatform;
 
+use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\TrafficPlatformIndexRequest;
+use App\Http\Requests\Admin\TrafficPlatformStoreRequest;
+use App\Http\Requests\Admin\TrafficPlatformUpdateRequest;
+use App\Http\Requests\Admin\TrafficPlatformUpdateStatusRequest;
 use App\Http\Resources\CamelizeResource;
-use App\Models\TrafficPlatform;
+use App\Services\TrafficPlatform\TrafficPlatformService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class TrafficPlatformController extends Controller
 {
+    public function __construct(
+        protected TrafficPlatformService $service
+    ) {}
+
     /**
      * 平台列表
      * GET /traffic-platform/platforms
      */
-    public function fetch(Request $request): JsonResponse
+    public function index(TrafficPlatformIndexRequest $request): JsonResponse
     {
         try {
-            $query = TrafficPlatform::query();
-
-            if ($request->filled('enabled')) {
-                $query->where('enabled', $request->input('enabled'));
-            }
-            if ($request->filled('keyword')) {
-                $keyword = $request->input('keyword');
-                $query->where(function ($q) use ($keyword) {
-                    $q->where('code', 'like', "%{$keyword}%")
-                      ->orWhere('name', 'like', "%{$keyword}%");
-                });
-            }
-
-            $data = $query->orderByDesc('id')->get();
+            $result = $this->service->index($request->validated());
 
             return $this->ok([
-                'data' => CamelizeResource::collection($data),
+                'data' => CamelizeResource::collection($result['data']),
             ]);
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
-            Log::error('TrafficPlatform fetch error: ' . $e->getMessage());
+            Log::error('TrafficPlatform index error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }
 
     /**
      * 新增平台
-     * POST /traffic-platform/platforms
+     * POST /traffic-platform/platforms/create
      */
-    public function save(Request $request): JsonResponse
+    public function store(TrafficPlatformStoreRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'code'           => 'required|string|max:50',
-                'name'           => 'required|string|max:100',
-                'baseUrl'        => 'nullable|string|max:255',
-                'enabled'        => 'nullable|integer|in:0,1',
-            ]);
-
-            if (TrafficPlatform::where('code', $request->input('code'))->exists()) {
-                return $this->error([422, '平台编码已存在']);
-            }
-
-            $platform = TrafficPlatform::create([
-                'code'            => $request->input('code'),
-                'name'            => $request->input('name'),
-                'base_url'        => $request->input('baseUrl', ''),
-                'enabled'         => $request->input('enabled', 1),
-            ]);
+            $platform = $this->service->store($request->validated());
 
             return $this->ok(CamelizeResource::make($platform));
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, $e->getMessage()]);
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
-            Log::error('TrafficPlatform save error: ' . $e->getMessage());
+            Log::error('TrafficPlatform store error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }
 
     /**
      * 修改平台
-     * PUT /traffic-platform/platforms/{id}
+     * POST /traffic-platform/platforms/update
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(TrafficPlatformUpdateRequest $request): JsonResponse
     {
         try {
-            $platform = TrafficPlatform::find($id);
-            if (!$platform) {
-                return $this->error([404, '平台不存在']);
-            }
-
-            $request->validate([
-                'name'           => 'nullable|string|max:100',
-                'baseUrl'        => 'nullable|string|max:255',
-                'enabled'        => 'nullable|integer|in:0,1',
-            ]);
-
-            $updateData = [];
-            if ($request->has('name'))           $updateData['name']            = $request->input('name');
-            if ($request->has('baseUrl'))         $updateData['base_url']        = $request->input('baseUrl');
-            if ($request->has('enabled'))         $updateData['enabled']         = $request->input('enabled');
-
-            $platform->update($updateData);
-
-            return $this->ok(CamelizeResource::make($platform->fresh()));
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, $e->getMessage()]);
+            $platform = $this->service->update($request->validated());
+            return $this->ok(CamelizeResource::make($platform));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('TrafficPlatform update error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
@@ -112,25 +76,17 @@ class TrafficPlatformController extends Controller
 
     /**
      * 启用/禁用平台
-     * PATCH /traffic-platform/platforms/{id}/status
+     * POST /traffic-platform/platforms/update-status
      */
-    public function updateStatus(Request $request, int $id): JsonResponse
+    public function updateStatus(TrafficPlatformUpdateStatusRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'enabled' => 'required|integer|in:0,1',
-            ]);
-
-            $platform = TrafficPlatform::find($id);
-            if (!$platform) {
-                return $this->error([404, '平台不存在']);
-            }
-
-            $platform->update(['enabled' => $request->input('enabled')]);
+            $params = $request->validated();
+            $this->service->updateStatus((int) $params['id'], (int) $params['enabled']);
 
             return $this->ok(true);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error([422, $e->getMessage()]);
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('TrafficPlatform updateStatus error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
