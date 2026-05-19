@@ -3,29 +3,58 @@
 namespace App\Services\Automation;
 
 use App\Jobs\SendEmailJob;
-use App\Models\AutomationExecution;
 use App\Models\AutomationRule;
 use App\Models\AutomationRuleState;
 use App\Models\TrafficPlatformAccount;
 use App\Models\User;
+use App\Services\Automation\Contracts\AutomationModuleHandler;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class TrafficPlatformAutomationService
+class TrafficPlatformAutomationService implements AutomationModuleHandler
 {
+    public const MODULE_KEY = 'traffic_platform';
+    public const TARGET_TYPE = 'traffic_platform_account';
+
+    private const EXEC_STATUS_TRIGGERED = 'triggered';
+    private const EXEC_STATUS_RECOVERED = 'recovered';
+    private const EXEC_STATUS_SKIPPED = 'skipped';
+    private const EXEC_STATUS_FAILED = 'failed';
+
+    public function __construct(
+        protected AutomationExecutionLogService $executionLogService
+    ) {}
+
+    /**
+     * 返回模块标识。
+     */
+    public function moduleKey(): string
+    {
+        return self::MODULE_KEY;
+    }
+
+    /**
+     * 返回模块默认目标类型。
+     */
+    public function defaultTargetType(): string
+    {
+        return self::TARGET_TYPE;
+    }
+
     /**
      * 执行 traffic_platform 模块自动化规则。
      */
     public function run(array $params = []): array
     {
         $ruleId = isset($params['ruleId']) ? (int) $params['ruleId'] : null;
-        $accountIds = array_values(array_filter(array_map('intval', (array) ($params['accountIds'] ?? []))));
+        $accountIds = (array) ($params['accountIds'] ?? $params['targetIds'] ?? []);
+        $accountIds = array_values(array_filter(array_map('intval', $accountIds)));
         $dryRun = (bool) ($params['dryRun'] ?? false);
 
         $query = AutomationRule::query()
-            ->where('module', AutomationRuleService::MODULE_TRAFFIC_PLATFORM)
+            ->where('module', self::MODULE_KEY)
             ->where('enabled', 1);
 
         if ($ruleId) {
@@ -84,7 +113,7 @@ class TrafficPlatformAutomationService
             if ($evaluation['matched']) {
                 if ($state->suppress_until && $state->suppress_until->gt($now)) {
                     $summary['skippedCount']++;
-                    $this->logExecution($rule, $target, AutomationExecution::STATUS_SKIPPED, $metrics, $evaluation['details'], [
+                    $this->logExecution($rule, $target, self::EXEC_STATUS_SKIPPED, $metrics, $evaluation['details'], [
                         'reason' => 'cooldown',
                         'suppress_until' => $state->suppress_until->toDateTimeString(),
                     ], null);
@@ -93,7 +122,7 @@ class TrafficPlatformAutomationService
 
                 if ($dryRun) {
                     $summary['skippedCount']++;
-                    $this->logExecution($rule, $target, AutomationExecution::STATUS_SKIPPED, $metrics, $evaluation['details'], [
+                    $this->logExecution($rule, $target, self::EXEC_STATUS_SKIPPED, $metrics, $evaluation['details'], [
                         'reason' => 'dry_run',
                     ], null);
                     continue;
@@ -111,7 +140,7 @@ class TrafficPlatformAutomationService
                     $this->logExecution(
                         $rule,
                         $target,
-                        AutomationExecution::STATUS_TRIGGERED,
+                        self::EXEC_STATUS_TRIGGERED,
                         $metrics,
                         $evaluation['details'],
                         $rule->actions_json,
@@ -128,7 +157,7 @@ class TrafficPlatformAutomationService
                     $this->logExecution(
                         $rule,
                         $target,
-                        AutomationExecution::STATUS_FAILED,
+                        self::EXEC_STATUS_FAILED,
                         $metrics,
                         $evaluation['details'],
                         $rule->actions_json,
@@ -146,7 +175,7 @@ class TrafficPlatformAutomationService
             ) {
                 if ($dryRun) {
                     $summary['skippedCount']++;
-                    $this->logExecution($rule, $target, AutomationExecution::STATUS_SKIPPED, $metrics, $evaluation['details'], [
+                    $this->logExecution($rule, $target, self::EXEC_STATUS_SKIPPED, $metrics, $evaluation['details'], [
                         'reason' => 'dry_run_recovery',
                     ], null);
                     continue;
@@ -164,7 +193,7 @@ class TrafficPlatformAutomationService
                     $this->logExecution(
                         $rule,
                         $target,
-                        AutomationExecution::STATUS_RECOVERED,
+                        self::EXEC_STATUS_RECOVERED,
                         $metrics,
                         $evaluation['details'],
                         $rule->actions_json,
@@ -181,7 +210,7 @@ class TrafficPlatformAutomationService
                     $this->logExecution(
                         $rule,
                         $target,
-                        AutomationExecution::STATUS_FAILED,
+                        self::EXEC_STATUS_FAILED,
                         $metrics,
                         $evaluation['details'],
                         $rule->actions_json,
@@ -364,7 +393,7 @@ class TrafficPlatformAutomationService
         return AutomationRuleState::query()->firstOrCreate(
             [
                 'rule_id' => $rule->id,
-                'target_type' => 'traffic_platform_account',
+                'target_type' => self::TARGET_TYPE,
                 'target_id' => (string) $target->id,
             ],
             [
@@ -404,9 +433,9 @@ class TrafficPlatformAutomationService
     ): array {
         $type = (string) ($action['type'] ?? '');
         $context = array_merge($metrics, [
-            'rule_name' => $rule->name,
-            'rule_id' => $rule->id,
-            'status' => $recovery ? 'recovered' : 'alert',
+                'rule_name' => $rule->name,
+                'rule_id' => $rule->id,
+                'status' => $recovery ? 'recovered' : 'alert',
         ]);
 
         return match ($type) {
@@ -532,20 +561,23 @@ class TrafficPlatformAutomationService
         ?array $actionResults,
         ?string $errorMessage = null
     ): void {
-        AutomationExecution::create([
+        $record = [
             'rule_id' => $rule->id,
+            'rule_name' => $rule->name,
             'module' => $rule->module,
-            'target_type' => 'traffic_platform_account',
+            'target_type' => self::TARGET_TYPE,
             'target_id' => (string) $target->id,
+            'target_name' => (string) $target->account_name,
             'status' => $status,
             'metrics_snapshot' => $metrics,
             'matched_conditions' => $details,
             'actions_snapshot' => $actions,
             'action_results' => $actionResults,
             'error_message' => $errorMessage ? mb_substr($errorMessage, 0, 2000) : null,
-            'executed_at' => now(),
-            'created_at' => now(),
-        ]);
+            'executed_at' => now()->toDateTimeString(),
+        ];
+
+        $this->executionLogService->appendExecution(self::MODULE_KEY, $record);
     }
 
     /**

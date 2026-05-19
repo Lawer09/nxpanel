@@ -4,7 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class TrafficPlatformAutomationRuleIndexRequest extends FormRequest
+class AutomationRuleIndexRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,6 +14,7 @@ class TrafficPlatformAutomationRuleIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'module' => 'required|string|max:64',
             'keyword' => 'nullable|string|max:100',
             'enabled' => 'nullable|integer|in:0,1',
             'page' => 'nullable|integer|min:1',

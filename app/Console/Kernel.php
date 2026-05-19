@@ -75,8 +75,8 @@ class Kernel extends ConsoleKernel
         // 应用客户端凭证同步到 Redis（每分钟）
         $schedule->command('app-client:sync-redis')->everyMinute()->onOneServer()->withoutOverlapping(2);
 
-        // 代理流量自动化检测与告警（每 5 分钟触发一次，实际由 Horizon 消费 automation 队列执行）
-        $schedule->command('traffic-platform:automation-run')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
+        // 自动化检测与告警（每 5 分钟触发一次，实际由 Horizon 消费 automation 队列执行）
+        $schedule->command('automation:run traffic_platform')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
 
         app(PluginManager::class)->registerPluginSchedules($schedule);
 

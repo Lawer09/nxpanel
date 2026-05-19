@@ -7,15 +7,19 @@ use App\Models\AutomationRule;
 
 class AutomationRuleService
 {
-    public const MODULE_TRAFFIC_PLATFORM = 'traffic_platform';
+    public function __construct(
+        protected AutomationModuleRegistry $registry
+    ) {}
 
     /**
-     * 查询自动化规则列表。
+     * 查询指定模块自动化规则列表。
      */
-    public function index(array $params): array
+    public function index(string $module, array $params): array
     {
+        $this->registry->getHandlerOrFail($module);
+
         $query = AutomationRule::query()
-            ->where('module', self::MODULE_TRAFFIC_PLATFORM);
+            ->where('module', $module);
 
         if (array_key_exists('enabled', $params) && $params['enabled'] !== null) {
             $query->where('enabled', (int) $params['enabled']);
@@ -47,12 +51,14 @@ class AutomationRuleService
     }
 
     /**
-     * 查询规则详情。
+     * 查询指定模块规则详情。
      */
-    public function detail(int $id): AutomationRule
+    public function detail(string $module, int $id): AutomationRule
     {
+        $this->registry->getHandlerOrFail($module);
+
         $rule = AutomationRule::query()
-            ->where('module', self::MODULE_TRAFFIC_PLATFORM)
+            ->where('module', $module)
             ->find($id);
 
         if (!$rule) {
@@ -67,7 +73,9 @@ class AutomationRuleService
      */
     public function store(array $params): AutomationRule
     {
-        return AutomationRule::create($this->buildPayload($params));
+        $module = (string) $params['module'];
+        $handler = $this->registry->getHandlerOrFail($module);
+        return AutomationRule::create($this->buildPayload($params, $handler->defaultTargetType()));
     }
 
     /**
@@ -75,8 +83,10 @@ class AutomationRuleService
      */
     public function update(array $params): AutomationRule
     {
-        $rule = $this->detail((int) $params['id']);
-        $payload = $this->buildPayload($params, false);
+        $module = (string) $params['module'];
+        $handler = $this->registry->getHandlerOrFail($module);
+        $rule = $this->detail($module, (int) $params['id']);
+        $payload = $this->buildPayload($params, $handler->defaultTargetType(), false);
 
         if (!empty($payload)) {
             $rule->update($payload);
@@ -88,18 +98,21 @@ class AutomationRuleService
     /**
      * 更新规则启停状态。
      */
-    public function updateStatus(int $id, int $enabled): void
+    public function updateStatus(string $module, int $id, int $enabled): void
     {
-        $rule = $this->detail($id);
+        $rule = $this->detail($module, $id);
         $rule->update(['enabled' => $enabled]);
     }
 
     /**
      * 构建规则存储数据。
      */
-    private function buildPayload(array $params, bool $isCreate = true): array
+    private function buildPayload(array $params, string $defaultTargetType, bool $isCreate = true): array
     {
-        $payload = ['module' => self::MODULE_TRAFFIC_PLATFORM];
+        $payload = [];
+        if ($isCreate) {
+            $payload['module'] = (string) $params['module'];
+        }
 
         if ($isCreate || array_key_exists('name', $params)) {
             $payload['name'] = trim((string) ($params['name'] ?? ''));
@@ -110,7 +123,7 @@ class AutomationRuleService
                 : null;
         }
         if ($isCreate || array_key_exists('targetType', $params)) {
-            $payload['target_type'] = (string) ($params['targetType'] ?? 'traffic_platform_account');
+            $payload['target_type'] = (string) ($params['targetType'] ?? $defaultTargetType);
         }
         if ($isCreate || array_key_exists('targetScope', $params)) {
             $payload['target_scope_json'] = $params['targetScope'] ?? null;

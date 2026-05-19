@@ -33,7 +33,7 @@ use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAccountController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
-use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAutomationRuleController;
+use App\Http\Controllers\V3\Admin\AutomationRuleController;
 use App\Http\Controllers\V3\Admin\ReportController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsDashboardController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnSessionController;
@@ -429,15 +429,17 @@ class AdminRoute
                 $router->get('/sync-jobs',       [TrafficPlatformSyncController::class, 'index']);
                 $router->get('/sync-jobs/detail', [TrafficPlatformSyncController::class, 'detail']);
 
-                // 自动化规则
-                $router->group(['prefix' => 'automation-rules'], function ($router) {
-                    $router->get('/',                [TrafficPlatformAutomationRuleController::class, 'index']);
-                    $router->get('/detail',          [TrafficPlatformAutomationRuleController::class, 'detail']);
-                    $router->post('/create',         [TrafficPlatformAutomationRuleController::class, 'store']);
-                    $router->post('/update',         [TrafficPlatformAutomationRuleController::class, 'update']);
-                    $router->post('/update-status',  [TrafficPlatformAutomationRuleController::class, 'updateStatus']);
-                    $router->post('/run',            [TrafficPlatformAutomationRuleController::class, 'run']);
-                });
+            });
+
+            // Automation Rules（通用入口，按 module 区分）
+            $router->group(['prefix' => 'automation-rules'], function ($router) {
+                $router->get('/',               [AutomationRuleController::class, 'index']);
+                $router->get('/detail',         [AutomationRuleController::class, 'detail']);
+                $router->get('/executions',     [AutomationRuleController::class, 'executions']);
+                $router->post('/create',        [AutomationRuleController::class, 'store']);
+                $router->post('/update',        [AutomationRuleController::class, 'update']);
+                $router->post('/update-status', [AutomationRuleController::class, 'updateStatus']);
+                $router->post('/run',           [AutomationRuleController::class, 'run']);
             });
         });
     }

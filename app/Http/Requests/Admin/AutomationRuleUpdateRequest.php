@@ -4,7 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class TrafficPlatformAutomationRuleUpdateRequest extends FormRequest
+class AutomationRuleUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,11 +14,14 @@ class TrafficPlatformAutomationRuleUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'module' => 'required|string|max:64',
             'id' => 'required|integer|min:1',
             'name' => 'nullable|string|max:100',
             'description' => 'nullable|string|max:255',
-            'targetType' => 'nullable|string|in:traffic_platform_account',
+            'targetType' => 'nullable|string|max:64',
             'targetScope' => 'nullable|array',
+            'targetScope.targetIds' => 'nullable|array',
+            'targetScope.targetIds.*' => 'string|max:64',
             'targetScope.accountIds' => 'nullable|array',
             'targetScope.accountIds.*' => 'integer|min:1',
             'targetScope.platformCodes' => 'nullable|array',
@@ -30,7 +33,7 @@ class TrafficPlatformAutomationRuleUpdateRequest extends FormRequest
             'conditions.*.operator' => 'required_with:conditions|string|in:eq,neq,gt,gte,lt,lte,in,not_in,between',
             'conditions.*.value' => 'required_with:conditions',
             'actions' => 'nullable|array|min:1',
-            'actions.*.type' => 'required_with:actions|string|in:telegram_admin,email,disable_account',
+            'actions.*.type' => 'required_with:actions|string|max:64',
             'actions.*.template' => 'nullable|string|max:1000',
             'actions.*.recoverTemplate' => 'nullable|string|max:1000',
             'actions.*.subject' => 'nullable|string|max:255',

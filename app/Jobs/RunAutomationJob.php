@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Services\Automation\TrafficPlatformAutomationService;
+use App\Services\Automation\AutomationRunnerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-class RunTrafficPlatformAutomationJob implements ShouldQueue
+class RunAutomationJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -24,8 +24,9 @@ class RunTrafficPlatformAutomationJob implements ShouldQueue
     public array $backoff = [30, 120];
 
     public function __construct(
+        public string $module,
         public ?int $ruleId = null,
-        public array $accountIds = [],
+        public array $targetIds = [],
         public bool $dryRun = false,
         public ?string $triggerId = null
     ) {
@@ -34,13 +35,15 @@ class RunTrafficPlatformAutomationJob implements ShouldQueue
     }
 
     /**
-     * 执行代理流量自动化任务。
+     * 执行指定模块自动化任务。
      */
-    public function handle(TrafficPlatformAutomationService $service): void
+    public function handle(AutomationRunnerService $runner): void
     {
-        $lock = Cache::lock('traffic_platform_automation:run', 600);
+        $lockKey = 'automation:run:' . $this->module;
+        $lock = Cache::lock($lockKey, 600);
         if (!$lock->get()) {
-            Log::warning('traffic platform automation skipped due to lock', [
+            Log::warning('automation job skipped due to lock', [
+                'module' => $this->module,
                 'triggerId' => $this->triggerId,
                 'ruleId' => $this->ruleId,
             ]);
@@ -48,20 +51,22 @@ class RunTrafficPlatformAutomationJob implements ShouldQueue
         }
 
         try {
-            Log::info('traffic platform automation start', [
+            Log::info('automation job start', [
+                'module' => $this->module,
                 'triggerId' => $this->triggerId,
                 'ruleId' => $this->ruleId,
-                'accountIds' => $this->accountIds,
+                'targetIds' => $this->targetIds,
                 'dryRun' => $this->dryRun,
             ]);
 
-            $summary = $service->run([
+            $summary = $runner->runByModule($this->module, [
                 'ruleId' => $this->ruleId,
-                'accountIds' => $this->accountIds,
+                'targetIds' => $this->targetIds,
                 'dryRun' => $this->dryRun,
             ]);
 
-            Log::info('traffic platform automation finish', [
+            Log::info('automation job finish', [
+                'module' => $this->module,
                 'triggerId' => $this->triggerId,
                 'summary' => $summary,
             ]);
