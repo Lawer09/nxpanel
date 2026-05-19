@@ -105,6 +105,40 @@
 - 无需数据库迁移
 - 无需回滚
 
+### Traffic Platform 平台列表改为分页返回
+
+- `TrafficPlatformController::index`（`GET /traffic-platform/platforms`）返回结构调整为分页格式
+- `TrafficPlatformService::index` 新增分页查询逻辑，支持 `page` / `pageSize`
+- `TrafficPlatformIndexRequest` 新增 `page` / `pageSize` 参数校验
+- 同步更新 `docs/api/traffic_platform_platforms_api.md` 的请求参数与返回结构说明
+
+### 影响范围
+
+- `app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformController.php`
+- `app/Services/TrafficPlatform/TrafficPlatformService.php`
+- `app/Http/Requests/Admin/TrafficPlatformIndexRequest.php`
+- `docs/api/traffic_platform_platforms_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+### Traffic Platform 接口文档补充返回字段说明
+
+- 参照 `docs/api/ad_revenue_api.md` 的文档结构，为 `docs/api/traffic_platform_platforms_api.md` 补齐各接口返回字段说明
+- 新增平台配置、平台账号、流量查询、同步任务等接口的返回结构示例与字段表（含类型与含义）
+- 明确分页接口统一返回 `data` / `total` / `page` / `pageSize`，并补充动态返回接口的字段说明
+
+### 影响范围
+
+- `docs/api/traffic_platform_platforms_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
 ### Traffic Platform 账号余额字段与接口规范化
 
 - `traffic_platform_accounts` 新增 `balance` 字段（int，单位 MB，默认 0），用于表示账号剩余可用流量

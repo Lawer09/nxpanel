@@ -29,6 +29,9 @@ class TrafficPlatformController extends Controller
             $result = $this->service->index($request->validated());
 
             return $this->ok([
+                'page' => $result['page'],
+                'pageSize' => $result['pageSize'],
+                'total' => $result['total'],
                 'data' => CamelizeResource::collection($result['data']),
             ]);
         } catch (BusinessException $e) {

@@ -28,6 +28,50 @@ Query 参数：
 | --- | --- | --- | --- |
 | enabled | int | 否 | 0/1 |
 | keyword | string | 否 | 按 code/name 模糊搜索 |
+| page | int | 否 | 默认1 |
+| pageSize | int | 否 | 默认20，最大200 |
+
+返回结构：
+
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "total": 1,
+  "data": [
+    {
+      "id": 1,
+      "code": "kkoip",
+      "name": "KKOIP",
+      "baseUrl": "https://www.kkoip.com",
+      "enabled": 1,
+      "createdAt": "2026-05-18 10:00:00",
+      "updatedAt": "2026-05-18 10:00:00"
+    }
+  ]
+}
+```
+
+返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 平台列表 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 平台 ID |
+| code | string | 平台编码（唯一） |
+| name | string | 平台名称 |
+| baseUrl | string | 平台基础地址 |
+| enabled | int | 启用状态，1 启用 / 0 禁用 |
+| createdAt | string | 创建时间 |
+| updatedAt | string | 更新时间 |
 
 ### 2.2 新增平台
 
@@ -44,6 +88,8 @@ Body：
 }
 ```
 
+返回字段（data）：与「2.1 平台列表」的 `data[]` 单项字段一致。
+
 ### 2.3 修改平台
 
 `POST /platforms/update`
@@ -59,6 +105,8 @@ Body（可选字段，必须包含 id）：
 }
 ```
 
+返回字段（data）：与「2.1 平台列表」的 `data[]` 单项字段一致。
+
 ### 2.4 启用/禁用平台
 
 `POST /platforms/update-status`
@@ -71,6 +119,12 @@ Body：
   "enabled": 1
 }
 ```
+
+返回字段（data）：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| data | bool | 操作结果，`true` 表示更新成功 |
 
 ---
 
@@ -90,17 +144,66 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认20，最大200 |
 
-返回字段（data 每项）新增：
+返回结构：
 
-- `balance`：账号剩余可用流量（MB，int）
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "total": 1,
+  "data": [
+    {
+      "id": 1,
+      "platformId": 1,
+      "platformCode": "kkoip",
+      "platformName": "KKOIP",
+      "accountName": "kkoip-main",
+      "externalAccountId": "3494058",
+      "balance": 10240,
+      "credentialMasked": {
+        "accessid": "349***058",
+        "secret": "******"
+      },
+      "timezone": "Asia/Shanghai",
+      "enabled": 1,
+      "createdAt": "2026-05-18 10:00:00",
+      "updatedAt": "2026-05-18 10:00:00"
+    }
+  ]
+}
+```
+
+返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 账号列表 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 账号 ID |
+| platformId | int | 平台 ID |
+| platformCode | string | 平台编码 |
+| platformName | string | 平台名称 |
+| accountName | string | 账号名称 |
+| externalAccountId | string | 外部平台账号 ID |
+| balance | int | 账号剩余可用流量（MB） |
+| credentialMasked | object | 脱敏后的凭证信息 |
+| timezone | string | 账号时区 |
+| enabled | int | 启用状态，1 启用 / 0 禁用 |
+| createdAt | string | 创建时间 |
+| updatedAt | string | 更新时间 |
 
 ### 3.2 账号详情
 
 `GET /accounts/detail?id=1`
 
-返回字段包含：
-
-- `balance`：账号剩余可用流量（MB，int）
+返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
 
 ### 3.3 新增账号
 
@@ -123,6 +226,8 @@ Body：
 }
 ```
 
+返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
+
 ### 3.4 修改账号
 
 `POST /accounts/update`
@@ -143,6 +248,8 @@ Body（可选字段，必须包含 id）：
 }
 ```
 
+返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
+
 ### 3.5 启用/禁用账号
 
 `POST /accounts/update-status`
@@ -155,6 +262,12 @@ Body：
   "enabled": 1
 }
 ```
+
+返回字段（data）：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| data | bool | 操作结果，`true` 表示更新成功 |
 
 ### 3.6 测试账号连接
 
@@ -169,6 +282,8 @@ Body：
 ```
 
 说明：用于测试账号连通与实时接口返回，不直接代表统计报表已入库。
+
+返回字段说明：该接口透传内部 Go 服务返回的 `data`，字段会因平台实现不同而变化。
 
 ---
 
@@ -191,22 +306,33 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认50，最大200 |
 
-返回字段（data 每项）包含：
+返回字段：
 
-- `platformAccountId`
-- `platformCode`
-- `balance`（账号剩余可用流量，MB）
-- `externalUid`
-- `externalUsername`
-- `statTime`
-- `statDate`
-- `statHour`
-- `statMinute`
-- `geo`
-- `region`
-- `trafficBytes`
-- `trafficMb`
-- `accountName`
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 小时流量明细 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| platformAccountId | int | 平台账号 ID |
+| platformCode | string | 平台编码 |
+| balance | int | 账号剩余可用流量（MB） |
+| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUsername | string/null | 子账号名称 |
+| statTime | string | 统计时间 |
+| statDate | string | 统计日期 |
+| statHour | int | 统计小时 |
+| statMinute | int | 统计分钟 |
+| geo | string | 地区编码（空维度时为空字符串） |
+| region | string | 地区名称（空维度时为空字符串） |
+| trafficBytes | int | 流量字节数 |
+| trafficMb | float | 流量 MB |
+| accountName | string | 平台账号名称 |
 
 ### 4.2 日流量汇总
 
@@ -225,19 +351,30 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认50，最大200 |
 
-返回字段（data 每项）包含：
+返回字段：
 
-- `statDate`
-- `platformAccountId`
-- `platformCode`
-- `externalUid`
-- `externalUsername`
-- `geo`
-- `region`
-- `trafficBytes`
-- `trafficMb`
-- `trafficGb`（兼容字段，`trafficMb / 1024`）
-- `accountName`
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 日流量汇总 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| statDate | string | 统计日期 |
+| platformAccountId | int | 平台账号 ID |
+| platformCode | string | 平台编码 |
+| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUsername | string/null | 子账号名称 |
+| geo | string | 地区编码（空维度时为空字符串） |
+| region | string | 地区名称（空维度时为空字符串） |
+| trafficBytes | int | 流量字节数（日累计） |
+| trafficMb | float | 流量 MB（日累计） |
+| trafficGb | float | 兼容字段，`trafficMb / 1024` |
+| accountName | string | 平台账号名称 |
 
 ### 4.3 月流量汇总
 
@@ -255,17 +392,28 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认50，最大200 |
 
-返回字段（data 每项）包含：
+返回字段：
 
-- `statMonth`
-- `platformAccountId`
-- `platformCode`
-- `externalUid`
-- `externalUsername`
-- `trafficBytes`
-- `trafficMb`
-- `trafficGb`（兼容字段）
-- `accountName`
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 月流量汇总 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| statMonth | string | 统计月份，格式 `YYYY-MM` |
+| platformAccountId | int | 平台账号 ID |
+| platformCode | string | 平台编码 |
+| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUsername | string/null | 子账号名称 |
+| trafficBytes | int | 流量字节数（月累计） |
+| trafficMb | float | 流量 MB（月累计） |
+| trafficGb | float | 兼容字段，`trafficMb / 1024` |
+| accountName | string | 平台账号名称 |
 
 ### 4.4 流量趋势
 
@@ -282,11 +430,13 @@ Query 参数：
 | endDate | string | 否 | 结束日期 |
 | dimension | string | 否 | `hour` / `day` / `month`，默认 `day` |
 
-返回字段（data 每项）包含：
+返回字段（data[]）：
 
-- `time`
-- `trafficMb`
-- `trafficGb`（兼容字段）
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| time | string | 时间点（随 `dimension` 变化） |
+| trafficMb | float | 该时间点流量 MB |
+| trafficGb | float | 兼容字段，`trafficMb / 1024` |
 
 ### 4.5 流量排行
 
@@ -302,11 +452,26 @@ Query 参数：
 | rankBy | string | 否 | `account` / `external_uid` / `geo`，默认 `account` |
 | limit | int | 否 | 默认20，最大100 |
 
-返回字段（按 rankBy 不同）包含：
+返回字段（data[]，按 `rankBy` 不同）：
 
-- `account` 维度：`platformAccountId`, `platformCode`, `trafficMb`, `trafficGb`, `accountName`
-- `external_uid` 维度：`platformAccountId`, `platformCode`, `externalUid`, `externalUsername`, `trafficMb`, `trafficGb`, `accountName`
-- `geo` 维度：`geo`, `region`, `trafficMb`, `trafficGb`
+| rankBy | 字段 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| account | platformAccountId | int | 平台账号 ID |
+| account | platformCode | string | 平台编码 |
+| account | trafficMb | float | 流量 MB |
+| account | trafficGb | float | 兼容字段，`trafficMb / 1024` |
+| account | accountName | string | 平台账号名称 |
+| external_uid | platformAccountId | int | 平台账号 ID |
+| external_uid | platformCode | string | 平台编码 |
+| external_uid | externalUid | string | 子账号 ID |
+| external_uid | externalUsername | string/null | 子账号名称 |
+| external_uid | trafficMb | float | 流量 MB |
+| external_uid | trafficGb | float | 兼容字段，`trafficMb / 1024` |
+| external_uid | accountName | string | 平台账号名称 |
+| geo | geo | string | 地区编码 |
+| geo | region | string | 地区名称 |
+| geo | trafficMb | float | 流量 MB |
+| geo | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 
 ---
 
@@ -339,6 +504,8 @@ Body：
 - `platformCode` 可不传，后端会根据 `accountId` 自动补齐
 - 若传 `platformCode`，会做一致性校验，不匹配返回 `422`
 
+返回字段说明：该接口透传内部 Go 服务返回的 `data`，通常包含任务标识、状态、时间范围等信息，具体以节点服务实现为准。
+
 ### 5.2 同步任务列表
 
 `GET /sync-jobs`
@@ -355,6 +522,34 @@ Query 参数：
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认20，最大200 |
 
+返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| page | int | 当前页 |
+| pageSize | int | 每页条数 |
+| total | int | 总条数 |
+| data | array | 同步任务列表 |
+
+data[] 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 同步任务 ID |
+| platformAccountId | int | 平台账号 ID |
+| platformCode | string | 平台编码 |
+| status | string | 任务状态（如 `running` / `success` / `failed`） |
+| startDate | string | 同步开始日期 |
+| endDate | string | 同步结束日期 |
+| startedAt | string/null | 任务开始时间 |
+| finishedAt | string/null | 任务结束时间 |
+| errorMessage | string/null | 失败原因 |
+| accountName | string | 平台账号名称（后端补充） |
+| createdAt | string | 创建时间 |
+| updatedAt | string | 更新时间 |
+
 ### 5.3 同步任务详情
 
 `GET /sync-jobs/detail?id=1`
+
+返回字段（data）：与「5.2 同步任务列表」的 `data[]` 单项字段一致。

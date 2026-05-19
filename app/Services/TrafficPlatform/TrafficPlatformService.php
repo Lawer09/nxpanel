@@ -25,8 +25,20 @@ class TrafficPlatformService
             });
         }
 
+        $page = (int) ($params['page'] ?? 1);
+        $pageSize = (int) ($params['pageSize'] ?? 20);
+
+        $total = $query->count();
+        $items = $query->orderByDesc('id')
+            ->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
         return [
-            'data' => $query->orderByDesc('id')->get(),
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $total,
+            'data' => $items,
         ];
     }
 
