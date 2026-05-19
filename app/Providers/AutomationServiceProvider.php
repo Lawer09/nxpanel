@@ -14,9 +14,12 @@ class AutomationServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(AutomationModuleRegistry::class, function ($app) {
-            return new AutomationModuleRegistry([
+            $registry = new AutomationModuleRegistry();
+            $registry->registerHandlers([
                 $app->make(TrafficPlatformAutomationService::class),
             ]);
+
+            return $registry;
         });
     }
 }

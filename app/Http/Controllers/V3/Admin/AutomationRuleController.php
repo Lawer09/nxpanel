@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AutomationExecutionIndexRequest;
+use App\Http\Requests\Admin\AutomationModelIndexRequest;
 use App\Http\Requests\Admin\AutomationRuleDetailRequest;
 use App\Http\Requests\Admin\AutomationRuleIndexRequest;
 use App\Http\Requests\Admin\AutomationRuleStoreRequest;
@@ -30,7 +31,6 @@ class AutomationRuleController extends Controller
 
     /**
      * 自动化规则列表。
-     * GET /automation-rules
      */
     public function index(AutomationRuleIndexRequest $request): JsonResponse
     {
@@ -53,8 +53,28 @@ class AutomationRuleController extends Controller
     }
 
     /**
+     * 查询 module 可用策略 model 标识列表。
+     */
+    public function models(AutomationModelIndexRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            $module = (string) $params['module'];
+
+            return $this->ok([
+                'module' => $this->moduleRegistry->normalizeModule($module),
+                'models' => CamelizeResource::collection($this->moduleRegistry->getModels($module)),
+            ]);
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('AutomationRule models error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
      * 自动化规则详情。
-     * GET /automation-rules/detail?id=&module=
      */
     public function detail(AutomationRuleDetailRequest $request): JsonResponse
     {
@@ -72,7 +92,6 @@ class AutomationRuleController extends Controller
 
     /**
      * 创建自动化规则。
-     * POST /automation-rules/create
      */
     public function store(AutomationRuleStoreRequest $request): JsonResponse
     {
@@ -89,7 +108,6 @@ class AutomationRuleController extends Controller
 
     /**
      * 更新自动化规则。
-     * POST /automation-rules/update
      */
     public function update(AutomationRuleUpdateRequest $request): JsonResponse
     {
@@ -105,8 +123,7 @@ class AutomationRuleController extends Controller
     }
 
     /**
-     * 更新自动化规则状态。
-     * POST /automation-rules/update-status
+     * 更新自动化规则启停状态。
      */
     public function updateStatus(AutomationRuleUpdateStatusRequest $request): JsonResponse
     {
@@ -124,7 +141,6 @@ class AutomationRuleController extends Controller
 
     /**
      * 手动执行自动化规则。
-     * POST /automation-rules/run
      */
     public function run(AutomationRunRequest $request): JsonResponse
     {
@@ -146,15 +162,15 @@ class AutomationRuleController extends Controller
     }
 
     /**
-     * 查询自动化规则执行记录（每模块 Redis 最新 100 条）。
-     * GET /automation-rules/executions
+     * 查询自动化规则执行记录（每 module Redis 最新 100 条）。
      */
     public function executions(AutomationExecutionIndexRequest $request): JsonResponse
     {
         try {
             $params = $request->validated();
-            $this->moduleRegistry->getHandlerOrFail((string) $params['module']);
-            $result = $this->executionLogService->listExecutions((string) $params['module'], $params);
+            $module = (string) $params['module'];
+            $this->moduleRegistry->getHandlerOrFail($module);
+            $result = $this->executionLogService->listExecutions($module, $params);
 
             return $this->ok([
                 'page' => $result['page'],

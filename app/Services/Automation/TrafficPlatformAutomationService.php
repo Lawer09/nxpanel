@@ -44,6 +44,21 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
     }
 
     /**
+     * 返回 traffic 模块支持的策略 model 列表。
+     */
+    public function supportedModels(): array
+    {
+        return [
+            [
+                'model' => self::TARGET_TYPE,
+                'name' => 'Traffic Platform Account',
+                'module' => self::MODULE_KEY,
+                'default' => true,
+            ],
+        ];
+    }
+
+    /**
      * 执行 traffic_platform 模块自动化规则。
      */
     public function run(array $params = []): array

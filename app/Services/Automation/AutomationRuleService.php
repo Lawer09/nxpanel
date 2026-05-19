@@ -16,10 +16,10 @@ class AutomationRuleService
      */
     public function index(string $module, array $params): array
     {
+        $module = $this->registry->normalizeModule($module);
         $this->registry->getHandlerOrFail($module);
 
-        $query = AutomationRule::query()
-            ->where('module', $module);
+        $query = AutomationRule::query()->where('module', $module);
 
         if (array_key_exists('enabled', $params) && $params['enabled'] !== null) {
             $query->where('enabled', (int) $params['enabled']);
@@ -55,6 +55,7 @@ class AutomationRuleService
      */
     public function detail(string $module, int $id): AutomationRule
     {
+        $module = $this->registry->normalizeModule($module);
         $this->registry->getHandlerOrFail($module);
 
         $rule = AutomationRule::query()
@@ -73,8 +74,10 @@ class AutomationRuleService
      */
     public function store(array $params): AutomationRule
     {
-        $module = (string) $params['module'];
+        $module = $this->registry->normalizeModule((string) $params['module']);
         $handler = $this->registry->getHandlerOrFail($module);
+        $params['module'] = $module;
+
         return AutomationRule::create($this->buildPayload($params, $handler->defaultTargetType()));
     }
 
@@ -83,9 +86,10 @@ class AutomationRuleService
      */
     public function update(array $params): AutomationRule
     {
-        $module = (string) $params['module'];
+        $module = $this->registry->normalizeModule((string) $params['module']);
         $handler = $this->registry->getHandlerOrFail($module);
         $rule = $this->detail($module, (int) $params['id']);
+        $params['module'] = $module;
         $payload = $this->buildPayload($params, $handler->defaultTargetType(), false);
 
         if (!empty($payload)) {

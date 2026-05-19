@@ -8,22 +8,51 @@ use App\Services\Automation\Contracts\AutomationModuleHandler;
 class AutomationModuleRegistry
 {
     /**
-     * @param iterable<AutomationModuleHandler> $handlers
+     * @var array<string, AutomationModuleHandler>
      */
-    public function __construct(
-        protected iterable $handlers
-    ) {}
+    protected array $handlers = [];
 
     /**
-     * 查询模块处理器，不存在则抛出业务异常。
+     * @param iterable<AutomationModuleHandler> $handlers
+     */
+    public function __construct(iterable $handlers = [])
+    {
+        $this->registerHandlers($handlers);
+    }
+
+    /**
+     * 批量注册模块处理器。
+     *
+     * @param iterable<AutomationModuleHandler> $handlers
+     */
+    public function registerHandlers(iterable $handlers): void
+    {
+        foreach ($handlers as $handler) {
+            $this->registerHandler($handler);
+        }
+    }
+
+    /**
+     * 注册单个模块处理器。
+     */
+    public function registerHandler(AutomationModuleHandler $handler): void
+    {
+        $module = $this->normalizeModule($handler->moduleKey());
+        if ($module === '') {
+            return;
+        }
+
+        $this->handlers[$module] = $handler;
+    }
+
+    /**
+     * 按模块查询处理器，不存在时抛出业务异常。
      */
     public function getHandlerOrFail(string $module): AutomationModuleHandler
     {
-        $module = trim($module);
-        foreach ($this->handlers as $handler) {
-            if ($handler->moduleKey() === $module) {
-                return $handler;
-            }
+        $module = $this->normalizeModule($module);
+        if (isset($this->handlers[$module])) {
+            return $this->handlers[$module];
         }
 
         throw new BusinessException([422, '不支持的自动化模块: ' . $module]);
@@ -31,14 +60,30 @@ class AutomationModuleRegistry
 
     /**
      * 获取系统支持的模块列表。
+     *
+     * @return array<int, string>
      */
     public function supportedModules(): array
     {
-        $modules = [];
-        foreach ($this->handlers as $handler) {
-            $modules[] = $handler->moduleKey();
-        }
+        return array_keys($this->handlers);
+    }
 
-        return array_values(array_unique($modules));
+    /**
+     * 查询指定模块可用的策略 model 列表。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getModels(string $module): array
+    {
+        $handler = $this->getHandlerOrFail($module);
+        return $handler->supportedModels();
+    }
+
+    /**
+     * 统一模块名格式，兼容 traffic-platform / traffic_platform。
+     */
+    public function normalizeModule(string $module): string
+    {
+        return str_replace('-', '_', strtolower(trim($module)));
     }
 }

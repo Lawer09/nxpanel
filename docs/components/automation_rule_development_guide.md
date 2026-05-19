@@ -4,14 +4,12 @@
 
 自动化规则体系采用“通用入口 + 模块处理器”模式：
 
-- Controller 与 RuleService 不绑定具体业务模块
-- 通过 `module` 参数路由到对应模块处理器
-- 执行链路统一走 Horizon 队列
-- 执行记录统一写入 Redis（每模块保留最新 100 条）
+- Controller 与 RuleService 不绑定具体业务模块。
+- 通过 `module` 参数路由到对应模块处理器。
+- 执行链路统一经 Horizon 队列。
+- 执行记录统一写入 Redis（每模块仅保留最新 100 条）。
 
----
-
-## 2. 当前核心结构
+## 2. 核心结构
 
 ### 2.1 通用层
 
@@ -33,38 +31,43 @@
 - 队列任务：`RunAutomationJob`
 - 调度：`Kernel` 每 5 分钟触发 `automation:run traffic_platform`
 
----
-
 ## 3. API 约定
 
 统一前缀：`/api/v3/admin/{securePath}/automation-rules`
 
-- `GET /`：规则列表（必须带 `module`）
-- `GET /detail`：规则详情（`module + id`）
-- `POST /create`：创建规则（body 内带 `module`）
-- `POST /update`：更新规则（body 内带 `module + id`）
-- `POST /update-status`：规则启停（body 内带 `module + id`）
-- `POST /run`：手动执行（body 内带 `module`）
-- `GET /executions`：执行记录（query 内带 `module`）
+- `GET /models`：按 `module` 查询可用策略 model 标识
+- `GET /`：规则列表
+- `GET /detail`：规则详情
+- `POST /create`：创建规则
+- `POST /update`：更新规则
+- `POST /update-status`：启停规则
+- `POST /run`：手动执行
+- `GET /executions`：执行记录（Redis 最新 100）
 
----
+## 4. 模块注册与容器约束
 
-## 4. 新增模块开发步骤
+`AutomationModuleRegistry` 设计要求：
+
+- 必须可被容器无参解析（避免 `iterable $handlers` 直接注入报错）。
+- 支持 `registerHandlers()` 显式注册处理器。
+- 支持模块名标准化：`traffic-platform` 与 `traffic_platform` 统一为 `traffic_platform`。
+
+`AutomationServiceProvider` 中完成模块处理器注册。
+
+## 5. 新增模块接入步骤
 
 以 `node_status` 为例：
 
-1. 新建模块处理器类，实现 `AutomationModuleHandler`  
-2. 实现 `moduleKey()` 返回 `node_status`  
-3. 实现 `defaultTargetType()`（如 `node`）  
-4. 实现 `run(array $params)`：完成目标筛选、指标采集、条件评估、动作分发  
-5. 处理器会被 `AutomationModuleRegistry` 自动发现并按 `module` 路由  
-6. 前端调用通用接口时仅切换 `module=node_status`
+1. 新建模块处理器并实现 `AutomationModuleHandler`。
+2. `moduleKey()` 返回 `node_status`。
+3. `defaultTargetType()` 返回默认目标类型（如 `node`）。
+4. `supportedModels()` 返回前端可选 model 标识列表。
+5. `run(array $params)` 完成目标筛选、指标采集、条件评估、动作分发。
+6. 在 `AutomationServiceProvider` 注册该处理器。
 
----
+## 6. 条件与动作扩展规范
 
-## 5. 条件与动作扩展规范
-
-### 5.1 条件结构
+### 6.1 条件结构
 
 ```json
 {
@@ -82,7 +85,7 @@
 - `in`, `not_in`
 - `between`
 
-### 5.2 动作结构
+### 6.2 动作结构
 
 ```json
 {
@@ -91,18 +94,15 @@
 }
 ```
 
-动作扩展要求：
+扩展动作时：
 
-1. 在模块处理器 `dispatchOneAction()` 添加 `type` 分支  
-2. 返回统一结果字段（`type`, `ok`, `message` 等）  
-3. 同时考虑恢复态（recovery）行为  
-4. 更新 API 文档中的动作说明
+1. 在模块处理器 `dispatchOneAction()` 增加 `type` 分支。
+2. 返回统一结果字段（`type`, `ok`, `message` 等）。
+3. 考虑恢复态（recovery）逻辑。
 
----
+## 7. 执行记录规范（Redis）
 
-## 6. 执行记录规范（Redis）
-
-按模块分片存储：
+按模块分片：
 
 - Key：`automation:executions:{module}`
 - 写入：`LPUSH + LTRIM 0 99`
@@ -120,22 +120,10 @@
 - `error_message`
 - `executed_at`
 
----
-
-## 7. 调度与并发控制
-
-1. `Kernel` 只负责触发，不跑重逻辑  
-2. 命令默认只投递队列（`--sync` 仅用于调试）  
-3. Job 使用模块级锁：`automation:run:{module}`  
-4. Horizon 队列建议按模块拆分（业务量上来后）
-
----
-
 ## 8. 开发检查清单
 
-1. 是否通过 `module` 走通用入口  
-2. 是否避免 Service/Controller 绑定具体模块常量  
-3. 是否补齐 FormRequest 校验  
-4. 是否补齐文档与 `version.md`  
-5. 是否确认执行记录仍为每模块 100 条上限
-
+1. 是否通过 `module` 走通用入口。
+2. Service/Controller 是否未绑定具体模块常量。
+3. 是否补齐 FormRequest 校验。
+4. 是否同步更新 `docs/` 与 `version.md`。
+5. 是否确认执行记录仍为每模块 100 条上限。

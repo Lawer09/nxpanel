@@ -13,7 +13,9 @@ class AutomationRunnerService
      */
     public function runByModule(string $module, array $params = []): array
     {
+        $module = $this->registry->normalizeModule($module);
         $handler = $this->registry->getHandlerOrFail($module);
+
         return $handler->run($params);
     }
 }

@@ -9,11 +9,11 @@ class AutomationExecutionLogService
     private const MAX_RECORDS = 100;
 
     /**
-     * 写入模块执行记录并截断到最近 100 条。
+     * 写入模块执行记录并截断到最新 100 条。
      */
     public function appendExecution(string $module, array $record): void
     {
-        $module = trim($module);
+        $module = $this->normalizeModule($module);
         if ($module === '') {
             return;
         }
@@ -35,6 +35,7 @@ class AutomationExecutionLogService
      */
     public function listExecutions(string $module, array $params): array
     {
+        $module = $this->normalizeModule($module);
         $rawItems = Redis::lrange($this->buildRedisKey($module), 0, self::MAX_RECORDS - 1);
         $items = [];
 
@@ -90,5 +91,13 @@ class AutomationExecutionLogService
     private function buildRedisKey(string $module): string
     {
         return 'automation:executions:' . $module;
+    }
+
+    /**
+     * 统一模块名格式，兼容 traffic-platform / traffic_platform。
+     */
+    private function normalizeModule(string $module): string
+    {
+        return str_replace('-', '_', strtolower(trim($module)));
     }
 }

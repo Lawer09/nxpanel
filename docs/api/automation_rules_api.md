@@ -14,9 +14,39 @@
 }
 ```
 
----
+## 2. 模块与 model 标识
 
-## 2. 规则列表
+### 2.1 查询 module 可用 model
+
+- `GET /models`
+
+Query 参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| module | string | 是 | 模块标识，支持 `traffic_platform` 或 `traffic-platform` |
+
+示例响应：
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "module": "traffic_platform",
+    "models": [
+      {
+        "model": "traffic_platform_account",
+        "name": "Traffic Platform Account",
+        "module": "traffic_platform",
+        "default": true
+      }
+    ]
+  }
+}
+```
+
+## 3. 规则列表
 
 - `GET /`
 
@@ -24,21 +54,17 @@ Query 参数：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| module | string | 是 | 模块标识，如 `traffic_platform` |
+| module | string | 是 | 模块标识，支持 `traffic_platform` 或 `traffic-platform` |
 | keyword | string | 否 | 规则名称/描述模糊搜索 |
 | enabled | int | 否 | 0/1 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 20，最大 100 |
 
----
-
-## 3. 规则详情
+## 4. 规则详情
 
 - `GET /detail?id=1&module=traffic_platform`
 
----
-
-## 4. 创建规则
+## 5. 创建规则
 
 - `POST /create`
 
@@ -68,9 +94,7 @@ Body 示例：
 }
 ```
 
----
-
-## 5. 更新规则
+## 6. 更新规则
 
 - `POST /update`
 
@@ -84,9 +108,7 @@ Body 示例：
 }
 ```
 
----
-
-## 6. 更新规则状态
+## 7. 更新规则状态
 
 - `POST /update-status`
 
@@ -100,9 +122,7 @@ Body：
 }
 ```
 
----
-
-## 7. 手动执行规则
+## 8. 手动执行规则
 
 - `POST /run`
 
@@ -117,9 +137,7 @@ Body 示例：
 }
 ```
 
----
-
-## 8. 执行记录列表（Redis）
+## 9. 执行记录列表（Redis）
 
 - `GET /executions`
 

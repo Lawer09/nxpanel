@@ -30,6 +30,7 @@ class RunAutomationJob implements ShouldQueue
         public bool $dryRun = false,
         public ?string $triggerId = null
     ) {
+        $this->module = $this->normalizeModule($this->module);
         $this->onQueue('automation');
         $this->triggerId = $this->triggerId ?: (string) Str::uuid();
     }
@@ -73,5 +74,13 @@ class RunAutomationJob implements ShouldQueue
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * 统一模块名格式，兼容 traffic-platform / traffic_platform。
+     */
+    private function normalizeModule(string $module): string
+    {
+        return str_replace('-', '_', strtolower(trim($module)));
     }
 }

@@ -434,6 +434,7 @@ class AdminRoute
             // Automation Rules（通用入口，按 module 区分）
             $router->group(['prefix' => 'automation-rules'], function ($router) {
                 $router->get('/',               [AutomationRuleController::class, 'index']);
+                $router->get('/models',         [AutomationRuleController::class, 'models']);
                 $router->get('/detail',         [AutomationRuleController::class, 'detail']);
                 $router->get('/executions',     [AutomationRuleController::class, 'executions']);
                 $router->post('/create',        [AutomationRuleController::class, 'store']);
