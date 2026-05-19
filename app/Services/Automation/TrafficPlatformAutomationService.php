@@ -233,7 +233,26 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
                         $e->getMessage()
                     );
                 }
+
+                continue;
             }
+
+            // 未命中且未触发恢复动作时，记录为 skipped，便于执行历史可观测。
+            $summary['skippedCount']++;
+            $this->logExecution(
+                $rule,
+                $target,
+                self::EXEC_STATUS_SKIPPED,
+                $metrics,
+                $evaluation['details'],
+                [
+                    'reason' => (
+                        $state->status === AutomationRuleState::STATUS_ALERTING
+                        && (int) $rule->recovery_enabled !== 1
+                    ) ? 'recovery_disabled' : 'condition_not_matched',
+                ],
+                null
+            );
         }
 
         return $summary;

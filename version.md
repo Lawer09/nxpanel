@@ -121,6 +121,21 @@
 - 无需数据库迁移
 - 配置/代码更新后需重启应用进程（如 Octane/Horizon）
 
+### 自动化 run 未命中时补充 skipped 执行记录
+
+- 修复 `automation-rules/run` 在条件未命中且无恢复动作时不写执行记录的问题
+- `TrafficPlatformAutomationService` 现会在该分支写入 `skipped` 状态执行日志（`reason=condition_not_matched` 或 `recovery_disabled`）
+- 便于 `automation-rules/executions` 观察到“已执行但未触发动作”的结果，并与返回汇总中的 `skippedCount` 对齐
+
+### 影响范围
+
+- `app/Services/Automation/TrafficPlatformAutomationService.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码变更生效
+
 ### AutomationServiceProvider boot 改回参数注入
 
 - `AutomationServiceProvider::boot` 改回参数注入方式：`boot(AutomationModuleRegistry $registry, TrafficPlatformAutomationService $trafficPlatformHandler)`
