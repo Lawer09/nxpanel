@@ -13,13 +13,15 @@ class AutomationServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(AutomationModuleRegistry::class, function ($app) {
-            $registry = new AutomationModuleRegistry();
-            $registry->registerHandlers([
-                $app->make(TrafficPlatformAutomationService::class),
-            ]);
+        $this->app->singleton(AutomationModuleRegistry::class, fn () => new AutomationModuleRegistry());
+    }
 
-            return $registry;
-        });
+    /**
+     * Bootstrap services.
+     */
+    public function boot(AutomationModuleRegistry $registry, TrafficPlatformAutomationService $trafficPlatformHandler): void
+    {
+        // 在 boot 阶段注册模块处理器，避免因容器初始化顺序导致 Registry 为空。
+        $registry->registerHandler($trafficPlatformHandler);
     }
 }

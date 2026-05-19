@@ -44,6 +44,21 @@
 - `POST /run`：手动执行
 - `GET /executions`：执行记录（Redis 最新 100）
 
+### 3.1 接口文档编写要求（按 module 区分结构）
+
+自动化规则属于“通用入口 + 模块专有结构”模型，文档必须显式区分：
+
+1. 通用字段（所有 module 共享）
+2. `module=xxx` 场景下的专有字段、可选值、示例
+
+以 `POST /create` 为例，必须单独标注：
+
+- 哪些字段是 `traffic_platform` 独有（如 `targetScope.accountIds/platformCodes/includeDisabled`）
+- `conditions[].metric` 的模块可用指标集合
+- `actions[].type` 的模块可用动作集合
+
+避免只给单一 JSON 示例而不说明“模块边界”，导致前端误以为字段对所有 module 通用。
+
 ## 4. 模块注册与容器约束
 
 `AutomationModuleRegistry` 设计要求：
