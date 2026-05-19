@@ -64,7 +64,8 @@
 `AutomationModuleRegistry` 设计要求：
 
 - 必须可被容器无参解析（避免 `iterable $handlers` 直接注入报错）。
-- 支持 `registerHandlers()` 显式注册处理器。
+- 支持在构造函数中一次性注入 handlers（推荐在 Provider 的 `register()` 中完成）。
+- 同时保留 `registerHandlers()`/`registerHandler()` 便于后续扩展。
 - 支持模块名标准化：`traffic-platform` 与 `traffic_platform` 统一为 `traffic_platform`。
 
 `AutomationServiceProvider` 中完成模块处理器注册。

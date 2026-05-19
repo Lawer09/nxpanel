@@ -105,6 +105,36 @@
 - 无需数据库迁移
 - 无需回滚
 
+### Automation 模块注册改为一次性注入
+
+- `AutomationServiceProvider` 调整为在 `register()` 中一次性构造 `AutomationModuleRegistry` 并注入 handlers（当前包含 `TrafficPlatformAutomationService`）
+- 移除 `boot()` 中的二次注册流程，避免重复注册与初始化路径分散
+- 同步更新自动化开发说明文档，明确推荐“Provider register 阶段一次性注入 handlers”
+
+### 影响范围
+
+- `app/Providers/AutomationServiceProvider.php`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 配置/代码更新后需重启应用进程（如 Octane/Horizon）
+
+### AutomationServiceProvider boot 改回参数注入
+
+- `AutomationServiceProvider::boot` 改回参数注入方式：`boot(AutomationModuleRegistry $registry, TrafficPlatformAutomationService $trafficPlatformHandler)`
+- 移除 boot 内显式 `make`，保持 Provider 依赖注入风格一致
+
+### 影响范围
+
+- `app/Providers/AutomationServiceProvider.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
 ### 自动化模块注册修复（traffic_platform 422）
 
 - 修复 `AutomationModuleRegistry` 在部分启动顺序下未注册 `traffic_platform` 处理器，导致接口报错：`不支持的自动化模块: traffic_platform`
@@ -121,6 +151,35 @@
 
 - 无需数据库迁移
 - 需要重启应用进程（如 `php-fpm` / Octane / Horizon）使 Provider 变更生效
+
+### AutomationServiceProvider boot 注入方式调整
+
+- 将 `AutomationServiceProvider::boot` 从方法参数注入改为容器内显式 `make` 获取 `AutomationModuleRegistry` 与 `TrafficPlatformAutomationService`
+- 保持 `traffic_platform` 模块注册逻辑不变，减少在不同运行时环境下的 boot 参数注入差异影响
+
+### 影响范围
+
+- `app/Providers/AutomationServiceProvider.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+### 自动化模块注册增加运行时兜底
+
+- 针对部分环境仍出现 `不支持的自动化模块: traffic_platform`，在 `AutomationModuleRegistry::getHandlerOrFail` 增加运行时兜底注册
+- 当请求模块为 `traffic_platform` 且当前未注册时，Registry 将尝试通过容器解析 `TrafficPlatformAutomationService` 并即时注册
+- 保持对其他模块的行为不变，避免影响现有模块扩展路径
+
+### 影响范围
+
+- `app/Services/Automation/AutomationModuleRegistry.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 `php-fpm` / Octane / Horizon）使新代码生效
 
 ### 自动化规则 list/detail 返回结构按 module 分层说明
 
