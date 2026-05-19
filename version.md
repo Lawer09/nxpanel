@@ -136,6 +136,22 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码变更生效
 
+### 自动化 run 返回增加实际命中规则/目标明细
+
+- `automation-rules/run` 返回新增 `ruleIds`、`targetIds` 字段
+- 用于明确本次执行实际命中的规则与目标，便于排查“同一时刻多条执行记录”来源
+- 同步更新 `docs/api/automation_rules_api.md` 的 run 返回字段说明
+
+### 影响范围
+
+- `app/Services/Automation/TrafficPlatformAutomationService.php`
+- `docs/api/automation_rules_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码变更生效
+
 ### AutomationServiceProvider boot 改回参数注入
 
 - `AutomationServiceProvider::boot` 改回参数注入方式：`boot(AutomationModuleRegistry $registry, TrafficPlatformAutomationService $trafficPlatformHandler)`

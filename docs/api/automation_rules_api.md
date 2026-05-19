@@ -346,6 +346,20 @@ Body 示例：
 }
 ```
 
+返回字段（data）补充：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| ruleCount | int | 本次参与执行的规则数量 |
+| ruleIds | int[] | 本次实际执行的规则 ID 列表 |
+| targetCount | int | 本次命中的目标数量 |
+| targetIds | int[] | 本次实际命中的目标 ID 列表 |
+| triggeredCount | int | 触发告警动作次数 |
+| recoveredCount | int | 触发恢复动作次数 |
+| skippedCount | int | 跳过次数（如冷却中、dryRun、未命中但记录） |
+| failedCount | int | 执行动作失败次数 |
+| dryRun | bool | 是否 dry-run |
+
 ## 9. 执行记录列表（Redis）
 
 - `GET /executions`

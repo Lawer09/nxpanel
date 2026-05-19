@@ -67,6 +67,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
         $accountIds = (array) ($params['accountIds'] ?? $params['targetIds'] ?? []);
         $accountIds = array_values(array_filter(array_map('intval', $accountIds)));
         $dryRun = (bool) ($params['dryRun'] ?? false);
+        $logUnmatched = $dryRun || $ruleId !== null || !empty($accountIds);
 
         $query = AutomationRule::query()
             ->where('module', self::MODULE_KEY)
@@ -80,7 +81,9 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
 
         $summary = [
             'ruleCount' => $rules->count(),
+            'ruleIds' => $rules->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             'targetCount' => 0,
+            'targetIds' => [],
             'triggeredCount' => 0,
             'recoveredCount' => 0,
             'skippedCount' => 0,
@@ -89,8 +92,9 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
         ];
 
         foreach ($rules as $rule) {
-            $ruleSummary = $this->runRule($rule, $accountIds, $dryRun);
+            $ruleSummary = $this->runRule($rule, $accountIds, $dryRun, $logUnmatched);
             $summary['targetCount'] += $ruleSummary['targetCount'];
+            $summary['targetIds'] = array_values(array_unique(array_merge($summary['targetIds'], $ruleSummary['targetIds'])));
             $summary['triggeredCount'] += $ruleSummary['triggeredCount'];
             $summary['recoveredCount'] += $ruleSummary['recoveredCount'];
             $summary['skippedCount'] += $ruleSummary['skippedCount'];
@@ -103,7 +107,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
     /**
      * 执行单条规则。
      */
-    private function runRule(AutomationRule $rule, array $accountIdFilter, bool $dryRun): array
+    private function runRule(AutomationRule $rule, array $accountIdFilter, bool $dryRun, bool $logUnmatched): array
     {
         $targets = $this->resolveTargets($rule, $accountIdFilter);
         $usageMap = $this->loadUsageMetrics($targets->pluck('id')->all());
@@ -111,6 +115,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
 
         $summary = [
             'targetCount' => $targets->count(),
+            'targetIds' => $targets->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             'triggeredCount' => 0,
             'recoveredCount' => 0,
             'skippedCount' => 0,
@@ -237,22 +242,24 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
                 continue;
             }
 
-            // 未命中且未触发恢复动作时，记录为 skipped，便于执行历史可观测。
-            $summary['skippedCount']++;
-            $this->logExecution(
-                $rule,
-                $target,
-                self::EXEC_STATUS_SKIPPED,
-                $metrics,
-                $evaluation['details'],
-                [
-                    'reason' => (
-                        $state->status === AutomationRuleState::STATUS_ALERTING
-                        && (int) $rule->recovery_enabled !== 1
-                    ) ? 'recovery_disabled' : 'condition_not_matched',
-                ],
-                null
-            );
+            if ($logUnmatched) {
+                // 手动执行/定向执行时记录未命中，便于前台排查；全量巡检默认不写以避免噪声。
+                $summary['skippedCount']++;
+                $this->logExecution(
+                    $rule,
+                    $target,
+                    self::EXEC_STATUS_SKIPPED,
+                    $metrics,
+                    $evaluation['details'],
+                    [
+                        'reason' => (
+                            $state->status === AutomationRuleState::STATUS_ALERTING
+                            && (int) $rule->recovery_enabled !== 1
+                        ) ? 'recovery_disabled' : 'condition_not_matched',
+                    ],
+                    null
+                );
+            }
         }
 
         return $summary;
