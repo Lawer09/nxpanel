@@ -89,6 +89,7 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:automation' => 60,
     ],
 
     /*
@@ -210,6 +211,16 @@ return [
                 'timeout' => 60,
                 'backoff' => [3, 10, 30],
             ],
+            'automation' => [
+                'connection' => 'redis',
+                'queue' => ['automation'],
+                'balance' => 'simple',
+                'minProcesses' => 1,
+                'maxProcesses' => 1,
+                'tries' => 2,
+                'timeout' => 300,
+                'backoff' => [30, 120],
+            ],
         ],
         'local' => [
             'NxPanel' => [
@@ -224,7 +235,8 @@ return [
                     'send_telegram',
                     'user_alive_sync',
                     'node_sync',
-                    'deploy'
+                    'deploy',
+                    'automation'
                 ],
                 'balance' => 'auto',
                 'minProcesses' => 1,
