@@ -569,3 +569,55 @@
 - 无需数据库迁移。
 - 若线上使用 `config:cache`，发布后执行 `php artisan optimize:clear` 或重新构建缓存，确保新 Provider 绑定与路由生效。
 - 若 Horizon 正在运行，执行 `php artisan horizon:terminate` 滚动加载新代码。
+
+### DNS 工具接口重构（V3，2026-05-19）
+
+- 重构 `V3/Admin/DnsToolController` 为 Controller + FormRequest + Service 分层，移除 Controller 内联校验。
+- 新增本地库 DNS 管理接口：
+  - Provider：`GET /dns/providers`、`GET /dns/providers/detail`、`POST /dns/providers/create`、`POST /dns/providers/update`
+  - Provider Account：`GET /dns/provider-accounts`、`GET /dns/provider-accounts/detail`、`POST /dns/provider-accounts/create`、`POST /dns/provider-accounts/update`
+  - Domain：`GET /dns/domains`、`POST /dns/domains/update-meta`
+  - IP Binding：`GET /dns/ip-bindings`、`GET /dns/records/by-ip`、`POST /dns/ip-bindings/update-meta`
+- 外部调用接口保留：`POST /dns/records/resolve`、`POST /dns/records/unbind`。
+- `by-ip` 查询改为本地库读取 `dns_ip_bindings`，不再依赖外部 DNS 服务。
+- 写入权限约束落地：
+  - 允许新增/更新：`dns_provider`、`dns_provider_accounts`
+  - 仅允许更新 `note`/`tags`：`dns_domains`、`dns_ip_bindings`
+- 新增 DNS 相关模型与管理服务：`DnsProvider`、`DnsProviderAccount`、`DnsDomain`、`DnsIpBinding`、`DnsAdminService`。
+- 新增接口文档：`docs/api/dns_api.md`。
+
+### 影响范围
+
+- `app/Http/Controllers/V3/Admin/DnsToolController.php`
+- `app/Http/Routes/V3/AdminRoute.php`
+- `app/Services/Dns/DnsAdminService.php`
+- `app/Models/DnsProvider.php`
+- `app/Models/DnsProviderAccount.php`
+- `app/Models/DnsDomain.php`
+- `app/Models/DnsIpBinding.php`
+- `app/Http/Requests/Admin/Dns*.php`（新增 DNS 专用 FormRequest）
+- `docs/api/dns_api.md`
+
+### 迁移/回滚说明
+
+- 无需数据库迁移。
+- 回滚时可恢复旧 DNS 路由与旧 Controller 逻辑（不影响表结构）。
+
+### DNS 表迁移补充（V3，2026-05-20）
+
+- 新增 DNS 相关迁移文件：`database/migrations/2026_05_20_000001_create_dns_tool_tables.php`。
+- 迁移将按“表不存在才创建”的方式补齐以下 4 张表：
+  - `dns_provider`
+  - `dns_provider_accounts`
+  - `dns_domains`
+  - `dns_ip_bindings`
+- 约束与索引与 `schema.sql` 保持一致（含唯一索引、复合索引、外键）。
+
+### 影响范围
+
+- `database/migrations/2026_05_20_000001_create_dns_tool_tables.php`
+
+### 迁移/回滚说明
+
+- 执行迁移：`php artisan migrate`
+- 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_20_000001_create_dns_tool_tables.php`

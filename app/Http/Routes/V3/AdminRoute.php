@@ -35,6 +35,7 @@ use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformUsageController
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\AutomationRuleController;
 use App\Http\Controllers\V3\Admin\ReportController;
+use App\Http\Controllers\V3\Admin\DnsToolController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsDashboardController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnSessionController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnProbeController;
@@ -140,6 +141,34 @@ class AdminRoute
                 $router->post('/updateNodeConfig',      [ManageController::class, 'updateNodeConfig']);
                  $router->get('/getNodes', [ManageController::class, 'getNodes']);
                  $router->get('/history',   [ManageController::class, 'getHistory']);
+            });
+
+            // DNS 管理（V3）
+            $router->group(['prefix' => 'dns'], function ($router) {
+                // Provider
+                $router->get('/providers',         [DnsToolController::class, 'providers']);
+                $router->get('/providers/detail',  [DnsToolController::class, 'providerDetail']);
+                $router->post('/providers/create', [DnsToolController::class, 'createProvider']);
+                $router->post('/providers/update', [DnsToolController::class, 'updateProvider']);
+
+                // Provider Accounts
+                $router->get('/provider-accounts',         [DnsToolController::class, 'providerAccounts']);
+                $router->get('/provider-accounts/detail',  [DnsToolController::class, 'providerAccountDetail']);
+                $router->post('/provider-accounts/create', [DnsToolController::class, 'createProviderAccount']);
+                $router->post('/provider-accounts/update', [DnsToolController::class, 'updateProviderAccount']);
+
+                // Domains (read only + meta update)
+                $router->get('/domains',              [DnsToolController::class, 'domains']);
+                $router->post('/domains/update-meta', [DnsToolController::class, 'updateDomainMeta']);
+
+                // IP Bindings (read only + meta update)
+                $router->get('/ip-bindings',              [DnsToolController::class, 'ipBindings']);
+                $router->get('/records/by-ip',            [DnsToolController::class, 'recordsByIp']);
+                $router->post('/ip-bindings/update-meta', [DnsToolController::class, 'updateIpBindingMeta']);
+
+                // External actions
+                $router->post('/records/resolve', [DnsToolController::class, 'resolveRecord']);
+                $router->post('/records/unbind',  [DnsToolController::class, 'unbindRecord']);
             });
 
             // Stat
