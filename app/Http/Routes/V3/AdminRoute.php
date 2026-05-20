@@ -58,6 +58,7 @@ class AdminRoute
 
             // Enum Options
             $router->get('/enum/options', [EnumController::class, 'getOptions']);
+            $router->get('/enum/app-ids', [EnumController::class, 'getAppIds']);
 
             // Order
             $router->group(['prefix' => 'order'], function ($router) {

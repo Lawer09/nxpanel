@@ -594,6 +594,26 @@
 
 - 执行迁移：`php artisan migrate`
 - 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
+
+### Enum 新增 AppID 枚举接口（V3，2026-05-20）
+
+- 新增接口：`GET /enum/app-ids`
+- 来源：`project_user_app_map.app_id`
+- 数据处理：去重、去空值，支持 `keyword` 模糊过滤
+- 返回结构：`appId` / `value` / `label`
+- 新增参数校验 `EnumAppIdsRequest`
+- 同步新增文档 `docs/api/enum_api.md`
+
+### 影响范围
+
+- `app/Http/Controllers/V3/Admin/EnumController.php`
+- `app/Http/Requests/Admin/EnumAppIdsRequest.php`
+- `app/Http/Routes/V3/AdminRoute.php`
+- `docs/api/enum_api.md`
+
+### 迁移/回滚说明
+
+- 无需数据库迁移。
 - 若线上使用 `config:cache`，发布后执行 `php artisan optimize:clear` 或重新构建缓存，确保新 Provider 绑定与路由生效。
 - 若 Horizon 正在运行，执行 `php artisan horizon:terminate` 滚动加载新代码。
 

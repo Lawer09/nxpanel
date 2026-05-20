@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\EnumAppIdsRequest;
 use App\Models\Server;
 use App\Models\ServerGroup;
 use App\Models\Plan;
+use App\Models\ProjectUserAppMap;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -48,6 +50,42 @@ class EnumController extends Controller
         }
 
         return $this->ok($result);
+    }
+
+    /**
+     * 获取项目绑定 AppID 枚举（去重）。
+     *
+     * GET /admin/enum/app-ids?keyword=xxx
+     */
+    public function getAppIds(EnumAppIdsRequest $request): JsonResponse
+    {
+        $keyword = $request->validated()['keyword'] ?? null;
+        $cacheKey = 'enum:project_user_app_ids';
+
+        $all = Cache::remember($cacheKey, self::CACHE_TTL, function () {
+            return ProjectUserAppMap::query()
+                ->whereNotNull('app_id')
+                ->where('app_id', '<>', '')
+                ->distinct()
+                ->orderBy('app_id', 'ASC')
+                ->pluck('app_id')
+                ->map(fn($appId) => [
+                    'appId' => $appId,
+                    'value' => $appId,
+                    'label' => $appId,
+                ])
+                ->values()
+                ->toArray();
+        });
+
+        if ($keyword) {
+            $keyword = mb_strtolower($keyword);
+            $all = array_values(array_filter($all, fn($item) =>
+                str_contains(mb_strtolower((string) $item['appId']), $keyword)
+            ));
+        }
+
+        return $this->ok($all);
     }
 
     /**
