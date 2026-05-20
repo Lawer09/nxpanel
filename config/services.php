@@ -31,8 +31,8 @@ return [
     ],
 
     'dns_tool' => [
-        'host'  => env('DNS_TOOL_HOST',  '8.221.113.81:8080'),
-        'token' => env('DNS_TOOL_TOKEN', 'd2d'),
+        'host'  => env('DNS_TOOL_HOST',  '10.2.0.17:8080'),
+        'token' => env('DNS_TOOL_TOKEN', 'nxdns_d25d281311'),
     ],
 
 ];
