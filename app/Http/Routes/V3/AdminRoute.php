@@ -159,6 +159,7 @@ class AdminRoute
 
                 // Domains (read only + meta update)
                 $router->get('/domains',              [DnsToolController::class, 'domains']);
+                $router->get('/domains/sync',         [DnsToolController::class, 'syncDomains']);
                 $router->post('/domains/update-meta', [DnsToolController::class, 'updateDomainMeta']);
 
                 // IP Bindings (read only + meta update)

@@ -567,6 +567,33 @@
 ### 迁移/回滚说明
 
 - 无需数据库迁移。
+
+### dns_ip_bindings 表结构升级（V3，2026-05-20）
+
+- 新增迁移：`database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
+- `dns_ip_bindings` 新增字段：
+  - `record_name`
+  - `record_type`
+  - `proxied`
+  - `raw_record`
+  - `remote_key`
+  - `synced_at`
+  - `released_at`
+- 新增索引：
+  - 唯一索引 `uk_provider_domain_remote_key(provider_account_id, domain_id, remote_key)`
+  - 普通索引 `idx_provider_record(provider_account_id, remote_record_id)`
+- 同步更新 `DnsIpBinding` 模型 casts 与 DNS API 文档。
+
+### 影响范围
+
+- `database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
+- `app/Models/DnsIpBinding.php`
+- `docs/api/dns_api.md`
+
+### 迁移/回滚说明
+
+- 执行迁移：`php artisan migrate`
+- 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
 - 若线上使用 `config:cache`，发布后执行 `php artisan optimize:clear` 或重新构建缓存，确保新 Provider 绑定与路由生效。
 - 若 Horizon 正在运行，执行 `php artisan horizon:terminate` 滚动加载新代码。
 
@@ -621,3 +648,19 @@
 
 - 执行迁移：`php artisan migrate`
 - 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_20_000001_create_dns_tool_tables.php`
+
+### DNS 域名列表返回增强（V3，2026-05-20）
+
+- `GET /dns/domains` 返回新增：
+  - `accountName`：域名所属 Provider 账号名称（来自 `dns_provider_accounts.account_name`）
+  - `bindingIpCount`：当前域名 `active` 状态绑定 IP 数（来自 `dns_ip_bindings` 聚合）
+- 同步更新文档字段说明。
+
+### 影响范围
+
+- `app/Services/Dns/DnsAdminService.php`
+- `docs/api/dns_api.md`
+
+### 迁移/回滚说明
+
+- 无需数据库迁移。

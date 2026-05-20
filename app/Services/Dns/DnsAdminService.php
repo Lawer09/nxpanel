@@ -232,34 +232,41 @@ class DnsAdminService
      */
     public function domainIndex(array $params): array
     {
-        $query = DnsDomain::query();
+        $query = DnsDomain::query()
+            ->leftJoin('dns_provider_accounts as dpa', 'dpa.id', '=', 'dns_domains.provider_account_id')
+            ->select('dns_domains.*', 'dpa.account_name as account_name')
+            ->withCount([
+                'ipBindings as binding_ip_count' => function ($q) {
+                    $q->where('status', 'active');
+                },
+            ]);
 
         if (!empty($params['keyword'])) {
             $keyword = (string) $params['keyword'];
             $query->where(function ($q) use ($keyword) {
-                $q->where('domain_name', 'like', "%{$keyword}%")
-                    ->orWhere('tags', 'like', "%{$keyword}%")
-                    ->orWhere('note', 'like', "%{$keyword}%");
+                $q->where('dns_domains.domain_name', 'like', "%{$keyword}%")
+                    ->orWhere('dns_domains.tags', 'like', "%{$keyword}%")
+                    ->orWhere('dns_domains.note', 'like', "%{$keyword}%");
             });
         }
         if (!empty($params['providerCode'])) {
-            $query->where('provider_code', $params['providerCode']);
+            $query->where('dns_domains.provider_code', $params['providerCode']);
         }
         if (array_key_exists('providerAccountId', $params) && $params['providerAccountId'] !== null) {
-            $query->where('provider_account_id', (int) $params['providerAccountId']);
+            $query->where('dns_domains.provider_account_id', (int) $params['providerAccountId']);
         }
         if (!empty($params['syncStatus'])) {
-            $query->where('sync_status', $params['syncStatus']);
+            $query->where('dns_domains.sync_status', $params['syncStatus']);
         }
         if (array_key_exists('isAvailable', $params) && $params['isAvailable'] !== null) {
-            $query->where('is_available', (int) $params['isAvailable']);
+            $query->where('dns_domains.is_available', (int) $params['isAvailable']);
         }
 
         $page = (int) ($params['page'] ?? 1);
         $pageSize = (int) ($params['pageSize'] ?? 20);
 
         $total = $query->count();
-        $data = $query->orderByDesc('id')
+        $data = $query->orderByDesc('dns_domains.id')
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->get();

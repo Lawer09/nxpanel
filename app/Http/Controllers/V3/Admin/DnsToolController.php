@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\DnsDomainIndexRequest;
+use App\Http\Requests\Admin\DnsDomainSyncRequest;
 use App\Http\Requests\Admin\DnsDomainUpdateMetaRequest;
 use App\Http\Requests\Admin\DnsIpBindingIndexRequest;
 use App\Http\Requests\Admin\DnsIpBindingUpdateMetaRequest;
@@ -206,6 +207,24 @@ class DnsToolController extends Controller
             return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('DnsTool updateDomainMeta error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 外部 DNS 服务同步域名。
+     */
+    public function syncDomains(DnsDomainSyncRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            $providerAccountId = isset($params['providerAccountId']) ? (int) $params['providerAccountId'] : null;
+            $result = $this->dnsToolService->syncDomainsByProviderAccount($providerAccountId);
+            return $this->ok($result);
+        } catch (\RuntimeException $e) {
+            return $this->error([$e->getCode() ?: 500, $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('DnsTool syncDomains error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

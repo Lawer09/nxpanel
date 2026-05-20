@@ -84,9 +84,14 @@ class DnsToolService
         return $this->unwrap($resp) ?? [];
     }
 
-    public function syncDomains(): array
+    public function syncDomains(?int $providerAccountId = null): array
     {
-        $resp = $this->client()->post('/domains/sync');
+        $query = [];
+        if ($providerAccountId !== null && $providerAccountId > 0) {
+            $query['provider_account_id'] = $providerAccountId;
+        }
+
+        $resp = $this->client()->get('/domains/sync', $query);
         return $this->unwrap($resp) ?? [];
     }
 

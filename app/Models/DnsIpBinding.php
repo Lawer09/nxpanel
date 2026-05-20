@@ -13,6 +13,10 @@ class DnsIpBinding extends Model
 
     protected $casts = [
         'ttl' => 'integer',
+        'proxied' => 'integer',
+        'raw_record' => 'array',
+        'synced_at' => 'datetime',
+        'released_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
