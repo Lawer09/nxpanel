@@ -219,7 +219,7 @@ class DnsToolController extends Controller
         try {
             $params = $request->validated();
             $providerAccountId = isset($params['providerAccountId']) ? (int) $params['providerAccountId'] : null;
-            $result = $this->dnsToolService->syncDomainsByProviderAccount($providerAccountId);
+            $result = $this->dnsToolService->syncDomains($providerAccountId);
             return $this->ok($result);
         } catch (\RuntimeException $e) {
             return $this->error([$e->getCode() ?: 500, $e->getMessage()]);
