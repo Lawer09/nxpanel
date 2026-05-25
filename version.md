@@ -107,6 +107,55 @@
 
 ## 2026-05-25
 
+### V3 邀请分页参数收敛
+
+- `GET /api/v3/user/invite/commissions` 移除旧参数兼容，仅支持 `page`、`pageSize`
+- 更新 `InviteCommissionListRequest` 校验规则，删除 `current`、`page_size` 校验
+- 更新 `InviteController::commissions` 参数读取逻辑，不再回退旧字段
+- 同步更新 `docs/api/user_api.md` 的 V3 参数说明
+
+### 影响范围
+
+- `app/Http/Requests/User/InviteCommissionListRequest.php`
+- `app/Http/Controllers/V3/User/InviteController.php`
+- `docs/api/user_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+## 2026-05-25
+
+### 邀请接口升级为 V3（含分页）
+
+- 新增 V3 用户邀请控制器：`app/Http/Controllers/V3/User/InviteController.php`
+- 新增 V3 路由：
+  - `POST /api/v3/user/invite-codes/create`（生成邀请码）
+  - `GET /api/v3/user/invite/summary`（邀请统计，返回对象结构）
+  - `GET /api/v3/user/invite/commissions`（返佣明细分页）
+- 新增分页参数校验：`app/Http/Requests/User/InviteCommissionListRequest.php`
+- 返佣明细接口统一分页返回：`data`、`total`、`page`、`pageSize`
+
+### 文档
+
+- 更新 `docs/api/user_api.md`，新增 V3 邀请接口章节
+- 保留 V1 邀请接口说明并标注迁移建议
+
+### 影响范围
+
+- `app/Http/Controllers/V3/User/InviteController.php`
+- `app/Http/Routes/V3/UserRoute.php`
+- `app/Http/Requests/User/InviteCommissionListRequest.php`
+- `docs/api/user_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+## 2026-05-25
+
 ### 用户邀请接口文档补充
 
 - 在 `docs/api/user_api.md` 新增“邀请相关接口（V1）”章节

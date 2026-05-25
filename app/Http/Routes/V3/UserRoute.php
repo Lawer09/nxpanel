@@ -4,6 +4,7 @@ namespace App\Http\Routes\V3;
 use App\Http\Controllers\V3\User\OrderController;
 use App\Http\Controllers\V3\User\PlanController;
 use App\Http\Controllers\V3\User\IpInfoController;
+use App\Http\Controllers\V3\User\InviteController;
 use App\Http\Controllers\V3\User\UserController;
 use App\Http\Controllers\V3\User\UserReportController;
 use App\Http\Controllers\V3\User\TicketController;
@@ -36,6 +37,11 @@ class UserRoute
             $router->post('/ticket/save', [TicketController::class, 'save']);
             $router->get('/ticket/fetch', [TicketController::class, 'fetch']);
             $router->post('/ticket/withdraw', [TicketController::class, 'withdraw']);
+
+            // Invite
+            $router->post('/invite-codes/create', [InviteController::class, 'createCode']);
+            $router->get('/invite/summary', [InviteController::class, 'summary']);
+            $router->get('/invite/commissions', [InviteController::class, 'commissions']);
         });
     }
 }
