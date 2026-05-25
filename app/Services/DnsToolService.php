@@ -12,9 +12,9 @@ class DnsToolService
 
     public function __construct()
     {
-        $host = config('services.dns_tool.host', '10.2.0.17:8080');
+        $host = config('services.dns_tool.host', '127.0.0.1:8080');
         $this->baseUrl  = 'http://' . $host . '/api/v1';
-        $this->apiToken = config('services.dns_tool.token', 'nxdns_d25d281311');
+        $this->apiToken = config('services.dns_tool.token', 'test');
     }
 
     // ----------------------------------------------------------------
