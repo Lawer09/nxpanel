@@ -54,11 +54,6 @@ class InviteService
             return null;
         }
 
-        $commissionRate = (int) admin_setting('invite_commission', 10);
-        if ($user->commission_rate) {
-            $commissionRate = (int) $user->commission_rate;
-        }
-
         $pendingCommission = (int) Order::query()
             ->where('status', 3)
             ->where('commission_status', 0)
@@ -71,13 +66,7 @@ class InviteService
 
         return [
             'codes' => $user->codes,
-            'summary' => [
-                'invitedUsers' => (int) User::query()->where('invite_user_id', $user->id)->count(),
-                'totalCommission' => (int) CommissionLog::query()->where('invite_user_id', $user->id)->sum('get_amount'),
-                'pendingCommission' => $pendingCommission,
-                'commissionRate' => $commissionRate,
-                'availableCommission' => (int) $user->commission_balance,
-            ],
+            'invitedUsers' => (int) User::query()->where('invite_user_id', $user->id)->count(),
         ];
     }
 
@@ -88,7 +77,6 @@ class InviteService
     {
         $query = CommissionLog::query()
             ->where('invite_user_id', $userId)
-            ->where('get_amount', '>', 0)
             ->orderByDesc('created_at');
 
         $total = $query->count();
