@@ -275,6 +275,42 @@ POST /api/v3/admin/user/update
 }
 ```
 
+### 使用邀请码（注册后补填）
+
+`POST /api/v3/user/invite-codes/use`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `inviteCode` | `string` | 是 | 邀请码 |
+
+#### 说明
+
+- 用于用户注册时忘记填写邀请码的补录场景。
+- 仅允许当前登录用户绑定一次邀请关系。
+- 不允许使用自己的邀请码。
+
+#### 返回示例
+
+```json
+{
+    "data": {
+        "bound": true,
+        "inviterUserId": 123
+    }
+}
+```
+
+#### 失败示例
+
+```json
+{
+    "code": 422,
+    "message": "Invite user already bound"
+}
+```
+
 ### 邀请统计
 
 `GET /api/v3/user/invite/summary`

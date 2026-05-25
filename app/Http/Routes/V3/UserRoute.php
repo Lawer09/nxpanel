@@ -40,6 +40,7 @@ class UserRoute
 
             // Invite
             $router->post('/invite-codes/create', [InviteController::class, 'createCode']);
+            $router->post('/invite-codes/use', [InviteController::class, 'useCode']);
             $router->get('/invite/summary', [InviteController::class, 'summary']);
             $router->get('/invite/commissions', [InviteController::class, 'commissions']);
         });

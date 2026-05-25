@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V3\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\InviteCodeCreateRequest;
+use App\Http\Requests\User\InviteCodeUseRequest;
 use App\Http\Requests\User\InviteCommissionListRequest;
 use App\Http\Requests\User\InviteSummaryRequest;
 use App\Http\Resources\ComissionLogResource;
@@ -23,6 +24,21 @@ class InviteController extends Controller
     public function createCode(InviteCodeCreateRequest $request): JsonResponse
     {
         $result = $this->inviteService->createCode((int) $request->user()->id);
+        if (!$result['ok']) {
+            return $this->error($result['error']);
+        }
+
+        return $this->ok($result['data']);
+    }
+
+    /**
+     * 使用邀请码（注册后补填）。
+     */
+    public function useCode(InviteCodeUseRequest $request): JsonResponse
+    {
+        $params = $request->validated();
+        $result = $this->inviteService->useCode((int) $request->user()->id, (string) $params['inviteCode']);
+
         if (!$result['ok']) {
             return $this->error($result['error']);
         }

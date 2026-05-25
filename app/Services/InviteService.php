@@ -7,6 +7,7 @@ use App\Models\InviteCode;
 use App\Models\Order;
 use App\Models\User;
 use App\Utils\Helper;
+use Illuminate\Support\Facades\DB;
 
 class InviteService
 {
@@ -99,5 +100,64 @@ class InviteService
             'page' => $page,
             'pageSize' => $pageSize,
         ];
+    }
+
+    /**
+     * 使用邀请码（注册后补填）。
+     */
+    public function useCode(int $userId, string $inviteCode): array
+    {
+        return DB::transaction(function () use ($userId, $inviteCode) {
+            $user = User::query()->lockForUpdate()->find($userId);
+            if (!$user) {
+                return [
+                    'ok' => false,
+                    'error' => [404, 'User not found'],
+                ];
+            }
+
+            if (!empty($user->invite_user_id)) {
+                return [
+                    'ok' => false,
+                    'error' => [422, 'Invite user already bound'],
+                ];
+            }
+
+            $inviteCodeModel = InviteCode::query()
+                ->where('code', $inviteCode)
+                ->where('status', InviteCode::STATUS_UNUSED)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$inviteCodeModel) {
+                return [
+                    'ok' => false,
+                    'error' => [422, 'Invalid invitation code'],
+                ];
+            }
+
+            if ((int) $inviteCodeModel->user_id === $userId) {
+                return [
+                    'ok' => false,
+                    'error' => [422, 'Cannot use your own invitation code'],
+                ];
+            }
+
+            $user->invite_user_id = (int) $inviteCodeModel->user_id;
+            $user->save();
+
+            if (!(int) admin_setting('invite_never_expire', 0)) {
+                $inviteCodeModel->status = InviteCode::STATUS_USED;
+                $inviteCodeModel->save();
+            }
+
+            return [
+                'ok' => true,
+                'data' => [
+                    'bound' => true,
+                    'inviterUserId' => (int) $user->invite_user_id,
+                ],
+            ];
+        });
     }
 }

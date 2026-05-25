@@ -107,6 +107,33 @@
 
 ## 2026-05-25
 
+### 新增 V3 邀请码使用接口（注册后补填）
+
+- 新增接口：`POST /api/v3/user/invite-codes/use`
+- 新增请求校验：`app/Http/Requests/User/InviteCodeUseRequest.php`
+- 新增服务逻辑：`InviteService::useCode()`，包含事务与规则校验：
+  - 仅允许未绑定邀请人的用户使用
+  - 邀请码必须存在且为未使用状态
+  - 禁止使用自己的邀请码
+  - 按 `invite_never_expire` 配置决定是否置邀请码为已使用
+- 更新路由：`app/Http/Routes/V3/UserRoute.php`
+- 更新文档：`docs/api/user_api.md`
+
+### 影响范围
+
+- `app/Http/Controllers/V3/User/InviteController.php`
+- `app/Http/Requests/User/InviteCodeUseRequest.php`
+- `app/Services/InviteService.php`
+- `app/Http/Routes/V3/UserRoute.php`
+- `docs/api/user_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+## 2026-05-25
+
 ### V3 邀请接口分层修正（Controller + FormRequest + Service）
 
 - 修正 `app/Http/Controllers/V3/User/InviteController.php`：
