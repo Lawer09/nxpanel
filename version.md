@@ -105,6 +105,26 @@
 - 无需数据库迁移
 - 无需回滚
 
+## 2026-05-25
+
+### 用户邀请接口文档补充
+
+- 在 `docs/api/user_api.md` 新增“邀请相关接口（V1）”章节
+- 补充以下接口文档：
+  - `GET /api/v1/user/invite/save`（生成邀请码）
+  - `GET /api/v1/user/invite/fetch`（邀请统计）
+  - `GET /api/v1/user/invite/details`（返佣明细）
+- 明确 `fetch` 的 `stat` 数组顺序含义与 `details` 的分页参数
+
+### 影响范围
+
+- `docs/api/user_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
 ### Automation 模块注册改为一次性注入
 
 - `AutomationServiceProvider` 调整为在 `register()` 中一次性构造 `AutomationModuleRegistry` 并注入 handlers（当前包含 `TrafficPlatformAutomationService`）
