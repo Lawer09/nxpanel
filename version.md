@@ -107,6 +107,36 @@
 
 ## 2026-05-25
 
+### V3 邀请接口分层修正（Controller + FormRequest + Service）
+
+- 修正 `app/Http/Controllers/V3/User/InviteController.php`：
+  - 不再直接使用通用 `Request`
+  - 不在 Controller 内承载大量业务逻辑
+  - 仅保留请求接收、参数校验、Service 调用与统一响应
+- 新增请求校验类：
+  - `app/Http/Requests/User/InviteCodeCreateRequest.php`
+  - `app/Http/Requests/User/InviteSummaryRequest.php`
+  - `app/Http/Requests/User/InviteCommissionListRequest.php`
+- 新增业务服务：`app/Services/InviteService.php`
+  - `createCode()` 处理邀请码创建逻辑
+  - `summary()` 处理邀请统计聚合逻辑
+  - `commissions()` 处理返佣分页查询逻辑
+
+### 影响范围
+
+- `app/Http/Controllers/V3/User/InviteController.php`
+- `app/Http/Requests/User/InviteCodeCreateRequest.php`
+- `app/Http/Requests/User/InviteSummaryRequest.php`
+- `app/Http/Requests/User/InviteCommissionListRequest.php`
+- `app/Services/InviteService.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+## 2026-05-25
+
 ### V3 邀请分页参数收敛
 
 - `GET /api/v3/user/invite/commissions` 移除旧参数兼容，仅支持 `page`、`pageSize`
