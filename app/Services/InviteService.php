@@ -27,7 +27,7 @@ class InviteService
                 'data' => $userCodes->map(fn($code) => [
                     'code' => $code->code,
                     'status' => $code->status,
-                    'created_at' => $code->created_at->toDateTimeString(),
+                    'created' => true,
                 ]),
             ];
         }
