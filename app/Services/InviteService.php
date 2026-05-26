@@ -21,7 +21,8 @@ class InviteService
             ->where('status', InviteCode::STATUS_UNUSED)
             ->count();
 
-        if ($unusedCount >= (int) admin_setting('invite_gen_limit', 5)) {
+        // if ($unusedCount >= (int) admin_setting('invite_gen_limit', 5)) {
+        if ($unusedCount >= 1) {
             return [
                 'ok' => false,
                 'error' => [400, __('The maximum number of creations has been reached')],
@@ -30,7 +31,7 @@ class InviteService
 
         $inviteCode = new InviteCode();
         $inviteCode->user_id = $userId;
-        $inviteCode->code = Helper::randomChar(8);
+        $inviteCode->code = 'MU-' . Helper::randomChar(8);
 
         return [
             'ok' => true,
