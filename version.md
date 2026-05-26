@@ -107,6 +107,27 @@
 
 ## 2026-05-25
 
+### loginByAid 增加默认多次使用邀请码
+
+- 在 `LoginService::loginByAid` 的自动注册分支中，新增邀请码创建逻辑
+- 新建用户后自动确保存在一个 `MU-` 前缀邀请码（默认可多次使用）
+- 邀请码消费逻辑调整：
+  - `RegisterService::handleInviteCode` 对 `MU-` 前缀邀请码不置为已使用
+  - `InviteService::useCode` 对 `MU-` 前缀邀请码不置为已使用
+
+### 影响范围
+
+- `app/Services/Auth/LoginService.php`
+- `app/Services/Auth/RegisterService.php`
+- `app/Services/InviteService.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+
+## 2026-05-25
+
 ### 新增 V3 邀请码使用接口（注册后补填）
 
 - 新增接口：`POST /api/v3/user/invite-codes/use`

@@ -134,7 +134,8 @@ class InviteService
             $user->invite_user_id = (int) $inviteCodeModel->user_id;
             $user->save();
 
-            if (!(int) admin_setting('invite_never_expire', 0)) {
+            $isMultiUseCode = str_starts_with((string) $inviteCodeModel->code, 'MU-');
+            if (!(int) admin_setting('invite_never_expire', 0) && !$isMultiUseCode) {
                 $inviteCodeModel->status = InviteCode::STATUS_USED;
                 $inviteCodeModel->save();
             }

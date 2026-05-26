@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Models\InviteCode;
 use App\Models\User;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
@@ -108,6 +109,8 @@ class LoginService
                     return [false, [500, 'User creation failed']];
                 }
 
+                $this->ensureAidReusableInviteCode((int) $user->id);
+
                 $created = true;
             } catch (\Illuminate\Database\QueryException $e) {
                 $errorCode = $e->errorInfo[1] ?? null;
@@ -162,6 +165,27 @@ class LoginService
         $user->save();
 
         return [true, $user];
+    }
+
+    /**
+     * 为 AID 自动注册用户确保存在一个可重复使用的邀请码。
+     */
+    private function ensureAidReusableInviteCode(int $userId): void
+    {
+        $exists = InviteCode::query()
+            ->where('user_id', $userId)
+            ->where('code', 'like', 'MU-%')
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $inviteCode = new InviteCode();
+        $inviteCode->user_id = $userId;
+        $inviteCode->code = 'MU-' . Helper::randomChar(8);
+        $inviteCode->status = InviteCode::STATUS_UNUSED;
+        $inviteCode->save();
     }
 
     private function normalizeAidMetadata(?array $metadata): array

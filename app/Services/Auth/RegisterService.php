@@ -119,7 +119,8 @@ class RegisterService
             return null;
         }
 
-        if (!(int) admin_setting('invite_never_expire', 0)) {
+        $isMultiUseCode = str_starts_with((string) $inviteCodeModel->code, 'MU-');
+        if (!(int) admin_setting('invite_never_expire', 0) && !$isMultiUseCode) {
             $inviteCodeModel->status = InviteCode::STATUS_USED;
             $inviteCodeModel->save();
         }
