@@ -16,16 +16,19 @@ class InviteService
      */
     public function createCode(int $userId): array
     {
-        $unusedCount = InviteCode::query()
+        $userCodes = InviteCode::query()
             ->where('user_id', $userId)
-            ->where('status', InviteCode::STATUS_UNUSED)
-            ->count();
+            ->where('status', InviteCode::STATUS_UNUSED);
 
         // if ($unusedCount >= (int) admin_setting('invite_gen_limit', 5)) {
-        if ($unusedCount >= 1) {
+        if ($userCodes->count() >= 1) {
             return [
-                'ok' => false,
-                'error' => [400, __('The maximum number of creations has been reached')],
+                'ok' => true,
+                'data' => $userCodes->map(fn($code) => [
+                    'code' => $code->code,
+                    'status' => $code->status,
+                    'created_at' => $code->created_at->toDateTimeString(),
+                ]),
             ];
         }
 
@@ -36,8 +39,11 @@ class InviteService
         return [
             'ok' => true,
             'data' => [
-                'created' => (bool) $inviteCode->save(),
-                'code' => $inviteCode->code,
+                [
+                    'created' => (bool) $inviteCode->save(),
+                    'status' => $inviteCode->status,
+                    'code' => $inviteCode->code,
+                ]
             ],
         ];
     }
