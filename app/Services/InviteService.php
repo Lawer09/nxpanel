@@ -72,7 +72,7 @@ class InviteService
         }
 
         return [
-            'codes' => $user->codes,
+            // 'codes' => $user->codes,
             'invitedUsers' => (int) User::query()->where('invite_user_id', $user->id)->count(),
         ];
     }

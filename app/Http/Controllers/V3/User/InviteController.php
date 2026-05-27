@@ -46,6 +46,7 @@ class InviteController extends Controller
         return $this->ok($result['data']);
     }
 
+
     /**
      * 邀请统计
      */
@@ -56,10 +57,7 @@ class InviteController extends Controller
             return $this->error([404, 'User not found']);
         }
 
-        return $this->ok([
-            'codes' => InviteCodeResource::collection($result['codes']),
-            'summary' => $result['summary'],
-        ]);
+        return $this->ok($result);
     }
 
     /**
