@@ -16,6 +16,20 @@ return new class extends Migration
             return;
         }
 
+        $databaseName = DB::getDatabaseName();
+
+        $uniqueIndexExists = DB::table('information_schema.statistics')
+            ->where('table_schema', $databaseName)
+            ->where('table_name', 'dns_ip_bindings')
+            ->where('index_name', 'uk_provider_domain_remote_key')
+            ->exists();
+
+        $providerRecordIndexExists = DB::table('information_schema.statistics')
+            ->where('table_schema', $databaseName)
+            ->where('table_name', 'dns_ip_bindings')
+            ->where('index_name', 'idx_provider_record')
+            ->exists();
+
         Schema::table('dns_ip_bindings', function (Blueprint $table) {
             if (!Schema::hasColumn('dns_ip_bindings', 'record_name')) {
                 $table->string('record_name', 255)->default('@')->comment('记录名，@表示根记录')->after('subdomain');
@@ -42,15 +56,13 @@ return new class extends Migration
 
         DB::statement("UPDATE dns_ip_bindings SET record_name = CASE WHEN subdomain IS NULL OR subdomain = '' THEN '@' ELSE subdomain END WHERE record_name = '@' OR record_name = ''");
 
-        Schema::table('dns_ip_bindings', function (Blueprint $table) {
-            try {
+        Schema::table('dns_ip_bindings', function (Blueprint $table) use ($uniqueIndexExists, $providerRecordIndexExists) {
+            if (!$uniqueIndexExists) {
                 $table->unique(['provider_account_id', 'domain_id', 'remote_key'], 'uk_provider_domain_remote_key');
-            } catch (\Throwable $e) {
             }
 
-            try {
+            if (!$providerRecordIndexExists) {
                 $table->index(['provider_account_id', 'remote_record_id'], 'idx_provider_record');
-            } catch (\Throwable $e) {
             }
         });
     }

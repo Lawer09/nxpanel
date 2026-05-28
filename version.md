@@ -735,6 +735,24 @@
 - 执行迁移：`php artisan migrate`
 - 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_28_120000_add_rate_limit_and_device_limit_to_v2_server_table.php`
 
+## 2026-05-28
+
+### DNS 迁移重复索引容错修复
+
+- 修复 `2026_05_20_000002_alter_dns_ip_bindings_add_record_fields` 在部分环境执行时创建索引报错：`Duplicate key name 'uk_provider_domain_remote_key'`
+- 调整为在创建前查询 `information_schema.statistics`，仅当索引不存在时再创建：
+  - `uk_provider_domain_remote_key`
+  - `idx_provider_record`
+
+### 影响范围
+
+- `database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
+
+### 迁移/回滚说明
+
+- 重新执行：`php artisan migrate`
+- 无需额外数据迁移；仅修正迁移执行幂等性
+
 ### dns_ip_bindings 表结构升级（V3，2026-05-20）
 
 - 新增迁移：`database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`
