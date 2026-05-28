@@ -835,6 +835,33 @@
 - 无需数据库迁移。
 - 回滚时可恢复旧 DNS 路由与旧 Controller 逻辑（不影响表结构）。
 
+## 2026-05-28
+
+### Firebase Analytics 新增最近接收事件分页接口
+
+- 新增 Firebase Analytics 最近接收事件接口：`GET /api/v3/{admin_prefix}/firebase-analytics/events/recent`，支持 `page`、`pageSize` 分页参数
+- 新增参数校验类 `FirebaseAnalyticsRecentEventsRequest`，统一校验分页入参范围（page>=1，pageSize<=200）
+- 在 `FirebaseAnalyticsEventController` 新增 `recentEvents` 方法，保持 Controller 仅负责请求校验与 Service 调用
+- 在 `FirebaseAnalyticsService` 新增 `recentEvents` 方法，从 Redis List `firebase-event-recv:recent:events` 读取并分页返回（含 `total` 与 `items`）
+- 同步更新 Firebase Analytics 接口文档，补充 `/events/recent` 请求参数与返回示例
+
+### 影响范围
+
+- `app/Http/Routes/V3/AdminRoute.php`
+- `app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsEventController.php`
+- `app/Http/Requests/Admin/FirebaseAnalyticsRecentEventsRequest.php`
+- `app/Services/FirebaseAnalyticsService.php`
+- `docs/api/firebase_analytics.md`
+
+### 迁移说明
+
+- 无需数据库迁移。
+- 依赖 Redis 中存在 `firebase-event-recv:recent:events` 列表数据。
+
+### 回滚说明
+
+- 移除新增路由与对应 Controller/Request/Service 方法即可回滚，不影响数据库结构。
+
 ### DNS 表迁移补充（V3，2026-05-20）
 
 - 新增 DNS 相关迁移文件：`database/migrations/2026_05_20_000001_create_dns_tool_tables.php`。

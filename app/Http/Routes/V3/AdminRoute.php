@@ -395,6 +395,7 @@ class AdminRoute
                 $router->get('/server-api-error/api-rank', [FirebaseAnalyticsApiErrorController::class, 'apiRank']);
 
                 $router->get('/events', [FirebaseAnalyticsEventController::class, 'events']);
+                $router->get('/events/recent', [FirebaseAnalyticsEventController::class, 'recentEvents']);
                 $router->get('/events/{event_id}', [FirebaseAnalyticsEventController::class, 'detail']);
 
                 $router->get('/filters/options', [FirebaseAnalyticsFilterController::class, 'options']);

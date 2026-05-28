@@ -6,9 +6,62 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 
 class FirebaseAnalyticsService
 {
+    /**
+     * 查询最近接收事件（Redis List）。
+     */
+    public function recentEvents(array $params): array
+    {
+        $page = (int) ($params['page'] ?? 1);
+        $pageSize = (int) ($params['pageSize'] ?? 20);
+
+        $page = max(1, $page);
+        $pageSize = min(max(1, $pageSize), 200);
+
+        $key = 'firebase-event-recv:recent:events';
+        $total = (int) Redis::llen($key);
+
+        if ($total <= 0) {
+            return [
+                'page' => $page,
+                'pageSize' => $pageSize,
+                'total' => 0,
+                'items' => [],
+            ];
+        }
+
+        $start = ($page - 1) * $pageSize;
+        if ($start >= $total) {
+            return [
+                'page' => $page,
+                'pageSize' => $pageSize,
+                'total' => $total,
+                'items' => [],
+            ];
+        }
+
+        $end = $start + $pageSize - 1;
+        $rawItems = Redis::lrange($key, $start, $end);
+
+        $items = [];
+        foreach ($rawItems as $rawItem) {
+            $decoded = json_decode((string) $rawItem, true);
+            if (is_array($decoded)) {
+                $items[] = $decoded;
+            }
+        }
+
+        return [
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $total,
+            'items' => $items,
+        ];
+    }
+
     public function dashboardSummary(array $params): array
     {
         return $this->remember('dashboard-summary', $params, function () use ($params) {

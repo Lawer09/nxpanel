@@ -75,6 +75,7 @@
 | API 错误趋势 | GET | /server-api-error/trend | API 错误趋势 |
 | HTTP 状态码分布 | GET | /server-api-error/http-status-distribution | HTTP 状态码分布 |
 | API 路径排行 | GET | /server-api-error/api-rank | API 路径错误排行 |
+| 最近接收事件 | GET | /events/recent | Redis 最近接收事件分页 |
 | 事件列表 | GET | /events | 事件明细列表 |
 | 事件详情 | GET | /events/{event_id} | 事件详情 |
 | 筛选项 | GET | /filters/options | 前端筛选项 |
@@ -1271,7 +1272,69 @@
 
 ---
 
-### 25. 事件列表
+### 25. 最近接收事件
+
+#### 请求信息
+
+- 请求方法：`GET`
+- 请求路径：`/events/recent`
+- 权限要求：`admin`
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| page | int | 否 | 1 | 当前页（从 1 开始） |
+| pageSize | int | 否 | 20 | 每页数量，最大 200 |
+
+#### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 500,
+    "items": [
+      {
+        "recv_at": "2026-05-19T09:30:12.123456789Z",
+        "event_id": "evt_01",
+        "app_id": "com.demo.app",
+        "event_name": "app_open",
+        "platform": "android",
+        "queue_file": "/var/lib/firebase-event-recv/queue/pending/20260519T093012.123456789_xxx.json",
+        "raw": {
+          "app_id": "com.demo.app",
+          "event_id": "evt_01",
+          "event_name": "app_open",
+          "platform": "android",
+          "app_version": "1.0.0",
+          "device_id": "dev_01",
+          "event_time": 1710000000000,
+          "created_at": 1710000000000,
+          "open_type": "cold_start",
+          "launch_ms": 430
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### 数据来源
+
+| 字段 | 来源 | 说明 |
+|---|---|---|
+| total | Redis `LLEN` | Key 为 `firebase-event-recv:recent:events` |
+| items | Redis `LRANGE` | List 元素为 JSON 字符串，按 `LPUSH` 顺序返回 |
+
+---
+
+### 26. 事件列表
 
 #### 请求信息
 
@@ -1351,7 +1414,7 @@
 
 ---
 
-### 26. 事件详情
+### 27. 事件详情
 
 #### 请求信息
 
@@ -1428,7 +1491,7 @@
 
 ---
 
-### 27. 筛选项
+### 28. 筛选项
 
 #### 请求信息
 
