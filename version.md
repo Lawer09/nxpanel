@@ -715,6 +715,26 @@
 
 - 无需数据库迁移。
 
+## 2026-05-28
+
+### v2_server 节点限速与设备限制字段入库
+
+- 为 `v2_server` 新增字段：
+  - `rate_limit`：节点速率限制，单位 `bytes/s`，默认 `0`（表示不限制）
+  - `device_limit`：节点设备限制，默认 `0`（表示不限制）
+- 管理端节点保存参数新增校验：`rate_limit`、`device_limit`（整数，最小值 0）
+- 由于 `app/Http/Controllers/V3/Admin/Server/ManageController.php` 继承 `V2` 保存逻辑，V2/V3 节点保存链路均支持以上两个字段持久化
+
+### 影响范围
+
+- `database/migrations/2026_05_28_120000_add_rate_limit_and_device_limit_to_v2_server_table.php`
+- `app/Http/Requests/Admin/ServerSave.php`
+
+### 迁移/回滚说明
+
+- 执行迁移：`php artisan migrate`
+- 回滚该迁移：`php artisan migrate:rollback --path=database/migrations/2026_05_28_120000_add_rate_limit_and_device_limit_to_v2_server_table.php`
+
 ### dns_ip_bindings 表结构升级（V3，2026-05-20）
 
 - 新增迁移：`database/migrations/2026_05_20_000002_alter_dns_ip_bindings_add_record_fields.php`

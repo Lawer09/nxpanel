@@ -406,6 +406,8 @@ class NodeDeployService
             'NODE_ID'   => (string) $server->id,
             'CORE_TYPE' => 'sing',
             'NODE_TYPE' => strtolower($server->type),
+            'NODE_RATE_LIMIT' => $server->rate_limit ?? '0',
+            'NODE_DEVICE_LIMIT' => $server->device_limit ?? '0',
         ];
     }
 }

@@ -104,6 +104,8 @@ class ServerSave extends FormRequest
             'name' => 'required|string',
             'machine_id' => 'required|integer|exists:machines,id',
             'online_limit' => 'nullable|integer|min:0',
+            'rate_limit' => 'sometimes|integer|min:0',
+            'device_limit' => 'sometimes|integer|min:0',
             'group_ids' => 'nullable|array',
             'route_ids' => 'nullable|array',
             'parent_id' => 'nullable|integer',
