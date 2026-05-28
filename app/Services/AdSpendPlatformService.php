@@ -185,9 +185,11 @@ class AdSpendPlatformService
         if (!$response->successful()) {
             throw new \RuntimeException('拉取报表失败: ' . $response->body());
         }
-
-        $body = $response->json();
-        return is_array($body) ? $body : [];
+        $body = is_array($response->json()) ? $response->json() : [];
+        if($body['success'] == false) {
+            throw new \RuntimeException('拉取报表失败:  ' . $url . ' 投放平台返回错误，' . ($body['errorMessage'] ?? '未知错误'));
+        }
+        return $body;
     }
 
     private function tokenAvailable(AdSpendPlatformAccount $account): bool
