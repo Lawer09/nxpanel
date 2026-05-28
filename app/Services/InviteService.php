@@ -18,17 +18,18 @@ class InviteService
     {
         $userCodes = InviteCode::query()
             ->where('user_id', $userId)
-            ->where('status', InviteCode::STATUS_UNUSED);
+            ->where('status', InviteCode::STATUS_UNUSED)
+            ->get();
 
         // if ($unusedCount >= (int) admin_setting('invite_gen_limit', 5)) {
-        if ($userCodes->count() >= 1) {
+        if ($userCodes->isNotEmpty()) {
             return [
                 'ok' => true,
                 'data' => $userCodes->map(fn($code) => [
                     'code' => $code->code,
                     'status' => $code->status,
                     'created' => true,
-                ]),
+                ])->values()->toArray(),
             ];
         }
 
