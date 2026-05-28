@@ -61,7 +61,8 @@ class ClientController extends V1ClientController
                         'type' => $server['type'],
                         'host' => $server['host'],  
                         'port' => $server['port'],  
-                        'uri'  => $server['uri'],  
+                        'uri'  => $server['uri'], 
+                        'fast' => $server['rate_limit'] > 10 || $server['rate_limit'] === 0,
                         // 保留与现有订阅格式一致的完整信息  
                     ];  
                 })->values();  
