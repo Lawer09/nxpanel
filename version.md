@@ -959,6 +959,21 @@
 
 - 新增 `docs/api/application_route_api.md`，补充应用路由与鉴权说明
 
+### ApplicationRoute 增补报表接口
+
+- 应用路由新增：`POST /api/v3/{securePath}/report/project/query`
+- 映射控制器方法：`ReportController::queryProjectReport`
+- 更新文档：`docs/api/application_route_api.md`
+
+### ApplicationRoute 前缀调整
+
+- 应用路由前缀由 `/api/v3/{securePath}` 调整为 `/api/v3/application`
+- 目的：应用侧访问不再依赖 admin 安全路径配置
+- 影响接口：
+  - `GET /api/v3/application/app-client/fetch`
+  - `GET /api/v3/application/app-client/detail`
+  - `POST /api/v3/application/report/project/query`
+
 ### 影响范围
 
 - `app/Http/Middleware/AppAuth.php`
