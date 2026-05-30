@@ -1015,6 +1015,13 @@
   - `firebase_report_node`
 - 回滚路径已提供（`down()` 还原到 `utf8mb4_unicode_ci`）
 
+### Firebase 聚合写入优化：upsert 分块
+
+- 修复按日期范围重算时可能出现的 `SQLSTATE[HY000]: 1390 Prepared statement contains too many placeholders`
+- `firebase_report:aggregate` 新增参数：`--chunk`（默认 `500`，最小 `100`）
+- 用户汇总与节点汇总均改为 `array_chunk` 后分批 `upsert`
+- 影响文件：`app/Console/Commands/AggregateFirebaseReports.php`
+
 ### 影响范围
 
 - `app/Console/Commands/AggregateFirebaseReports.php`

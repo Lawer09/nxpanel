@@ -12,6 +12,7 @@ class AggregateFirebaseReports extends Command
         {--hours=72 : Rolling window hours to rebuild}
         {--date-from= : Start date (YYYY-MM-DD, UTC+8)}
         {--date-to= : End date (YYYY-MM-DD, UTC+8)}
+        {--chunk=500 : Upsert chunk size}
         {--rebuild-first-seen : Rebuild first-seen table from all history}';
 
     protected $description = 'Aggregate firebase event reports into hourly summary tables';
@@ -28,10 +29,12 @@ class AggregateFirebaseReports extends Command
         $windowStartMs = $windowStart->copy()->utc()->getTimestampMs();
         $windowEndMs = $now->copy()->utc()->getTimestampMs();
 
-        DB::transaction(function () use ($windowStartMs, $windowEndMs, $windowStart, $now) {
+        $chunkSize = max(100, (int) $this->option('chunk'));
+
+        DB::transaction(function () use ($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize) {
             $this->refreshFirstSeen($windowStartMs, $windowEndMs, (bool) $this->option('rebuild-first-seen'));
-            $this->aggregateUserSummary($windowStartMs, $windowEndMs, $windowStart, $now);
-            $this->aggregateNodeSummary($windowStartMs, $windowEndMs, $windowStart, $now);
+            $this->aggregateUserSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
+            $this->aggregateNodeSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
         });
 
         $this->info(sprintf('firebase report aggregated: %s - %s', $windowStart->toDateTimeString(), $now->toDateTimeString()));
@@ -97,7 +100,7 @@ class AggregateFirebaseReports extends Command
     /**
      * 聚合用户侧小时汇总与日活。
      */
-    private function aggregateUserSummary(int $windowStartMs, int $windowEndMs, Carbon $windowStart, Carbon $windowEnd): void
+    private function aggregateUserSummary(int $windowStartMs, int $windowEndMs, Carbon $windowStart, Carbon $windowEnd, int $chunkSize): void
     {
         DB::table('firebase_report_user_summary')
             ->whereBetween('time_bucket', [$windowStart->toDateTimeString(), $windowEnd->toDateTimeString()])
@@ -164,18 +167,20 @@ class AggregateFirebaseReports extends Command
         }
 
         if (!empty($upserts)) {
-            DB::table('firebase_report_user_summary')->upsert(
-                $upserts,
-                ['date', 'hour', 'app_id', 'app_version', 'platform', 'country', 'network_type'],
-                ['time_bucket', 'new_user_count', 'active_device_count', 'dau_device_count', 'event_count', 'recomputed_at', 'updated_at']
-            );
+            foreach (array_chunk($upserts, $chunkSize) as $chunk) {
+                DB::table('firebase_report_user_summary')->upsert(
+                    $chunk,
+                    ['date', 'hour', 'app_id', 'app_version', 'platform', 'country', 'network_type'],
+                    ['time_bucket', 'new_user_count', 'active_device_count', 'dau_device_count', 'event_count', 'recomputed_at', 'updated_at']
+                );
+            }
         }
     }
 
     /**
      * 聚合节点侧小时统计。
      */
-    private function aggregateNodeSummary(int $windowStartMs, int $windowEndMs, Carbon $windowStart, Carbon $windowEnd): void
+    private function aggregateNodeSummary(int $windowStartMs, int $windowEndMs, Carbon $windowStart, Carbon $windowEnd, int $chunkSize): void
     {
         DB::table('firebase_report_node')
             ->whereBetween('time_bucket', [$windowStart->toDateTimeString(), $windowEnd->toDateTimeString()])
@@ -235,11 +240,13 @@ class AggregateFirebaseReports extends Command
         }
 
         if (!empty($upserts)) {
-            DB::table('firebase_report_node')->upsert(
-                $upserts,
-                ['date', 'hour', 'app_id', 'app_version', 'country', 'node_id', 'node_host'],
-                ['time_bucket', 'node_name', 'node_country', 'node_region', 'protocol', 'total_count', 'success_count', 'fail_count', 'success_rate', 'avg_connect_ms', 'max_connect_ms', 'recomputed_at', 'updated_at']
-            );
+            foreach (array_chunk($upserts, $chunkSize) as $chunk) {
+                DB::table('firebase_report_node')->upsert(
+                    $chunk,
+                    ['date', 'hour', 'app_id', 'app_version', 'country', 'node_id', 'node_host'],
+                    ['time_bucket', 'node_name', 'node_country', 'node_region', 'protocol', 'total_count', 'success_count', 'fail_count', 'success_rate', 'avg_connect_ms', 'max_connect_ms', 'recomputed_at', 'updated_at']
+                );
+            }
         }
     }
 }
