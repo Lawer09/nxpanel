@@ -28,6 +28,7 @@ class AggregateProjectDailyData extends Command
             while ($cursor->lte($end)) {
                 $date = $cursor->toDateString();
                 $this->aggregateOneDate($date);
+                $this->aggregateHourlyReportOneDate($date);
                 $cursor->addDay();
             }
 
@@ -645,6 +646,243 @@ class AggregateProjectDailyData extends Command
         return $result;
     }
 
+    /**
+     * 聚合项目小时报表（project_report_hourly）。
+     */
+    private function aggregateHourlyReportOneDate(string $date): void
+    {
+        $projectCodesByAppId = $this->getProjectCodesByAppId();
+        if ($projectCodesByAppId->isEmpty()) {
+            DB::table('project_report_hourly')->where('date', '=', $date)->delete();
+            return;
+        }
+
+        $hourlyDauMap = $this->queryHourlyDauUsersMetrics($date, $projectCodesByAppId);
+        $dailyDauMap = $this->queryDailyDauUsersMetrics($date, $projectCodesByAppId);
+        $installMap = $this->queryInstallUsersMetrics($date, $projectCodesByAppId);
+
+        $dailyRevenueMap = [];
+        $dailySpendMap = [];
+        $dailyRows = DB::table('project_daily_aggregates')
+            ->where('report_date', '=', $date)
+            ->select('project_code', 'country', 'ad_revenue', 'ad_spend_cost')
+            ->get();
+
+        foreach ($dailyRows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode === '') {
+                continue;
+            }
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $dayKey = $projectCode . "\t" . $country;
+            $dailyRevenueMap[$dayKey] = $this->decimal($row->ad_revenue ?? 0);
+            $dailySpendMap[$dayKey] = $this->decimal($row->ad_spend_cost ?? 0);
+        }
+
+        $allHourlyKeys = [];
+        foreach ([$hourlyDauMap, $installMap] as $map) {
+            foreach (array_keys($map) as $key) {
+                $allHourlyKeys[$key] = true;
+            }
+        }
+
+        DB::table('project_report_hourly')->where('date', '=', $date)->delete();
+
+        if (empty($allHourlyKeys)) {
+            return;
+        }
+
+        $rows = [];
+        $now = now();
+        foreach (array_keys($allHourlyKeys) as $hourlyKey) {
+            [$reportDate, $hour, $projectCode, $country] = $this->parseHourlyDimensionKey($hourlyKey);
+            if ($projectCode === '') {
+                continue;
+            }
+
+            $hourlyDauUsers = (int) ($hourlyDauMap[$hourlyKey]['hourly_dau_users'] ?? 0);
+            $installUsers = (int) ($installMap[$hourlyKey]['install_users'] ?? 0);
+
+            $dayKey = $projectCode . "\t" . $country;
+            $dailyDauUsers = (int) ($dailyDauMap[$dayKey]['daily_dau_users'] ?? 0);
+            $dailyRevenue = $this->decimal($dailyRevenueMap[$dayKey] ?? 0);
+            $dailySpend = $this->decimal($dailySpendMap[$dayKey] ?? 0);
+
+            $hourlyRatio = $dailyDauUsers > 0 ? ((float) $hourlyDauUsers / (float) $dailyDauUsers) : 0.0;
+            $adRevenue = round($dailyRevenue * $hourlyRatio, 6);
+            $adSpendCost = round($dailySpend * $hourlyRatio, 6);
+
+            $installOverHourlyDau = $this->safeRatio($installUsers, $hourlyDauUsers);
+            $ros = null;
+            if ($installOverHourlyDau !== null && $adSpendCost > 0) {
+                $ros = round(($adRevenue * $installOverHourlyDau) / $adSpendCost, 6);
+            }
+
+            $rows[] = [
+                'date' => $reportDate,
+                'hour' => $hour,
+                'project_code' => $projectCode,
+                'country' => $country,
+                'install_users' => $installUsers,
+                'hourly_dau_users' => $hourlyDauUsers,
+                'daily_dau_users' => $dailyDauUsers,
+                'ad_revenue' => $adRevenue,
+                'ad_spend_cost' => $adSpendCost,
+                'ros' => $ros,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (empty($rows)) {
+            return;
+        }
+
+        DB::table('project_report_hourly')->upsert(
+            $rows,
+            ['date', 'hour', 'project_code', 'country'],
+            [
+                'install_users',
+                'hourly_dau_users',
+                'daily_dau_users',
+                'ad_revenue',
+                'ad_spend_cost',
+                'ros',
+                'updated_at',
+            ]
+        );
+    }
+
+    /**
+     * 获取 app_id 到项目代号映射（仅 enabled=1）。
+     */
+    private function getProjectCodesByAppId()
+    {
+        return DB::table('project_user_app_map')
+            ->where('enabled', '=', 1)
+            ->select('project_code', 'app_id')
+            ->get()
+            ->groupBy(function ($row) {
+                return trim((string) ($row->app_id ?? ''));
+            })
+            ->map(function ($group) {
+                return collect($group)
+                    ->pluck('project_code')
+                    ->map(fn ($v) => trim((string) $v))
+                    ->filter(fn ($v) => $v !== '')
+                    ->unique()
+                    ->values()
+                    ->all();
+            })
+            ->filter(fn ($codes, $appId) => $appId !== '' && !empty($codes));
+    }
+
+    /**
+     * 查询小时活跃用户数（按 date+hour+project+country）。
+     */
+    private function queryHourlyDauUsersMetrics(string $date, $projectCodesByAppId): array
+    {
+        $rows = DB::table('v3_user_report_count as urc')
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->where('urc.date', '=', $date)
+            ->selectRaw('urc.date as report_date')
+            ->selectRaw('urc.hour as report_hour')
+            ->selectRaw('puam.project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as hourly_dau_users')
+            ->groupBy('urc.date', 'urc.hour', 'puam.project_code')
+            ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeHourlyDimensionKey((string) $row->report_date, (int) ($row->report_hour ?? 0), (string) $row->project_code, $country);
+            $result[$key] = [
+                'hourly_dau_users' => (int) ($row->hourly_dau_users ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 查询日活用户数（按 date+project+country）。
+     */
+    private function queryDailyDauUsersMetrics(string $date, $projectCodesByAppId): array
+    {
+        $rows = DB::table('v3_user_report_count as urc')
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->where('urc.date', '=', $date)
+            ->selectRaw('puam.project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as daily_dau_users')
+            ->groupBy('puam.project_code')
+            ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = trim((string) ($row->project_code ?? '')) . "\t" . $country;
+            $result[$key] = [
+                'daily_dau_users' => (int) ($row->daily_dau_users ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 查询安装用户数（全生命周期首次上报小时）。
+     */
+    private function queryInstallUsersMetrics(string $date, $projectCodesByAppId): array
+    {
+        if ($projectCodesByAppId->isEmpty()) {
+            return [];
+        }
+
+        $rows = DB::table('v3_user_report_count as urc')
+            ->join(DB::raw('(
+                SELECT user_id, MIN(CONCAT(date, " ", LPAD(hour, 2, "0"))) as first_report_hour
+                FROM v3_user_report_count
+                GROUP BY user_id
+            ) as first_seen'), function ($join) {
+                $join->on('first_seen.user_id', '=', 'urc.user_id')
+                    ->whereRaw('CONCAT(urc.date, " ", LPAD(urc.hour, 2, "0")) = first_seen.first_report_hour');
+            })
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->where('urc.date', '=', $date)
+            ->selectRaw('urc.date as report_date')
+            ->selectRaw('urc.hour as report_hour')
+            ->selectRaw('puam.project_code as project_code')
+            ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as install_users')
+            ->groupBy('urc.date', 'urc.hour', 'puam.project_code')
+            ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeHourlyDimensionKey((string) $row->report_date, (int) ($row->report_hour ?? 0), (string) $row->project_code, $country);
+            $result[$key] = [
+                'install_users' => (int) ($row->install_users ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
     private function buildProjectCodeSetFromDimensionMaps(array $dimensionMaps): array
     {
         $set = [];
@@ -663,6 +901,29 @@ class AggregateProjectDailyData extends Command
     private function makeDimensionKey(string $date, string $projectCode, string $country): string
     {
         return trim($date) . "\t" . trim($projectCode) . "\t" . $this->normalizeCountry($country);
+    }
+
+    /**
+     * 生成小时维度键。
+     */
+    private function makeHourlyDimensionKey(string $date, int $hour, string $projectCode, string $country): string
+    {
+        $safeHour = max(0, min(23, $hour));
+        return trim($date) . "\t" . $safeHour . "\t" . trim((string) $projectCode) . "\t" . $this->normalizeCountry($country);
+    }
+
+    /**
+     * 解析小时维度键。
+     */
+    private function parseHourlyDimensionKey(string $key): array
+    {
+        $parts = explode("\t", $key, 4);
+        return [
+            trim((string) ($parts[0] ?? '')),
+            max(0, min(23, (int) ($parts[1] ?? 0))),
+            trim((string) ($parts[2] ?? '')),
+            $this->normalizeCountry((string) ($parts[3] ?? '')),
+        ];
     }
 
     private function parseDimensionKey(string $key): array

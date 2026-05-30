@@ -96,6 +96,28 @@
 - 需要执行迁移：`php artisan migrate`
 - 若需回滚可执行：`php artisan migrate:rollback --step=1`
 
+### 项目小时报表（project_report_hourly）
+- 新增表 `project_report_hourly`，维度为 `date + hour + project_code + country`
+- 新增字段：`install_users`、`hourly_dau_users`、`daily_dau_users`、`ad_revenue`、`ad_spend_cost`、`ros`
+- 口径：安装采用全生命周期首次上报小时；收益/花费按小时活跃占日活比例分配；`ros=(ad_revenue*(install/hourly_dau))/ad_spend_cost`
+- `project:aggregate-daily` 同步触发小时报表聚合（每日先删后写）
+
+### 影响范围（小时报表）
+- `database/migrations/2026_05_30_130000_create_project_report_hourly_table.php`
+- `app/Console/Commands/AggregateProjectDailyData.php`
+- `docs/api/project_report_hourly_api.md`
+
+### 小时报表查询接口
+- 新增 `ProjectReportService`，承载 `project_report_hourly` 查询与分组逻辑
+- `ReportController` 新增 `queryProjectReportHourly`，使用 FormRequest + Service 分层
+- 新增路由：`POST /report/project/hourly/query`
+
+### 影响范围（小时报表查询）
+- `app/Services/ProjectReportService.php`
+- `app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`
+- `app/Http/Controllers/V3/Admin/ReportController.php`
+- `app/Http/Routes/V3/AdminRoute.php`
+
 ### Firebase Analytics 后端设计落地
 
 - 新增 Firebase Analytics 管理端查询接口：Dashboard、VPN、测速、API 错误、事件明细与筛选项（app/Http/Routes/V3/AdminRoute.php）

@@ -13,13 +13,19 @@ use App\Http\Requests\Admin\UserReportNodeSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportSummaryQueryRequest;
 use App\Http\Requests\Admin\UserReportTrafficQueryRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyQueryRequest;
+use App\Http\Requests\Admin\ProjectReportHourlyQueryRequest;
 use App\Http\Resources\CamelizeResource;
+use App\Services\ProjectReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
+    public function __construct(
+        protected ProjectReportService $projectReportService
+    ) {}
+
     /**
      * 节点实时上报数据（缓存）
      *
@@ -924,6 +930,18 @@ class ReportController extends Controller
             'dateTo' => $dateTo,
             'groupBy' => $groupBy,
         ]);
+    }
+
+    /**
+     * 项目小时报表查询。
+     *
+     * POST /report/project/hourly/query
+     */
+    public function queryProjectReportHourly(ProjectReportHourlyQueryRequest $request): JsonResponse
+    {
+        $result = $this->projectReportService->queryHourly($request->validated());
+
+        return $this->ok($result);
     }
 
     private function normalizeGroupBy(array $groupBy, array $allowed): array
