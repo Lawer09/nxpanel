@@ -27,7 +27,7 @@ class ProjectReportHourlyQueryRequest extends FormRequest
             'filters.countries.*' => 'string|max:50',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
-            'orderBy' => 'nullable|string|in:reportDate,hour,projectCode,country,installUsers,hourlyDauUsers,dailyDauUsers,adRevenue,adSpendCost,ros,id,updatedAt',
+            'orderBy' => 'nullable|string|in:reportDate,hour,projectCode,country,installUsers,dauUsers,adRevenue,adSpendCost,ros,id,updatedAt',
             'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }

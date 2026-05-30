@@ -111,12 +111,25 @@
 - 新增 `ProjectReportService`，承载 `project_report_hourly` 查询与分组逻辑
 - `ReportController` 新增 `queryProjectReportHourly`，使用 FormRequest + Service 分层
 - 新增路由：`POST /report/project/hourly/query`
+- 调整 `ros` 返回口径：查询时实时重算并返回，不依赖数据库中 `ros` 存储值
 
 ### 影响范围（小时报表查询）
 - `app/Services/ProjectReportService.php`
 - `app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`
 - `app/Http/Controllers/V3/Admin/ReportController.php`
 - `app/Http/Routes/V3/AdminRoute.php`
+
+### 小时报表字段调整（不兼容）
+- `project_report_hourly` 移除 `daily_dau_users` 存储字段
+- `project_report_hourly` 将 `hourly_dau_users` 重命名为 `dau_users`
+- 查询接口返回字段同步调整：移除 `dailyDauUsers`、`hourlyDauUsers`，改为 `dauUsers`
+- `ros` 查询实时计算、排序表达式统一改为基于 `dau_users`
+
+### 影响范围（小时报表字段调整）
+- `database/migrations/2026_05_30_130000_create_project_report_hourly_table.php`
+- `app/Console/Commands/AggregateProjectDailyData.php`
+- `app/Services/ProjectReportService.php`
+- `app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`
 
 ### Firebase Analytics 后端设计落地
 

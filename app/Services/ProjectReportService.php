@@ -31,8 +31,7 @@ class ProjectReportService
 
         $metricMap = [
             'installUsers' => 'install_users',
-            'hourlyDauUsers' => 'hourly_dau_users',
-            'dailyDauUsers' => 'daily_dau_users',
+            'dauUsers' => 'dau_users',
             'adRevenue' => 'ad_revenue',
             'adSpendCost' => 'ad_spend_cost',
             'ros' => 'ros',
@@ -67,8 +66,16 @@ class ProjectReportService
             $orderColumn = $dimensionMap[$orderKey] ?? $metricMap[$orderKey] ?? 'date';
 
             $total = (clone $query)->count();
-            $rows = $query
-                ->orderBy($orderColumn, $orderDirection)
+            $rows = $query;
+            if ($orderKey === 'ros') {
+                $rows->orderByRaw(
+                    'CASE WHEN ad_spend_cost = 0 OR dau_users = 0 THEN NULL ELSE (ad_revenue * (install_users / dau_users)) / ad_spend_cost END ' . $orderDirection
+                );
+            } else {
+                $rows->orderBy($orderColumn, $orderDirection);
+            }
+
+            $rows = $rows
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
@@ -86,15 +93,14 @@ class ProjectReportService
             }
 
             $groupQuery->selectRaw('SUM(install_users) as install_users')
-                ->selectRaw('SUM(hourly_dau_users) as hourly_dau_users')
-                ->selectRaw('SUM(daily_dau_users) as daily_dau_users')
+                ->selectRaw('SUM(dau_users) as dau_users')
                 ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
-                ->selectRaw('CASE WHEN SUM(ad_spend_cost)=0 THEN NULL ELSE ROUND(SUM(ad_revenue*(CASE WHEN hourly_dau_users=0 THEN 0 ELSE install_users/hourly_dau_users END))/SUM(ad_spend_cost),6) END as ros')
+                ->selectRaw('CASE WHEN SUM(ad_spend_cost)=0 OR SUM(dau_users)=0 THEN NULL ELSE ROUND((SUM(ad_revenue) * (SUM(install_users) / SUM(dau_users))) / SUM(ad_spend_cost),6) END as ros')
                 ->selectRaw('MAX(updated_at) as updated_at');
 
             $sortable = array_values(array_unique(array_merge($groupDimensions, [
-                'installUsers', 'hourlyDauUsers', 'dailyDauUsers', 'adRevenue', 'adSpendCost', 'ros', 'updatedAt',
+                'installUsers', 'dauUsers', 'adRevenue', 'adSpendCost', 'ros', 'updatedAt',
             ])));
 
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'adRevenue';
@@ -121,11 +127,15 @@ class ProjectReportService
                 'projectCode' => $row->project_code ?? null,
                 'country' => $row->country ?? null,
                 'installUsers' => (int) ($row->install_users ?? 0),
-                'hourlyDauUsers' => (int) ($row->hourly_dau_users ?? 0),
-                'dailyDauUsers' => (int) ($row->daily_dau_users ?? 0),
+                'dauUsers' => (int) ($row->dau_users ?? 0),
                 'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
                 'adSpendCost' => $this->formatDecimal($row->ad_spend_cost ?? null),
-                'ros' => $this->formatDecimal($row->ros ?? null),
+                'ros' => $this->computeRos(
+                    (float) ($row->ad_revenue ?? 0),
+                    (int) ($row->install_users ?? 0),
+                    (int) ($row->dau_users ?? 0),
+                    (float) ($row->ad_spend_cost ?? 0)
+                ),
                 'updatedAt' => $row->updated_at ?? null,
             ];
         });
@@ -153,5 +163,19 @@ class ProjectReportService
         }
 
         return number_format((float) $value, 6, '.', '');
+    }
+
+    /**
+     * 根据口径实时计算 ROS。
+     */
+    private function computeRos(float $adRevenue, int $installUsers, int $dauUsers, float $adSpendCost): ?string
+    {
+        if ($adSpendCost == 0.0 || $dauUsers === 0) {
+            return null;
+        }
+
+        $ros = ($adRevenue * ($installUsers / $dauUsers)) / $adSpendCost;
+
+        return $this->formatDecimal($ros);
     }
 }

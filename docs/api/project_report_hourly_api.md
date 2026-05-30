@@ -48,7 +48,7 @@
 | daily_dau_users | int unsigned | 日活跃用户数（同日同项目同国家去重） |
 | ad_revenue | decimal(20,6) | 按小时分配后的广告收益 |
 | ad_spend_cost | decimal(20,6) | 按小时分配后的广告花费 |
-| ros | decimal(20,6) nullable | 收益转化指标 |
+| ros | decimal(20,6) nullable | 收益转化指标（查询接口按实时口径计算返回） |
 | created_at | timestamp | 创建时间 |
 | updated_at | timestamp | 更新时间 |
 
@@ -91,6 +91,7 @@
 
 - `ros = (ad_revenue * (install_users / hourly_dau_users)) / ad_spend_cost`
 - 若 `hourly_dau_users = 0` 或 `ad_spend_cost = 0`，则 `ros = null`
+- 查询接口返回的 `ros` 以实时计算结果为准，不依赖表内已存储值
 
 ---
 

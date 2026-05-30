@@ -20,8 +20,7 @@ return new class extends Migration
             $table->string('country', 50)->default('XX')->comment('国家，空值归一为XX');
 
             $table->unsignedInteger('install_users')->default(0)->comment('安装数（全生命周期首次上报小时）');
-            $table->unsignedInteger('hourly_dau_users')->default(0)->comment('小时活跃用户数');
-            $table->unsignedInteger('daily_dau_users')->default(0)->comment('日活跃用户数');
+            $table->unsignedInteger('dau_users')->default(0)->comment('小时活跃用户数');
 
             $table->decimal('ad_revenue', 20, 6)->default(0)->comment('按小时分摊后的广告收益');
             $table->decimal('ad_spend_cost', 20, 6)->default(0)->comment('按小时分摊后的广告花费');

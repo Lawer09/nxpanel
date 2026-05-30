@@ -700,7 +700,7 @@ class AggregateProjectDailyData extends Command
                 continue;
             }
 
-            $hourlyDauUsers = (int) ($hourlyDauMap[$hourlyKey]['hourly_dau_users'] ?? 0);
+            $dauUsers = (int) ($hourlyDauMap[$hourlyKey]['dau_users'] ?? 0);
             $installUsers = (int) ($installMap[$hourlyKey]['install_users'] ?? 0);
 
             $dayKey = $projectCode . "\t" . $country;
@@ -708,14 +708,14 @@ class AggregateProjectDailyData extends Command
             $dailyRevenue = $this->decimal($dailyRevenueMap[$dayKey] ?? 0);
             $dailySpend = $this->decimal($dailySpendMap[$dayKey] ?? 0);
 
-            $hourlyRatio = $dailyDauUsers > 0 ? ((float) $hourlyDauUsers / (float) $dailyDauUsers) : 0.0;
+            $hourlyRatio = $dailyDauUsers > 0 ? ((float) $dauUsers / (float) $dailyDauUsers) : 0.0;
             $adRevenue = round($dailyRevenue * $hourlyRatio, 6);
             $adSpendCost = round($dailySpend * $hourlyRatio, 6);
 
-            $installOverHourlyDau = $this->safeRatio($installUsers, $hourlyDauUsers);
+            $installOverDau = $this->safeRatio($installUsers, $dauUsers);
             $ros = null;
-            if ($installOverHourlyDau !== null && $adSpendCost > 0) {
-                $ros = round(($adRevenue * $installOverHourlyDau) / $adSpendCost, 6);
+            if ($installOverDau !== null && $adSpendCost > 0) {
+                $ros = round(($adRevenue * $installOverDau) / $adSpendCost, 6);
             }
 
             $rows[] = [
@@ -724,8 +724,7 @@ class AggregateProjectDailyData extends Command
                 'project_code' => $projectCode,
                 'country' => $country,
                 'install_users' => $installUsers,
-                'hourly_dau_users' => $hourlyDauUsers,
-                'daily_dau_users' => $dailyDauUsers,
+                'dau_users' => $dauUsers,
                 'ad_revenue' => $adRevenue,
                 'ad_spend_cost' => $adSpendCost,
                 'ros' => $ros,
@@ -743,8 +742,7 @@ class AggregateProjectDailyData extends Command
             ['date', 'hour', 'project_code', 'country'],
             [
                 'install_users',
-                'hourly_dau_users',
-                'daily_dau_users',
+                'dau_users',
                 'ad_revenue',
                 'ad_spend_cost',
                 'ros',
@@ -792,7 +790,7 @@ class AggregateProjectDailyData extends Command
             ->selectRaw('urc.hour as report_hour')
             ->selectRaw('puam.project_code as project_code')
             ->selectRaw('UPPER(COALESCE(urc.client_country, "")) as country')
-            ->selectRaw('COUNT(DISTINCT urc.user_id) as hourly_dau_users')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as dau_users')
             ->groupBy('urc.date', 'urc.hour', 'puam.project_code')
             ->groupByRaw('UPPER(COALESCE(urc.client_country, ""))')
             ->get();
@@ -802,7 +800,7 @@ class AggregateProjectDailyData extends Command
             $country = $this->normalizeCountry((string) ($row->country ?? ''));
             $key = $this->makeHourlyDimensionKey((string) $row->report_date, (int) ($row->report_hour ?? 0), (string) $row->project_code, $country);
             $result[$key] = [
-                'hourly_dau_users' => (int) ($row->hourly_dau_users ?? 0),
+                'dau_users' => (int) ($row->dau_users ?? 0),
             ];
         }
 
