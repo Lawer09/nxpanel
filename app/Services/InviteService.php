@@ -26,7 +26,7 @@ class InviteService
             return [
                 'ok' => true,
                 'data' => $userCodes->map(fn($code) => [
-                    'code' => $code->code,
+                    'code' => explode('-', $code->code)[1],
                     'status' => $code->status,
                     'created' => true,
                 ])->values()->toArray(),
@@ -35,7 +35,7 @@ class InviteService
 
         $inviteCode = new InviteCode();
         $inviteCode->user_id = $userId;
-        $inviteCode->code = 'MU-' . Helper::randomChar(8);
+        $inviteCode->code = 'MU-' . Helper::randomChar(4);
 
         return [
             'ok' => true,
@@ -43,7 +43,7 @@ class InviteService
                 [
                     'created' => (bool) $inviteCode->save(),
                     'status' => $inviteCode->status,
-                    'code' => $inviteCode->code,
+                    'code' => explode('-', $inviteCode->code)[1],
                 ]
             ],
         ];
@@ -103,6 +103,7 @@ class InviteService
      */
     public function useCode(int $userId, string $inviteCode): array
     {
+        $inviteCode = 'MU-' . $inviteCode;
         return DB::transaction(function () use ($userId, $inviteCode) {
             $user = User::query()->lockForUpdate()->find($userId);
             if (!$user) {
