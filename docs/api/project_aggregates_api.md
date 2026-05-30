@@ -32,7 +32,7 @@
 | groupBy | string[] | 否 | 按维度聚合，支持 `reportDate` / `projectCode` / `country`，默认明细 |
 | page | int | 否 | 默认 `1` |
 | pageSize | int | 否 | 默认 `50`，最大 `200` |
-| orderBy | string | 否 | 默认 `reportDate`，支持：`reportDate` / `projectCode` / `country` / `adRevenue` / `adSpendCost` / `trafficCost` / `profit` / `roi` / `adSpendCpi` / `updatedAt` |
+| orderBy | string | 否 | 默认 `reportDate`，支持：`reportDate` / `projectCode` / `country` / `newUsers` / `reportNewUsers` / `fbNewUsers` / `dauUsers` / `fbDauUsers` / `adRevenue` / `adSpendCost` / `trafficCost` / `profit` / `roi` / `adSpendCpi` / `updatedAt` |
 | orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
 
 `groupBy` 定义：
@@ -60,7 +60,9 @@
       "dauUsers": 220,
       "newUsers": 36,
       "reportNewUsers": 12,
+      "fbNewUsers": 28,
       "adRevenue": "344.340000",
+      "fbDauUsers": 198,
       "adRequests": 120000,
       "adMatchedRequests": 108000,
       "adImpressions": 98000,
@@ -185,7 +187,9 @@
     "projectCode": "A003",
     "newUsers": 380,
     "reportNewUsers": 120,
+    "fbNewUsers": 310,
     "dauUsers": 2450,
+    "fbDauUsers": 2010,
     "adRevenue": "5230.330000",
     "adRequests": 1860000,
     "adMatchedRequests": 1670000,
@@ -231,7 +235,9 @@
     "time": "2026-04-28",
     "newUsers": 36,
     "reportNewUsers": 12,
+    "fbNewUsers": 28,
     "dauUsers": 220,
+    "fbDauUsers": 198,
     "adRevenue": "344.340000",
     "adSpendCost": "210.000000",
     "adSpendCpi": "5.833333",
@@ -253,6 +259,7 @@
 - `dauUsers`: 活跃用户数
 - `newUsers`: 新增用户数
 - `reportNewUsers`: 上报新增用户数（首次上报日期为当日的去重用户数，来源 `v3_user_report_count`）
+- `fbNewUsers`: Firebase 新增用户数（来源 `firebase_report_user_summary.new_user_count`）
 - `adRevenue`: 广告收入
 - `adRequests`: 请求数
 - `adMatchedRequests`: 匹配数
@@ -271,3 +278,4 @@
 - `profit`: 毛利（`adRevenue - adSpendCost - trafficCost`）
 - `roi`: ROI（`adRevenue / (adSpendCost + trafficCost)`）
 - `updatedAt`: 更新时间
+- `fbDauUsers`: Firebase 日活用户数（来源 `firebase_report_user_summary.dau_device_count`）

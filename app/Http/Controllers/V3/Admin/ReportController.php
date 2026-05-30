@@ -770,7 +770,9 @@ class ReportController extends Controller
         $metricMap = [
             'newUsers' => 'new_users',
             'reportNewUsers' => 'report_new_users',
+            'fbNewUsers' => 'fb_new_users',
             'dauUsers' => 'dau_users',
+            'fbDauUsers' => 'fb_dau_users',
             'adRevenue' => 'ad_revenue',
             'adRequests' => 'ad_requests',
             'adMatchedRequests' => 'ad_matched_requests',
@@ -833,7 +835,9 @@ class ReportController extends Controller
 
             $groupQuery->selectRaw('SUM(new_users) as new_users')
                 ->selectRaw('SUM(report_new_users) as report_new_users')
+                ->selectRaw('SUM(fb_new_users) as fb_new_users')
                 ->selectRaw('SUM(dau_users) as dau_users')
+                ->selectRaw('SUM(fb_dau_users) as fb_dau_users')
                 ->selectRaw('SUM(ad_revenue) as ad_revenue')
                 ->selectRaw('SUM(ad_requests) as ad_requests')
                 ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
@@ -854,7 +858,7 @@ class ReportController extends Controller
                 ->selectRaw('CASE WHEN (SUM(ad_spend_cost)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/(SUM(ad_spend_cost)+SUM(traffic_cost)),6) END as roi');
 
             $sortable = array_values(array_unique(array_merge($groupDimensions, [
-                'newUsers', 'reportNewUsers', 'dauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
+                'newUsers', 'reportNewUsers', 'fbNewUsers', 'dauUsers', 'fbDauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
                 'adImpressions', 'adClicks', 'adEcpm', 'adCtr', 'adMatchRate', 'adShowRate',
                 'adSpendCost', 'adSpendCpi', 'adSpendCpc', 'adSpendCpm', 'trafficUsageMb',
                 'trafficCost', 'totalCost', 'profit', 'roi', 'updatedAt',
@@ -884,7 +888,9 @@ class ReportController extends Controller
                 'country' => $row->country ?? null,
                 'newUsers' => (int) ($row->new_users ?? 0),
                 'reportNewUsers' => (int) ($row->report_new_users ?? 0),
+                'fbNewUsers' => (int) ($row->fb_new_users ?? 0),
                 'dauUsers' => (int) ($row->dau_users ?? 0),
+                'fbDauUsers' => (int) ($row->fb_dau_users ?? 0),
                 'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
                 'adRequests' => (int) ($row->ad_requests ?? 0),
                 'adMatchedRequests' => (int) ($row->ad_matched_requests ?? 0),

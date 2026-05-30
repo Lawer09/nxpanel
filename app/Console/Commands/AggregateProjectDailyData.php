@@ -75,8 +75,9 @@ class AggregateProjectDailyData extends Command
         $adSpendMap = $this->queryAdSpendMetrics($date);
         $userMap = $this->queryUserMetrics($date);
         $reportNewUsersMap = $this->queryReportNewUsersMetrics($date);
+        $firebaseUsersMap = $this->queryFirebaseUserMetrics($date);
 
-        $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap]);
+        $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap, $firebaseUsersMap]);
 
         $trafficProjectCodes = DB::table('project_traffic_platform_accounts')
             ->where('enabled', '=', 1)
@@ -103,7 +104,7 @@ class AggregateProjectDailyData extends Command
         }
 
         $allKeys = [];
-        foreach ([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap, $trafficMap] as $map) {
+        foreach ([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap, $firebaseUsersMap, $trafficMap] as $map) {
             foreach (array_keys($map) as $key) {
                 $allKeys[$key] = true;
             }
@@ -134,6 +135,8 @@ class AggregateProjectDailyData extends Command
             $dauUsers = (int) ($userMap[$key]['dau_users'] ?? 0);
             $newUsers = (int) ($userMap[$key]['new_users'] ?? 0);
             $reportNewUsers = (int) ($reportNewUsersMap[$key]['report_new_users'] ?? 0);
+            $fbNewUsers = (int) ($firebaseUsersMap[$key]['fb_new_users'] ?? 0);
+            $fbDauUsers = (int) ($firebaseUsersMap[$key]['fb_dau_users'] ?? 0);
 
             $adSpendCost = $this->decimal($adSpendMap[$key]['ad_spend_cost'] ?? 0);
             $adSpendClicks = (int) ($adSpendMap[$key]['ad_spend_clicks'] ?? 0);
@@ -162,6 +165,8 @@ class AggregateProjectDailyData extends Command
                 'dau_users' => $dauUsers,
                 'new_users' => $newUsers,
                 'report_new_users' => $reportNewUsers,
+                'fb_new_users' => $fbNewUsers,
+                'fb_dau_users' => $fbDauUsers,
                 'ad_revenue' => $adRevenue,
                 'ad_requests' => $adRequests,
                 'ad_matched_requests' => $adMatchedRequests,
@@ -191,6 +196,8 @@ class AggregateProjectDailyData extends Command
                 'dau_users',
                 'new_users',
                 'report_new_users',
+                'fb_new_users',
+                'fb_dau_users',
                 'ad_revenue',
                 'ad_requests',
                 'ad_matched_requests',
@@ -561,6 +568,78 @@ class AggregateProjectDailyData extends Command
             $result[$key] = [
                 'report_new_users' => (int) ($row->report_new_users ?? 0),
             ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 查询 Firebase 用户指标（新增和日活），按项目+国家聚合。
+     */
+    private function queryFirebaseUserMetrics(string $date): array
+    {
+        $projectCodesByAppId = DB::table('project_user_app_map')
+            ->where('enabled', '=', 1)
+            ->select('project_code', 'app_id')
+            ->get()
+            ->groupBy(function ($row) {
+                return trim((string) ($row->app_id ?? ''));
+            })
+            ->map(function ($group) {
+                return collect($group)
+                    ->pluck('project_code')
+                    ->map(fn ($v) => trim((string) $v))
+                    ->filter(fn ($v) => $v !== '')
+                    ->unique()
+                    ->values()
+                    ->all();
+            })
+            ->filter(fn ($codes, $appId) => $appId !== '' && !empty($codes));
+
+        if ($projectCodesByAppId->isEmpty()) {
+            return [];
+        }
+
+        $rows = DB::table(DB::raw('(
+            SELECT
+                app_id,
+                UPPER(COALESCE(country, "")) AS country,
+                SUM(new_user_count) AS fb_new_users,
+                SUM(dau_device_count) AS fb_dau_users
+            FROM (
+                SELECT
+                    app_id,
+                    app_version,
+                    platform,
+                    country,
+                    network_type,
+                    SUM(new_user_count) AS new_user_count,
+                    MAX(dau_device_count) AS dau_device_count
+                FROM firebase_report_user_summary
+                WHERE date = ?
+                GROUP BY app_id, app_version, platform, country, network_type
+            ) t
+            GROUP BY app_id, UPPER(COALESCE(country, ""))
+        ) AS f'))
+            ->setBindings([$date])
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $appId = trim((string) ($row->app_id ?? ''));
+            if ($appId === '' || !$projectCodesByAppId->has($appId)) {
+                continue;
+            }
+
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $fbNewUsers = (int) ($row->fb_new_users ?? 0);
+            $fbDauUsers = (int) ($row->fb_dau_users ?? 0);
+
+            foreach ($projectCodesByAppId->get($appId, []) as $projectCode) {
+                $key = $this->makeDimensionKey($date, $projectCode, $country);
+                $result[$key]['fb_new_users'] = (int) ($result[$key]['fb_new_users'] ?? 0) + $fbNewUsers;
+                $result[$key]['fb_dau_users'] = (int) ($result[$key]['fb_dau_users'] ?? 0) + $fbDauUsers;
+            }
         }
 
         return $result;

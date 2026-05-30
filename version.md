@@ -78,6 +78,24 @@
 - `docs/api/project_api.md`
 - `app/Http/Requests/Admin/ProjectUpdateRequest.php`
 
+## 2026-05-30
+
+### 项目聚合新增 Firebase 用户指标
+- `project_daily_aggregates` 新增 `fb_new_users`、`fb_dau_users` 两列，用于存储 Firebase 新增/日活口径
+- `project:aggregate-daily` 聚合流程新增 `firebase_report_user_summary` 数据源，按 `date + project_code + country` 写入
+- 项目聚合查询接口新增返回字段：`fbNewUsers`、`fbDauUsers`，并支持 `orderBy` 排序
+
+### 影响范围
+- `database/migrations/2026_05_30_120000_add_fb_users_to_project_daily_aggregates.php`
+- `app/Console/Commands/AggregateProjectDailyData.php`
+- `app/Http/Controllers/V3/Admin/ReportController.php`
+- `app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`
+- `docs/api/project_aggregates_api.md`
+
+### 迁移与回滚说明
+- 需要执行迁移：`php artisan migrate`
+- 若需回滚可执行：`php artisan migrate:rollback --step=1`
+
 ### Firebase Analytics 后端设计落地
 
 - 新增 Firebase Analytics 管理端查询接口：Dashboard、VPN、测速、API 错误、事件明细与筛选项（app/Http/Routes/V3/AdminRoute.php）
@@ -976,6 +994,26 @@
   - `app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`
 - 更新路由：`app/Http/Routes/V3/AdminRoute.php`
 - 更新文档：`docs/api/firebase_analytics.md`
+
+### Firebase 报表接口文档拆分
+
+- 新增独立文档：`docs/api/firebase_report_api.md`
+- 收敛 `report/sync`、`report/user-summary/query`、`report/node/query` 三个接口说明
+
+### Firebase 聚合修复：字符集排序规则冲突
+
+- 修复 `AggregateFirebaseReports` 在关联 `firebase_event_common.device_id` 与 `firebase_device_first_seen.device_id` 时出现的 collation 冲突
+- 通过 `LEFT JOIN` 条件显式指定统一 collation（`utf8mb4_unicode_ci`）避免 `Illegal mix of collations` 异常
+- 影响命令：`firebase_report:aggregate`
+
+### Firebase 报表表结构统一字符集
+
+- 新增迁移：`database/migrations/2026_05_30_170500_unify_firebase_report_collation.php`
+- 统一以下表到 `utf8mb4` + `utf8mb4_0900_ai_ci`：
+  - `firebase_device_first_seen`
+  - `firebase_report_user_summary`
+  - `firebase_report_node`
+- 回滚路径已提供（`down()` 还原到 `utf8mb4_unicode_ci`）
 
 ### 影响范围
 
