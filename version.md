@@ -131,6 +131,13 @@
 - `app/Services/ProjectReportService.php`
 - `app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`
 
+### 文档同步
+- 更新小时报表接口文档字段：`hourlyDauUsers/dailyDauUsers` 调整为 `dauUsers`
+
+### 影响范围（文档）
+- `docs/api/project_report_hourly_api.md`
+- `docs/api/application_route_api.md`
+
 ### Firebase Analytics 后端设计落地
 
 - 新增 Firebase Analytics 管理端查询接口：Dashboard、VPN、测速、API 错误、事件明细与筛选项（app/Http/Routes/V3/AdminRoute.php）

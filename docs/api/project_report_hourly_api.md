@@ -21,7 +21,7 @@
 | filters.countries | string[] | 否 | 国家过滤 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 50，最大 200 |
-| orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`hourlyDauUsers`/`dailyDauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
+| orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`dauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
 | orderDirection | string | 否 | `asc` / `desc` |
 
 ---
@@ -44,8 +44,7 @@
 | project_code | varchar(100) | 项目代号 |
 | country | varchar(50) | 国家（空值归一 `XX`） |
 | install_users | int unsigned | 安装数（全生命周期首次上报小时） |
-| hourly_dau_users | int unsigned | 小时活跃用户数（去重用户） |
-| daily_dau_users | int unsigned | 日活跃用户数（同日同项目同国家去重） |
+| dau_users | int unsigned | 小时活跃用户数（去重用户） |
 | ad_revenue | decimal(20,6) | 按小时分配后的广告收益 |
 | ad_spend_cost | decimal(20,6) | 按小时分配后的广告花费 |
 | ros | decimal(20,6) nullable | 收益转化指标（查询接口按实时口径计算返回） |
@@ -67,7 +66,7 @@
 
 1) 小时活跃
 
-- `hourly_dau_users = COUNT(DISTINCT user_id)`
+- `dau_users = COUNT(DISTINCT user_id)`
 - 维度：`date + hour + project_code + country`
 
 2) 日活跃
@@ -82,15 +81,15 @@
 
 4) 收益/花费按小时分配
 
-- `hourly_ratio = hourly_dau_users / daily_dau_users`
+- `hourly_ratio = dau_users / daily_dau_users`
 - `ad_revenue = daily_ad_revenue * hourly_ratio`
 - `ad_spend_cost = daily_ad_spend_cost * hourly_ratio`
 - 若 `daily_dau_users = 0`，则 `hourly_ratio = 0`
 
 5) ROS
 
-- `ros = (ad_revenue * (install_users / hourly_dau_users)) / ad_spend_cost`
-- 若 `hourly_dau_users = 0` 或 `ad_spend_cost = 0`，则 `ros = null`
+- `ros = (ad_revenue * (install_users / dau_users)) / ad_spend_cost`
+- 若 `dau_users = 0` 或 `ad_spend_cost = 0`，则 `ros = null`
 - 查询接口返回的 `ros` 以实时计算结果为准，不依赖表内已存储值
 
 ---

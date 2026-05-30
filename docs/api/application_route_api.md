@@ -44,7 +44,7 @@
 | filters.countries | string[] | 否 | 国家过滤 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 50，最大 200 |
-| orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`hourlyDauUsers`/`dailyDauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
+| orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`dauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
 | orderDirection | string | 否 | `asc` / `desc` |
 
 ---
@@ -67,8 +67,7 @@
 | project_code | varchar(100) | 项目代号 |
 | country | varchar(50) | 国家（空值归一 `XX`） |
 | install_users | int unsigned | 安装数（全生命周期首次上报小时） |
-| hourly_dau_users | int unsigned | 小时活跃用户数（去重用户） |
-| daily_dau_users | int unsigned | 日活跃用户数（同日同项目同国家去重） |
+| dau_users | int unsigned | 小时活跃用户数（去重用户） |
 | ad_revenue | decimal(20,6) | 按小时分配后的广告收益 |
 | ad_spend_cost | decimal(20,6) | 按小时分配后的广告花费 |
 | ros | decimal(20,6) nullable | 收益转化指标 |
