@@ -896,3 +896,98 @@
 ### 迁移/回滚说明
 
 - 无需数据库迁移。
+## 2026-05-29
+
+### 新增 ApplicationRoute（应用鉴权访问部分 Admin 接口）
+
+- 新增应用鉴权中间件：`app/Http/Middleware/AppAuth.php`
+  - 支持通过 Header `X-App-Id`、`X-App-Token` 进行鉴权
+  - 兼容参数：`appId/app_id`、`appToken/app_token`
+  - 校验 `v3_app_clients` 中 `app_id + app_token` 且 `is_enabled = true`
+- 注册中间件别名：`app/Http/Kernel.php` 增加 `app` => `AppAuth`
+- 新增 V3 路由文件：`app/Http/Routes/V3/ApplicationRoute.php`
+  - 路由组使用 `secure_path` 前缀
+  - 中间件为 `app` + `log`
+  - 开放只读接口：
+    - `GET /api/v3/{securePath}/app-client/fetch`
+    - `GET /api/v3/{securePath}/app-client/detail`
+- 调整 Admin 路由：`app/Http/Routes/V3/AdminRoute.php`
+  - 保留 `app-client` 全量接口在 admin 鉴权链路（含 `fetch`、`detail`）
+  - 同时新增应用路由用于应用鉴权访问只读能力
+
+### 文档
+
+- 新增 `docs/api/application_route_api.md`，补充应用路由与鉴权说明
+
+### 影响范围
+
+- `app/Http/Middleware/AppAuth.php`
+- `app/Http/Kernel.php`
+- `app/Http/Routes/V3/ApplicationRoute.php`
+- `app/Http/Routes/V3/AdminRoute.php`
+- `docs/api/application_route_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 无需回滚
+## 2026-05-29
+
+### Firebase 事件聚合统计入库（5 分钟滚动 3 天）
+
+- 新增迁移：`database/migrations/2026_05_29_180000_create_firebase_report_tables.php`
+  - 新建 `firebase_device_first_seen`（设备首见表）
+  - 新建 `firebase_report_user_summary`（小时维度用户统计）
+  - 新建 `firebase_report_node`（小时维度节点统计）
+- 新增命令：`app/Console/Commands/AggregateFirebaseReports.php`
+  - 命令：`php artisan firebase_report:aggregate --hours=72`
+  - 基于 `event_time_ms` 聚合最近窗口数据
+  - `new_user_count` 按 `device_id` 首次出现定义
+  - 支持 `--rebuild-first-seen` 全量重建首见表
+- 新增调度：`app/Console/Kernel.php`
+  - 每 5 分钟执行 `firebase_report:aggregate --hours=72`
+- 更新命令文档：`docs/command_help.md`
+
+### 影响范围
+
+- `database/migrations/2026_05_29_180000_create_firebase_report_tables.php`
+- `app/Console/Commands/AggregateFirebaseReports.php`
+- `app/Console/Kernel.php`
+- `docs/command_help.md`
+
+### 迁移说明
+
+- 需要执行 `php artisan migrate`
+- 首次上线建议手动执行一次：`php artisan firebase_report:aggregate --hours=72 --rebuild-first-seen`
+## 2026-05-29
+
+### Firebase 聚合命令支持日期范围 + 管理端查询接口
+
+- 扩展命令 `firebase_report:aggregate`：
+  - 新增参数 `--date-from=YYYY-MM-DD`、`--date-to=YYYY-MM-DD`
+  - 支持按指定日期范围重算 Firebase 聚合结果
+- 新增管理端控制器：`app/Http/Controllers/V3/Admin/Firebase/FirebaseReportController.php`
+  - `POST /api/v3/admin/{securePath}/firebase-analytics/report/sync`（日期范围触发同步）
+  - `POST /api/v3/admin/{securePath}/firebase-analytics/report/user-summary/query`（查询 `firebase_report_user_summary`）
+  - `POST /api/v3/admin/{securePath}/firebase-analytics/report/node/query`（查询 `firebase_report_node`）
+- 新增请求校验：
+  - `app/Http/Requests/Admin/FirebaseReportSyncRequest.php`
+  - `app/Http/Requests/Admin/FirebaseReportUserSummaryQueryRequest.php`
+  - `app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`
+- 更新路由：`app/Http/Routes/V3/AdminRoute.php`
+- 更新文档：`docs/api/firebase_analytics.md`
+
+### 影响范围
+
+- `app/Console/Commands/AggregateFirebaseReports.php`
+- `app/Http/Controllers/V3/Admin/Firebase/FirebaseReportController.php`
+- `app/Http/Requests/Admin/FirebaseReportSyncRequest.php`
+- `app/Http/Requests/Admin/FirebaseReportUserSummaryQueryRequest.php`
+- `app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`
+- `app/Http/Routes/V3/AdminRoute.php`
+- `docs/api/firebase_analytics.md`
+
+### 迁移说明
+
+- 无新增迁移
+- 无需回滚

@@ -44,6 +44,7 @@ use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsApiErrorController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsEventController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsFilterController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsNodeController;
+use App\Http\Controllers\V3\Admin\Firebase\FirebaseReportController;
 use Illuminate\Contracts\Routing\Registrar;
 
 
@@ -399,6 +400,11 @@ class AdminRoute
                 $router->get('/events/{event_id}', [FirebaseAnalyticsEventController::class, 'detail']);
 
                 $router->get('/filters/options', [FirebaseAnalyticsFilterController::class, 'options']);
+
+                // Firebase Aggregate Reports
+                $router->post('/report/sync', [FirebaseReportController::class, 'sync']);
+                $router->post('/report/user-summary/query', [FirebaseReportController::class, 'queryUserSummary']);
+                $router->post('/report/node/query', [FirebaseReportController::class, 'queryNode']);
             });
 
             // Sync Servers

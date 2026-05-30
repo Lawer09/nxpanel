@@ -72,6 +72,7 @@ class Kernel extends HttpKernel
         'user' => \App\Http\Middleware\User::class,
         'admin' => \App\Http\Middleware\Admin::class,
         'client' => \App\Http\Middleware\Client::class,
+        'app' => \App\Http\Middleware\AppAuth::class,
         'staff' => \App\Http\Middleware\Staff::class,
         'log' => \App\Http\Middleware\RequestLog::class,
         'duration' => \App\Http\Middleware\RequestDuration::class,

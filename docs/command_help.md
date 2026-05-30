@@ -194,6 +194,34 @@ php artisan report_hourly:rebuild 2026-05-09 --keep-existing
 | `report_hourly:aggregate` | 每 5 分钟 | 小时表实时聚合 |
 | `user_report:aggregate` | 每 5 分钟 | 用户上报实时聚合 |
 | `node_server_report:dispatch` | 每 5 分钟 | 节点上报实时派发 |
+| `firebase_report:aggregate --hours=72` | 每 5 分钟 | Firebase 事件滚动 3 天聚合 |
+
+---
+
+## 4.1 Firebase 统计命令
+
+### firebase_report:aggregate
+
+基于 `firebase_event_common` 与 `firebase_event_vpn_session` 聚合写入：
+
+- `firebase_device_first_seen`
+- `firebase_report_user_summary`
+- `firebase_report_node`
+
+```bash
+# 默认重算最近72小时
+php artisan firebase_report:aggregate
+
+# 指定滚动窗口
+php artisan firebase_report:aggregate --hours=24
+
+# 首次全量重建 device 首见表
+php artisan firebase_report:aggregate --hours=72 --rebuild-first-seen
+```
+
+说明：
+- `new_user_count` 口径为「按 device_id 首次出现」
+- 默认每次仅更新窗口内数据，`--rebuild-first-seen` 用于首见表初始化/纠偏
 
 ---
 
