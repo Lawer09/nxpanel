@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Automation\Contracts\AutomationModuleHandler;
 use App\Services\TelegramService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -401,6 +402,7 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
         return match ($type) {
             'telegram_admin' => $this->dispatchTelegramAction($action, $context, $recovery),
             'email' => $this->dispatchEmailAction($action, $context, $recovery),
+            'webhook' => $this->dispatchWebhookAction($action, $rule, $target, $context, $recovery),
             default => [
                 'type' => $type,
                 'ok' => false,
@@ -468,6 +470,90 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             'ok' => true,
             'receiver_count' => count($receivers),
         ];
+    }
+
+    /**
+     * Webhook 通知动作（支持可选签名）。
+     */
+    private function dispatchWebhookAction(
+        array $action,
+        AutomationRule $rule,
+        array $target,
+        array $context,
+        bool $recovery
+    ): array {
+        $webhookUrl = trim((string) ($action['webhookUrl'] ?? ''));
+        if ($webhookUrl === '') {
+            return [
+                'type' => 'webhook',
+                'ok' => false,
+                'message' => 'webhookUrl is required',
+            ];
+        }
+
+        $template = $recovery
+            ? (string) ($action['recoverTemplate'] ?? '[Project Recovery] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}')
+            : (string) ($action['template'] ?? '[Project Alert] {rule_name} | {project_name}({project_code}) | profit={profit} | roi={roi} | ad_ecpm={ad_ecpm}');
+        $message = $this->renderTemplate($template, $context);
+
+        $payload = [
+            'event' => $recovery ? 'recovered' : 'triggered',
+            'module' => self::MODULE_KEY,
+            'ruleId' => (int) $rule->id,
+            'ruleName' => (string) $rule->name,
+            'targetType' => self::TARGET_TYPE,
+            'targetId' => (string) ($target['project_code'] ?? ''),
+            'targetName' => (string) ($target['project_name'] ?? ''),
+            'message' => $message,
+            'metrics' => $context,
+            'executedAt' => now()->toDateTimeString(),
+            // 飞书兼容字段。
+            'msg_type' => 'text',
+            'content' => [
+                'text' => $message,
+            ],
+        ];
+
+        $timeout = max(1, (int) ($action['timeoutSeconds'] ?? 10));
+        $headers = is_array($action['headers'] ?? null) ? $action['headers'] : [];
+        $headers = array_merge(['Content-Type' => 'application/json'], $headers);
+
+        $signing = is_array($action['signing'] ?? null) ? $action['signing'] : [];
+        $signEnabled = (int) ($signing['enabled'] ?? 0) === 1;
+        if ($signEnabled) {
+            $secret = (string) ($signing['secret'] ?? '');
+            if ($secret !== '') {
+                $timestamp = (string) time();
+                $timestampHeader = (string) ($signing['timestampHeader'] ?? 'X-Timestamp');
+                $signatureHeader = (string) ($signing['signatureHeader'] ?? 'X-Signature');
+                $headers[$timestampHeader] = $timestamp;
+                $headers[$signatureHeader] = $this->buildFeishuSignature($timestamp, $secret);
+            }
+        }
+
+        $response = Http::timeout($timeout)
+            ->withHeaders($headers)
+            ->post($webhookUrl, $payload);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('webhook failed: HTTP ' . $response->status() . ' body=' . mb_substr($response->body(), 0, 1000));
+        }
+
+        return [
+            'type' => 'webhook',
+            'ok' => true,
+            'status' => $response->status(),
+            'response' => mb_substr($response->body(), 0, 1000),
+        ];
+    }
+
+    /**
+     * 生成飞书风格签名（可选启用）。
+     */
+    private function buildFeishuSignature(string $timestamp, string $secret): string
+    {
+        $stringToSign = $timestamp . "\n" . $secret;
+        return base64_encode(hash_hmac('sha256', $stringToSign, $secret, true));
     }
 
     /**

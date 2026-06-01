@@ -371,6 +371,31 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化动作新增 webhook 通知（支持可选飞书签名）
+
+- `traffic_platform` 与 `project_aggregate` 模块新增 `webhook` 动作类型
+- 支持配置 `webhookUrl`、`template`、`recoverTemplate`、`headers`、`timeoutSeconds`
+- 支持可选签名配置 `signing`：
+  - `enabled`（1/0）
+  - `secret`
+  - `timestampHeader`（默认 `X-Timestamp`）
+  - `signatureHeader`（默认 `X-Signature`）
+- 当启用签名时，按飞书风格生成签名并附加请求头；未启用时直接发送 webhook
+- webhook 请求体同时包含通用事件字段和飞书兼容字段（`msg_type` / `content.text`）
+- 同步更新自动化 API 文档与开发指南
+
+### 影响范围
+
+- `app/Services/Automation/TrafficPlatformAutomationService.php`
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `docs/api/automation_rules_api.md`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 project_aggregate 模块 ad_ecpm 口径修正
 
 - 将 `project_aggregate` 规则评估中的 `ad_ecpm` 从“聚合后 AVG(ad_ecpm)”调整为“按项目维度实时重算”

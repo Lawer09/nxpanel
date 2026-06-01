@@ -246,11 +246,14 @@ traffic_platform 专有解读：
 - `actions[].type` 可用动作（traffic_platform 专有）：
   - `telegram_admin`
   - `email`
+  - `webhook`
   - `disable_account`
 - `actions[]` 可选扩展字段（该模块当前支持）：
   - `template` / `recoverTemplate`
   - `subject` / `recoverSubject`（`email` 使用）
   - `toAdmin` / `recipients`（`email` 使用）
+  - `webhookUrl` / `headers` / `timeoutSeconds`（`webhook` 使用）
+  - `signing.enabled` / `signing.secret` / `signing.timestampHeader` / `signing.signatureHeader`（`webhook` 可选签名）
 
 Body 示例：
 
@@ -444,6 +447,21 @@ Query 参数：
 
 - `telegram_admin`
 - `email`
+- `webhook`
+
+`webhook` 动作扩展字段：
+
+- `webhookUrl`：Webhook 地址（必填）
+- `template` / `recoverTemplate`：通知内容模板（可选）
+- `headers`：自定义请求头对象（可选）
+- `timeoutSeconds`：请求超时秒数（可选，默认 10）
+- `signing`：签名配置（可选）
+  - `enabled`：`1/0`，默认 `0`
+  - `secret`：签名密钥（你们当前方案可直接传）
+  - `timestampHeader`：时间戳请求头名，默认 `X-Timestamp`
+  - `signatureHeader`：签名请求头名，默认 `X-Signature`
+
+说明：当 `signing.enabled=1` 且有 `secret` 时，会按飞书风格生成签名并追加到请求头。
 
 ### 10.5 创建规则示例（project_aggregate）
 
@@ -461,7 +479,15 @@ Query 参数：
     { "metric": "ad_ecpm", "operator": "lt", "value": 2.5 }
   ],
   "actions": [
-    { "type": "telegram_admin" }
+    {
+      "type": "webhook",
+      "webhookUrl": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxx",
+      "template": "[Project Alert] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}",
+      "signing": {
+        "enabled": 1,
+        "secret": "your-feishu-secret"
+      }
+    }
   ],
   "cooldownSeconds": 3600,
   "recoveryEnabled": 1,

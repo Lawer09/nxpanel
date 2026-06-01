@@ -90,6 +90,13 @@ project_aggregate 模块实现约束：
 - 时间口径：应用当前时区（`now()->toDateString()`）
 - `ad_ecpm` 指标：按项目聚合实时重算（`SUM(ad_revenue)/SUM(ad_impressions)*1000`，保留 6 位小数）
 
+动作扩展（traffic_platform / project_aggregate）：
+
+- 新增 `webhook` 动作类型，支持将告警/恢复事件推送到外部系统（如飞书机器人）
+- 常用字段：`webhookUrl`、`template`、`recoverTemplate`、`headers`、`timeoutSeconds`
+- 可选签名：`signing.enabled=1` 时启用，密钥使用 `signing.secret`
+- 签名头默认：`X-Timestamp`、`X-Signature`（可通过 `signing.timestampHeader` / `signing.signatureHeader` 覆盖）
+
 ## 6. 条件与动作扩展规范
 
 ### 6.1 条件结构
