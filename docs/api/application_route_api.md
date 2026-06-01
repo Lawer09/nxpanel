@@ -73,3 +73,23 @@
 | ros | decimal(20,6) nullable | 收益转化指标 |
 | created_at | timestamp | 创建时间 |
 | updated_at | timestamp | 更新时间 |
+
+---
+
+## Tg Bot
+
+### 1) 消息上报
+
+- 方法/路径：`POST /api/v3/application/tg-bot/say`
+- 鉴权：应用身份（`app` 中间件）
+
+请求参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| receiveAt | int | 是 | 接收时间戳 |
+| content | string | 是 | 消息内容 |
+
+说明：
+
+- 当前接口仅接收参数并返回，不做业务处理。

@@ -402,7 +402,7 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             'target_name' => (string) ($target['project_name'] ?? $target['project_code'] ?? ''),
         ]);
 
-        if ($type === 'telegram_admin' || $type === 'email' || $type === 'webhook') {
+        if ($this->actionDispatcher->supports($type)) {
             $meta = [
                 'event' => $recovery ? 'recovered' : 'triggered',
                 'module' => self::MODULE_KEY,

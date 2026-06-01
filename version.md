@@ -371,6 +371,24 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化通用动作判定优化
+
+- 在 `AutomationActionDispatcher` 新增 `supports($type)` 判定方法
+- `traffic_platform` 与 `project_aggregate` 模块改为调用 `supports()` 判断是否走通用动作分发
+- 避免模块内硬编码动作类型列表，新增通用动作时无需逐模块改条件判断
+
+### 影响范围
+
+- `app/Services/Automation/AutomationActionDispatcher.php`
+- `app/Services/Automation/TrafficPlatformAutomationService.php`
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化通知动作抽离（通用分发器）
 
 - 新增 `AutomationActionDispatcher`，统一承载通知类动作：`telegram_admin`、`email`、`webhook`
@@ -1147,6 +1165,15 @@
   - `GET /api/v3/application/app-client/fetch`
   - `GET /api/v3/application/app-client/detail`
   - `POST /api/v3/application/report/project/query`
+
+### 新增应用侧 TgBot 上报接口
+
+- 新增控制器：`app/Http/Controllers/V3/App/TgBotController.php`
+- 新增服务：`app/Services/App/TgBotService.php`
+- 新增请求校验：`app/Http/Requests/App/TgBotSayRequest.php`
+- 新增路由：`POST /api/v3/application/tg-bot/say`（`app` 鉴权）
+- 接口行为：接收 `receiveAt` 和 `content`，当前不做业务处理，仅返回接收结果
+- 更新文档：`docs/api/application_route_api.md`
 
 ### 影响范围
 

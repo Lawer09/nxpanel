@@ -28,6 +28,7 @@
 - 模块标识：`project_aggregate`
 - `app/Services/Automation/AutomationActionDispatcher.php`
 - 通用动作分发：`telegram_admin` / `email` / `webhook`
+- 支持判定：`supports($type)`，模块通过该方法识别是否走通用动作分发
 
 ### 2.3 执行入口
 

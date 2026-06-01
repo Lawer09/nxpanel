@@ -10,6 +10,14 @@ use Illuminate\Support\Facades\Http;
 class AutomationActionDispatcher
 {
     /**
+     * 判断是否为通用动作。
+     */
+    public function supports(string $type): bool
+    {
+        return in_array($type, ['telegram_admin', 'email', 'webhook'], true);
+    }
+
+    /**
      * 分发通用动作（telegram/email/webhook）。
      */
     public function dispatch(array $action, array $context, array $meta): array

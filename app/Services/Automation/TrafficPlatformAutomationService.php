@@ -477,7 +477,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
                 'status' => $recovery ? 'recovered' : 'alert',
         ]);
 
-        if ($type === 'telegram_admin' || $type === 'email' || $type === 'webhook') {
+        if ($this->actionDispatcher->supports($type)) {
             $meta = [
                 'event' => $recovery ? 'recovered' : 'triggered',
                 'module' => self::MODULE_KEY,

@@ -4,6 +4,7 @@ namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\ReportController;
+use App\Http\Controllers\V3\App\TgBotController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class ApplicationRoute
@@ -23,7 +24,11 @@ class ApplicationRoute
             });
 
             $router->group(['prefix' => 'report'], function ($router) {
-                $router->post('/project/query', [ReportController::class, 'queryProjectReportHourly']);
+                $router->post('/project/query', [ReportController::class, 'queryProjectReport']);
+            });
+
+            $router->group(['prefix' => 'tg-bot'], function ($router) {
+                $router->post('/say', [TgBotController::class, 'say']);
             });
         });
     }
