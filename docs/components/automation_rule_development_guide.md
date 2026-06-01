@@ -26,6 +26,8 @@
 - 模块标识：`traffic_platform`
 - `app/Services/Automation/ProjectAggregateAutomationService.php`
 - 模块标识：`project_aggregate`
+- `app/Services/Automation/AutomationActionDispatcher.php`
+- 通用动作分发：`telegram_admin` / `email` / `webhook`
 
 ### 2.3 执行入口
 
@@ -97,6 +99,11 @@ project_aggregate 模块实现约束：
 - 常用字段：`webhookUrl`、`template`、`recoverTemplate`、`headers`、`timeoutSeconds`
 - 可选签名：`signing.enabled=1` 时启用，密钥使用 `signing.secret`
 - 签名头默认：`X-Timestamp`、`X-Signature`（可通过 `signing.timestampHeader` / `signing.signatureHeader` 覆盖）
+
+实现建议：
+
+- 模块内仅保留“目标解析 + 条件评估 + 状态流转 + 模块特有动作”
+- 通知类动作统一委托 `AutomationActionDispatcher`，避免每个模块重复实现
 
 ## 6. 条件与动作扩展规范
 

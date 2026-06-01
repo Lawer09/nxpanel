@@ -371,6 +371,26 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化通知动作抽离（通用分发器）
+
+- 新增 `AutomationActionDispatcher`，统一承载通知类动作：`telegram_admin`、`email`、`webhook`
+- `traffic_platform` 与 `project_aggregate` 模块改为复用该分发器，移除模块内重复通知实现
+- 模块内部仅保留模块专属动作（如 `disable_account`）
+- `webhook` 可选签名、模板渲染、邮件管理员收件等逻辑统一收敛为单点维护
+- 更新开发文档，明确后续新增模块应复用通用分发器
+
+### 影响范围
+
+- `app/Services/Automation/AutomationActionDispatcher.php`
+- `app/Services/Automation/TrafficPlatformAutomationService.php`
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 project_aggregate 目标范围过滤修复
 
 - 修复 `project_aggregate` 规则 `targetScope.projectCodes` 在创建/更新时被请求校验过滤的问题

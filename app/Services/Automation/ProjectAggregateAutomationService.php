@@ -2,14 +2,10 @@
 
 namespace App\Services\Automation;
 
-use App\Jobs\SendEmailJob;
 use App\Models\AutomationRule;
 use App\Models\AutomationRuleState;
 use App\Models\Project;
-use App\Models\User;
 use App\Services\Automation\Contracts\AutomationModuleHandler;
-use App\Services\TelegramService;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -24,7 +20,8 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
     private const EXEC_STATUS_FAILED = 'failed';
 
     public function __construct(
-        protected AutomationExecutionLogService $executionLogService
+        protected AutomationExecutionLogService $executionLogService,
+        protected AutomationActionDispatcher $actionDispatcher
     ) {}
 
     /**
@@ -405,161 +402,28 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             'target_name' => (string) ($target['project_name'] ?? $target['project_code'] ?? ''),
         ]);
 
-        return match ($type) {
-            'telegram_admin' => $this->dispatchTelegramAction($action, $context, $recovery),
-            'email' => $this->dispatchEmailAction($action, $context, $recovery),
-            'webhook' => $this->dispatchWebhookAction($action, $rule, $target, $context, $recovery),
-            default => [
-                'type' => $type,
-                'ok' => false,
-                'message' => 'unsupported action type',
-            ],
-        };
-    }
-
-    /**
-     * Telegram 通知动作。
-     */
-    private function dispatchTelegramAction(array $action, array $context, bool $recovery): array
-    {
-        $template = $recovery
-            ? (string) ($action['recoverTemplate'] ?? '[Project Recovery] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}')
-            : (string) ($action['template'] ?? '[Project Alert] {rule_name} | {project_name}({project_code}) | profit={profit} | roi={roi} | ad_ecpm={ad_ecpm}');
-
-        $message = $this->renderTemplate($template, $context);
-        (new TelegramService())->sendMessageWithAdmin($message);
-
-        return [
-            'type' => 'telegram_admin',
-            'ok' => true,
-        ];
-    }
-
-    /**
-     * 邮件通知动作。
-     */
-    private function dispatchEmailAction(array $action, array $context, bool $recovery): array
-    {
-        $template = $recovery
-            ? (string) ($action['recoverTemplate'] ?? '[Project Recovery] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}')
-            : (string) ($action['template'] ?? '[Project Alert] {rule_name} | {project_name}({project_code}) | profit={profit} | roi={roi} | ad_ecpm={ad_ecpm}');
-
-        $subjectTemplate = $recovery
-            ? (string) ($action['recoverSubject'] ?? '[Project Aggregate] Recovered - {rule_name}')
-            : (string) ($action['subject'] ?? '[Project Aggregate] Alert - {rule_name}');
-
-        $message = $this->renderTemplate($template, $context);
-        $subject = $this->renderTemplate($subjectTemplate, $context);
-
-        $receivers = array_values(array_filter((array) ($action['recipients'] ?? [])));
-        $toAdmin = !array_key_exists('toAdmin', $action) || (int) $action['toAdmin'] === 1;
-        if ($toAdmin) {
-            $adminEmails = User::query()->where('is_admin', 1)->whereNotNull('email')->pluck('email')->all();
-            $receivers = array_values(array_unique(array_merge($receivers, $adminEmails)));
-        }
-
-        foreach ($receivers as $email) {
-            SendEmailJob::dispatch([
-                'email' => $email,
-                'subject' => $subject,
-                'template_name' => 'notify',
-                'template_value' => [
-                    'name' => admin_setting('app_name', 'NxPanel'),
-                    'content' => $message,
-                    'url' => admin_setting('app_url'),
-                ],
-            ]);
-        }
-
-        return [
-            'type' => 'email',
-            'ok' => true,
-            'receiver_count' => count($receivers),
-        ];
-    }
-
-    /**
-     * Webhook 通知动作（支持可选签名）。
-     */
-    private function dispatchWebhookAction(
-        array $action,
-        AutomationRule $rule,
-        array $target,
-        array $context,
-        bool $recovery
-    ): array {
-        $webhookUrl = trim((string) ($action['webhookUrl'] ?? ''));
-        if ($webhookUrl === '') {
-            return [
-                'type' => 'webhook',
-                'ok' => false,
-                'message' => 'webhookUrl is required',
+        if ($type === 'telegram_admin' || $type === 'email' || $type === 'webhook') {
+            $meta = [
+                'event' => $recovery ? 'recovered' : 'triggered',
+                'module' => self::MODULE_KEY,
+                'moduleLabel' => 'Project Aggregate',
+                'ruleId' => (int) $rule->id,
+                'ruleName' => (string) $rule->name,
+                'targetType' => self::TARGET_TYPE,
+                'targetId' => (string) ($target['project_code'] ?? ''),
+                'targetName' => (string) ($target['project_name'] ?? ''),
+                'defaultAlertTemplate' => '[Project Alert] {rule_name} | {project_name}({project_code}) | profit={profit} | roi={roi} | ad_ecpm={ad_ecpm}',
+                'defaultRecoverTemplate' => '[Project Recovery] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}',
             ];
-        }
 
-        $template = $recovery
-            ? (string) ($action['recoverTemplate'] ?? '[Project Recovery] {rule_name} | {project_name}({project_code}) | ad_ecpm={ad_ecpm}')
-            : (string) ($action['template'] ?? '[Project Alert] {rule_name} | {project_name}({project_code}) | profit={profit} | roi={roi} | ad_ecpm={ad_ecpm}');
-        $message = $this->renderTemplate($template, $context);
-
-        $payload = [
-            'event' => $recovery ? 'recovered' : 'triggered',
-            'module' => self::MODULE_KEY,
-            'ruleId' => (int) $rule->id,
-            'ruleName' => (string) $rule->name,
-            'targetType' => self::TARGET_TYPE,
-            'targetId' => (string) ($target['project_code'] ?? ''),
-            'targetName' => (string) ($target['project_name'] ?? ''),
-            'message' => $message,
-            'metrics' => $context,
-            'executedAt' => now()->toDateTimeString(),
-            // 飞书兼容字段。
-            'msg_type' => 'text',
-            'content' => [
-                'text' => $message,
-            ],
-        ];
-
-        $timeout = max(1, (int) ($action['timeoutSeconds'] ?? 10));
-        $headers = is_array($action['headers'] ?? null) ? $action['headers'] : [];
-        $headers = array_merge(['Content-Type' => 'application/json'], $headers);
-
-        $signing = is_array($action['signing'] ?? null) ? $action['signing'] : [];
-        $signEnabled = (int) ($signing['enabled'] ?? 0) === 1;
-        if ($signEnabled) {
-            $secret = (string) ($signing['secret'] ?? '');
-            if ($secret !== '') {
-                $timestamp = (string) time();
-                $timestampHeader = (string) ($signing['timestampHeader'] ?? 'X-Timestamp');
-                $signatureHeader = (string) ($signing['signatureHeader'] ?? 'X-Signature');
-                $headers[$timestampHeader] = $timestamp;
-                $headers[$signatureHeader] = $this->buildFeishuSignature($timestamp, $secret);
-            }
-        }
-
-        $response = Http::timeout($timeout)
-            ->withHeaders($headers)
-            ->post($webhookUrl, $payload);
-
-        if (!$response->successful()) {
-            throw new \RuntimeException('webhook failed: HTTP ' . $response->status() . ' body=' . mb_substr($response->body(), 0, 1000));
+            return $this->actionDispatcher->dispatch($action, $context, $meta);
         }
 
         return [
-            'type' => 'webhook',
-            'ok' => true,
-            'status' => $response->status(),
-            'response' => mb_substr($response->body(), 0, 1000),
+            'type' => $type,
+            'ok' => false,
+            'message' => 'unsupported action type',
         ];
-    }
-
-    /**
-     * 生成飞书风格签名（可选启用）。
-     */
-    private function buildFeishuSignature(string $timestamp, string $secret): string
-    {
-        $stringToSign = $timestamp . "\n" . $secret;
-        return base64_encode(hash_hmac('sha256', $stringToSign, $secret, true));
     }
 
     /**
@@ -595,17 +459,5 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
         ];
 
         $this->executionLogService->appendExecution(self::MODULE_KEY, $record);
-    }
-
-    /**
-     * 模板渲染，替换 {placeholder}。
-     */
-    private function renderTemplate(string $template, array $context): string
-    {
-        return (string) preg_replace_callback('/\{([a-zA-Z0-9_]+)\}/', function ($matches) use ($context) {
-            $key = $matches[1] ?? '';
-            $value = $context[$key] ?? '';
-            return is_scalar($value) || $value === null ? (string) $value : json_encode($value);
-        }, $template);
     }
 }
