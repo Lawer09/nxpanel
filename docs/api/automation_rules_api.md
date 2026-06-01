@@ -24,7 +24,7 @@ Query 参数：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| module | string | 是 | 模块标识，支持 `traffic_platform` 或 `traffic-platform` |
+| module | string | 是 | 模块标识，支持 `traffic_platform` / `traffic-platform` / `project_aggregate` / `project-aggregate` |
 
 示例响应：
 
@@ -403,3 +403,68 @@ Query 参数：
 
 - `targetType` 固定为 `traffic_platform_account`
 - `metricsSnapshot` 主要包含：`balanceMb`、`usage1hMb`、`usage6hMb`、`avgHourlyUsageMb`、`etaHours`、`lastSyncMinutes`、`enabled` 等字段
+
+`module=project_aggregate` 时：
+
+- `targetType` 固定为 `project_daily_aggregate`
+- `targetId` 为 `projectCode`
+- `metricsSnapshot` 主要包含：`projectCode`、`projectName`、`newUsers`、`reportNewUsers`、`fbNewUsers`、`dauUsers`、`fbDauUsers`、`adRevenue`、`adSpendCost`、`trafficCost`、`profit`、`roi`、`adSpendCpi`、`adEcpm`
+
+## 10. `module=project_aggregate` 专有说明
+
+### 10.1 适用范围
+
+- 按当天项目维度（不区分国家）对 `project_daily_aggregates` 做聚合评估
+- 日期使用应用当前时区（`now()->toDateString()`）
+
+### 10.2 targetScope 专有字段
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCodes | string[] | 否 | 指定项目编码范围；不传表示全项目 |
+
+### 10.3 conditions[].metric 可用指标
+
+- `new_users`
+- `report_new_users`
+- `fb_new_users`
+- `dau_users`
+- `fb_dau_users`
+- `ad_revenue`
+- `ad_spend_cost`
+- `traffic_cost`
+- `profit`
+- `roi`
+- `ad_spend_cpi`
+- `ad_ecpm`
+
+说明：`ad_ecpm` 直接使用数据库字段值（按当天项目维度聚合后取 AVG），不在规则执行阶段二次计算。
+
+### 10.4 actions[].type 可用动作
+
+- `telegram_admin`
+- `email`
+
+### 10.5 创建规则示例（project_aggregate）
+
+```json
+{
+  "module": "project_aggregate",
+  "name": "项目当日 eCPM 过低告警",
+  "description": "当天项目聚合 eCPM 低于阈值时告警",
+  "targetType": "project_daily_aggregate",
+  "targetScope": {
+    "projectCodes": ["A003", "A005"]
+  },
+  "conditionLogic": "all",
+  "conditions": [
+    { "metric": "ad_ecpm", "operator": "lt", "value": 2.5 }
+  ],
+  "actions": [
+    { "type": "telegram_admin" }
+  ],
+  "cooldownSeconds": 3600,
+  "recoveryEnabled": 1,
+  "enabled": 1
+}
+```

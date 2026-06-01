@@ -343,6 +343,34 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码变更生效
 
+### 自动化新增项目聚合告警模块（project_aggregate）
+
+- 新增 `project_aggregate` 自动化模块处理器：`ProjectAggregateAutomationService`
+- 规则评估基于 `project_daily_aggregates` 当天项目维度聚合（不区分国家）
+- 评估日期使用应用当前时区（`now()->toDateString()`）
+- 支持项目范围筛选 `targetScope.projectCodes`
+- 支持项目聚合指标条件：
+  - `new_users` / `report_new_users` / `fb_new_users`
+  - `dau_users` / `fb_dau_users`
+  - `ad_revenue` / `ad_spend_cost` / `traffic_cost` / `profit` / `roi` / `ad_spend_cpi` / `ad_ecpm`
+- `ad_ecpm` 按要求直接使用数据库字段聚合值（AVG），不在执行阶段二次计算
+- 动作复用 `telegram_admin` / `email`
+- 调度新增：`automation:run project_aggregate`（每 5 分钟）
+- 更新自动化 API 与开发说明文档，补充 `project_aggregate` 专有结构和示例
+
+### 影响范围
+
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `app/Providers/AutomationServiceProvider.php`
+- `app/Console/Kernel.php`
+- `docs/api/automation_rules_api.md`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 run 返回增加实际命中规则/目标明细
 
 - `automation-rules/run` 返回新增 `ruleIds`、`targetIds` 字段

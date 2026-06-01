@@ -24,6 +24,8 @@
 
 - `app/Services/Automation/TrafficPlatformAutomationService.php`
 - 模块标识：`traffic_platform`
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- 模块标识：`project_aggregate`
 
 ### 2.3 执行入口
 
@@ -80,6 +82,13 @@
 4. `supportedModels()` 返回前端可选 model 标识列表。
 5. `run(array $params)` 完成目标筛选、指标采集、条件评估、动作分发。
 6. 在 `AutomationServiceProvider` 注册该处理器。
+
+project_aggregate 模块实现约束：
+
+- 数据来源：`project_daily_aggregates`
+- 评估粒度：当天 `projectCode` 维度（不区分国家）
+- 时间口径：应用当前时区（`now()->toDateString()`）
+- `ad_ecpm` 指标：直接使用数据库字段聚合值，不在规则执行阶段重算
 
 ## 6. 条件与动作扩展规范
 
