@@ -252,7 +252,7 @@ traffic_platform 专有解读：
   - `template` / `recoverTemplate`
   - `subject` / `recoverSubject`（`email` 使用）
   - `toAdmin` / `recipients`（`email` 使用）
-  - `webhookUrl` / `headers` / `timeoutSeconds`（`webhook` 使用）
+  - `webhookUrl` / `method` / `headers` / `timeoutSeconds`（`webhook` 使用）
   - `signing.enabled` / `signing.secret` / `signing.timestampHeader` / `signing.signatureHeader`（`webhook` 可选签名）
 
 Body 示例：
@@ -457,6 +457,7 @@ Query 参数：
 `webhook` 动作扩展字段：
 
 - `webhookUrl`：Webhook 地址（必填）
+- `method`：请求方法（可选，支持 `POST`/`PUT`/`PATCH`，默认 `POST`）
 - `template` / `recoverTemplate`：通知内容模板（可选）
 - `headers`：自定义请求头对象（可选）
 - `timeoutSeconds`：请求超时秒数（可选，默认 10）

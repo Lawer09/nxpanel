@@ -371,6 +371,32 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化 webhook 动作参数持久化修复
+
+- 修复自动化规则创建/更新时 `actions` 下 webhook 扩展参数被过滤的问题
+- `AutomationRuleStoreRequest` 与 `AutomationRuleUpdateRequest` 新增 webhook 参数白名单：
+  - `webhookUrl`
+  - `method`
+  - `headers`
+  - `timeoutSeconds`
+  - `signing.enabled`
+  - `signing.secret`
+  - `signing.timestampHeader`
+  - `signing.signatureHeader`
+- 修复后，规则详情/列表可正确回显上述字段，不再仅保留 `type` / `template`
+- 同步更新自动化 API 文档 webhook 字段说明
+
+### 影响范围
+
+- `app/Http/Requests/Admin/AutomationRuleStoreRequest.php`
+- `app/Http/Requests/Admin/AutomationRuleUpdateRequest.php`
+- `docs/api/automation_rules_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 project_aggregate 新增匹配率条件字段
 
 - `project_aggregate` 模块新增可用条件指标：`ad_match_rate`
