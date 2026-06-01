@@ -371,6 +371,25 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化 project_aggregate 新增匹配率条件字段
+
+- `project_aggregate` 模块新增可用条件指标：`ad_match_rate`
+- 规则评估时新增聚合基础字段：`ad_requests`、`ad_matched_requests`
+- `ad_match_rate` 口径：`SUM(ad_matched_requests) / SUM(ad_requests) * 100`（百分比值，保留 6 位小数）
+- 规则指标快照新增字段：`adRequests`、`adMatchedRequests`、`adMatchRate`
+- 同步更新自动化 API 文档与开发指南
+
+### 影响范围
+
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `docs/api/automation_rules_api.md`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化动作新增 webhook 通知（支持可选飞书签名）
 
 - `traffic_platform` 与 `project_aggregate` 模块新增 `webhook` 动作类型

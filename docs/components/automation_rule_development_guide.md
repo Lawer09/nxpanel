@@ -89,6 +89,7 @@ project_aggregate 模块实现约束：
 - 评估粒度：当天 `projectCode` 维度（不区分国家）
 - 时间口径：应用当前时区（`now()->toDateString()`）
 - `ad_ecpm` 指标：按项目聚合实时重算（`SUM(ad_revenue)/SUM(ad_impressions)*1000`，保留 6 位小数）
+- `ad_match_rate` 指标：按项目聚合实时重算（`SUM(ad_matched_requests)/SUM(ad_requests)*100`，百分比值，保留 6 位小数）
 
 动作扩展（traffic_platform / project_aggregate）：
 

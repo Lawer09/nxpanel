@@ -231,12 +231,15 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             ->selectRaw('SUM(dau_users) as dau_users')
             ->selectRaw('SUM(fb_dau_users) as fb_dau_users')
             ->selectRaw('SUM(ad_revenue) as ad_revenue')
+            ->selectRaw('SUM(ad_requests) as ad_requests')
+            ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
             ->selectRaw('SUM(ad_impressions) as ad_impressions')
             ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
             ->selectRaw('SUM(traffic_cost) as traffic_cost')
             ->selectRaw('SUM(profit) as profit')
             ->selectRaw('AVG(roi) as roi')
             ->selectRaw('AVG(ad_spend_cpi) as ad_spend_cpi')
+            ->selectRaw('CASE WHEN SUM(ad_requests)=0 THEN NULL ELSE ROUND(SUM(ad_matched_requests)/SUM(ad_requests)*100,6) END as ad_match_rate')
             ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/SUM(ad_impressions)*1000,6) END as ad_ecpm')
             ->whereDate('report_date', $today)
             ->groupBy('project_code')
@@ -279,11 +282,14 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             'dau_users' => (int) ($target['dau_users'] ?? 0),
             'fb_dau_users' => (int) ($target['fb_dau_users'] ?? 0),
             'ad_revenue' => (float) ($target['ad_revenue'] ?? 0),
+            'ad_requests' => (int) ($target['ad_requests'] ?? 0),
+            'ad_matched_requests' => (int) ($target['ad_matched_requests'] ?? 0),
             'ad_spend_cost' => (float) ($target['ad_spend_cost'] ?? 0),
             'traffic_cost' => (float) ($target['traffic_cost'] ?? 0),
             'profit' => (float) ($target['profit'] ?? 0),
             'roi' => $target['roi'] !== null ? (float) $target['roi'] : null,
             'ad_spend_cpi' => $target['ad_spend_cpi'] !== null ? (float) $target['ad_spend_cpi'] : null,
+            'ad_match_rate' => $target['ad_match_rate'] !== null ? (float) $target['ad_match_rate'] : null,
             // 按项目聚合口径重算 ad_ecpm：SUM(ad_revenue)/SUM(ad_impressions)*1000。
             'ad_ecpm' => $target['ad_ecpm'] !== null ? (float) $target['ad_ecpm'] : null,
         ];

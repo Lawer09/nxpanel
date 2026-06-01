@@ -411,7 +411,7 @@ Query 参数：
 
 - `targetType` 固定为 `project_daily_aggregate`
 - `targetId` 为 `projectCode`
-- `metricsSnapshot` 主要包含：`projectCode`、`projectName`、`newUsers`、`reportNewUsers`、`fbNewUsers`、`dauUsers`、`fbDauUsers`、`adRevenue`、`adSpendCost`、`trafficCost`、`profit`、`roi`、`adSpendCpi`、`adEcpm`
+- `metricsSnapshot` 主要包含：`projectCode`、`projectName`、`newUsers`、`reportNewUsers`、`fbNewUsers`、`dauUsers`、`fbDauUsers`、`adRevenue`、`adRequests`、`adMatchedRequests`、`adMatchRate`、`adSpendCost`、`trafficCost`、`profit`、`roi`、`adSpendCpi`、`adEcpm`
 
 ## 10. `module=project_aggregate` 专有说明
 
@@ -434,6 +434,9 @@ Query 参数：
 - `dau_users`
 - `fb_dau_users`
 - `ad_revenue`
+- `ad_requests`
+- `ad_matched_requests`
+- `ad_match_rate`
 - `ad_spend_cost`
 - `traffic_cost`
 - `profit`
@@ -442,6 +445,8 @@ Query 参数：
 - `ad_ecpm`
 
 说明：`ad_ecpm` 按当天项目维度聚合实时重算，公式为 `SUM(ad_revenue)/SUM(ad_impressions)*1000`（保留 6 位小数）。
+
+说明：`ad_match_rate` 按当天项目维度聚合实时重算，公式为 `SUM(ad_matched_requests)/SUM(ad_requests)*100`（百分比值，保留 6 位小数）。
 
 ### 10.4 actions[].type 可用动作
 
