@@ -230,12 +230,13 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             ->selectRaw('SUM(dau_users) as dau_users')
             ->selectRaw('SUM(fb_dau_users) as fb_dau_users')
             ->selectRaw('SUM(ad_revenue) as ad_revenue')
+            ->selectRaw('SUM(ad_impressions) as ad_impressions')
             ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
             ->selectRaw('SUM(traffic_cost) as traffic_cost')
             ->selectRaw('SUM(profit) as profit')
             ->selectRaw('AVG(roi) as roi')
             ->selectRaw('AVG(ad_spend_cpi) as ad_spend_cpi')
-            ->selectRaw('AVG(ad_ecpm) as ad_ecpm')
+            ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/SUM(ad_impressions)*1000,6) END as ad_ecpm')
             ->whereDate('report_date', $today)
             ->groupBy('project_code')
             ->orderBy('project_code');
@@ -282,7 +283,7 @@ class ProjectAggregateAutomationService implements AutomationModuleHandler
             'profit' => (float) ($target['profit'] ?? 0),
             'roi' => $target['roi'] !== null ? (float) $target['roi'] : null,
             'ad_spend_cpi' => $target['ad_spend_cpi'] !== null ? (float) $target['ad_spend_cpi'] : null,
-            // 按要求：直接使用数据库 ad_ecpm 字段（聚合后为 AVG(ad_ecpm)），不再按收入/展示重算。
+            // 按项目聚合口径重算 ad_ecpm：SUM(ad_revenue)/SUM(ad_impressions)*1000。
             'ad_ecpm' => $target['ad_ecpm'] !== null ? (float) $target['ad_ecpm'] : null,
         ];
     }

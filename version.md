@@ -371,6 +371,24 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化 project_aggregate 模块 ad_ecpm 口径修正
+
+- 将 `project_aggregate` 规则评估中的 `ad_ecpm` 从“聚合后 AVG(ad_ecpm)”调整为“按项目维度实时重算”
+- 新公式：`SUM(ad_revenue) / SUM(ad_impressions) * 1000`（保留 6 位小数）
+- 与报表分组查询口径保持一致，避免平均值口径偏差
+- 同步更新自动化 API 文档与开发指南中的 `ad_ecpm` 说明
+
+### 影响范围
+
+- `app/Services/Automation/ProjectAggregateAutomationService.php`
+- `docs/api/automation_rules_api.md`
+- `docs/components/automation_rule_development_guide.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 run 返回增加实际命中规则/目标明细
 
 - `automation-rules/run` 返回新增 `ruleIds`、`targetIds` 字段

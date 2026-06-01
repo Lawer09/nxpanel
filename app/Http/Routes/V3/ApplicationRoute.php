@@ -23,7 +23,7 @@ class ApplicationRoute
             });
 
             $router->group(['prefix' => 'report'], function ($router) {
-                $router->post('/project/query', [ReportController::class, 'queryProjectReport']);
+                $router->post('/project/query', [ReportController::class, 'queryProjectReportHourly']);
             });
         });
     }

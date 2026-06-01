@@ -438,7 +438,7 @@ Query 参数：
 - `ad_spend_cpi`
 - `ad_ecpm`
 
-说明：`ad_ecpm` 直接使用数据库字段值（按当天项目维度聚合后取 AVG），不在规则执行阶段二次计算。
+说明：`ad_ecpm` 按当天项目维度聚合实时重算，公式为 `SUM(ad_revenue)/SUM(ad_impressions)*1000`（保留 6 位小数）。
 
 ### 10.4 actions[].type 可用动作
 
