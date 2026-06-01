@@ -371,6 +371,24 @@
 - 无需数据库迁移
 - 需要重启应用进程（如 Octane/Horizon）使代码生效
 
+### 自动化 project_aggregate 目标范围过滤修复
+
+- 修复 `project_aggregate` 规则 `targetScope.projectCodes` 在创建/更新时被请求校验过滤的问题
+- `AutomationRuleStoreRequest` 与 `AutomationRuleUpdateRequest` 新增 `targetScope.projectCodes`、`targetScope.projectCodes.*` 校验
+- 修复后当规则配置 `projectCodes=["A002"]` 时，仅会评估该项目，不再错误扫描全项目
+- 同步更新自动化 API 文档中的 `projectCodes` 持久化说明
+
+### 影响范围
+
+- `app/Http/Requests/Admin/AutomationRuleStoreRequest.php`
+- `app/Http/Requests/Admin/AutomationRuleUpdateRequest.php`
+- `docs/api/automation_rules_api.md`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 需要重启应用进程（如 Octane/Horizon）使代码生效
+
 ### 自动化 webhook 动作参数持久化修复
 
 - 修复自动化规则创建/更新时 `actions` 下 webhook 扩展参数被过滤的问题

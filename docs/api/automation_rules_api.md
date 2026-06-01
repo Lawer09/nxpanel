@@ -426,6 +426,8 @@ Query 参数：
 | --- | --- | --- | --- |
 | projectCodes | string[] | 否 | 指定项目编码范围；不传表示全项目 |
 
+说明：创建/更新规则时，`targetScope.projectCodes` 会按白名单校验并持久化，用于实际执行范围过滤。
+
 ### 10.3 conditions[].metric 可用指标
 
 - `new_users`

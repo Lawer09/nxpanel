@@ -24,6 +24,8 @@ class AutomationRuleUpdateRequest extends FormRequest
             'targetScope.targetIds.*' => 'string|max:64',
             'targetScope.accountIds' => 'nullable|array',
             'targetScope.accountIds.*' => 'integer|min:1',
+            'targetScope.projectCodes' => 'nullable|array',
+            'targetScope.projectCodes.*' => 'string|max:64',
             'targetScope.platformCodes' => 'nullable|array',
             'targetScope.platformCodes.*' => 'string|max:50',
             'targetScope.includeDisabled' => 'nullable|integer|in:0,1',
