@@ -3,12 +3,23 @@
 namespace App\Services\Automation;
 
 use App\Jobs\SendEmailJob;
+use App\Jobs\SendWebhookJob;
 use App\Models\User;
 use App\Services\TelegramService;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis;
 
 class AutomationActionDispatcher
 {
+    /**
+     * Webhook 缓冲区 Redis Key 前缀。
+     */
+    private const WEBHOOK_BUFFER_PREFIX = 'automation:webhook:buffer:';
+
+    /**
+     * 合并窗口：30 秒内同一 webhookUrl 的 payload 合并为一次发送。
+     */
+    private const WEBHOOK_MERGE_DELAY_SECONDS = 30;
+
     /**
      * 判断是否为通用动作。
      */
@@ -26,18 +37,18 @@ class AutomationActionDispatcher
 
         return match ($type) {
             'telegram_admin' => $this->dispatchTelegramAction($action, $context, $meta),
-            'email' => $this->dispatchEmailAction($action, $context, $meta),
-            'webhook' => $this->dispatchWebhookAction($action, $context, $meta),
-            default => [
-                'type' => $type,
-                'ok' => false,
+            'email'          => $this->dispatchEmailAction($action, $context, $meta),
+            'webhook'        => $this->dispatchWebhookAction($action, $context, $meta),
+            default          => [
+                'type'    => $type,
+                'ok'      => false,
                 'message' => 'unsupported action type',
             ],
         };
     }
 
     /**
-     * Telegram 通知动作。
+     * Telegram 通知动作（同步）。
      */
     private function dispatchTelegramAction(array $action, array $context, array $meta): array
     {
@@ -46,12 +57,12 @@ class AutomationActionDispatcher
 
         return [
             'type' => 'telegram_admin',
-            'ok' => true,
+            'ok'   => true,
         ];
     }
 
     /**
-     * 邮件通知动作。
+     * 邮件通知动作（异步，通过 SendEmailJob 队列）。
      */
     private function dispatchEmailAction(array $action, array $context, array $meta): array
     {
@@ -70,94 +81,93 @@ class AutomationActionDispatcher
 
         foreach ($receivers as $email) {
             SendEmailJob::dispatch([
-                'email' => $email,
-                'subject' => $subject,
-                'template_name' => 'notify',
+                'email'          => $email,
+                'subject'        => $subject,
+                'template_name'  => 'notify',
                 'template_value' => [
-                    'name' => admin_setting('app_name', 'NxPanel'),
+                    'name'    => admin_setting('app_name', 'NxPanel'),
                     'content' => $message,
-                    'url' => admin_setting('app_url'),
+                    'url'     => admin_setting('app_url'),
                 ],
             ]);
         }
 
         return [
-            'type' => 'email',
-            'ok' => true,
+            'type'           => 'email',
+            'ok'             => true,
             'receiver_count' => count($receivers),
         ];
     }
 
     /**
-     * Webhook 通知动作（支持可选签名）。
+     * Webhook 通知动作（异步，通过 SendWebhookJob + Redis 缓冲合并）。
+     *
+     * 设计：
+     *   1. 将当前 payload RPUSH 到 Redis 缓冲区（Key 按 webhookUrl hash 区分）。
+     *   2. 用 SET NX + EX 做"只投递一次 Job"的守卫：
+     *      - 若 Key 不存在（第一条进来）→ 设置守卫 Key，dispatch SendWebhookJob（delay 30s）。
+     *      - 若 Key 已存在（30s 窗口内的后续条）→ 只追加缓冲区，不重复投递 Job。
+     *   3. SendWebhookJob 执行时，LRANGE + DEL 原子取出全部 payload，合并后一次性发送。
      */
     private function dispatchWebhookAction(array $action, array $context, array $meta): array
     {
         $webhookUrl = trim((string) ($action['webhookUrl'] ?? ''));
         if ($webhookUrl === '') {
             return [
-                'type' => 'webhook',
-                'ok' => false,
+                'type'    => 'webhook',
+                'ok'      => false,
                 'message' => 'webhookUrl is required',
             ];
         }
 
         $message = $this->buildMessage($action, $context, $meta);
         $payload = [
-            'event' => (string) ($meta['event'] ?? 'triggered'),
-            'module' => (string) ($meta['module'] ?? ''),
-            'ruleId' => (int) ($meta['ruleId'] ?? 0),
-            'ruleName' => (string) ($meta['ruleName'] ?? ''),
+            'event'      => (string) ($meta['event'] ?? 'triggered'),
+            'module'     => (string) ($meta['module'] ?? ''),
+            'ruleId'     => (int) ($meta['ruleId'] ?? 0),
+            'ruleName'   => (string) ($meta['ruleName'] ?? ''),
             'targetType' => (string) ($meta['targetType'] ?? ''),
-            'targetId' => (string) ($meta['targetId'] ?? ''),
+            'targetId'   => (string) ($meta['targetId'] ?? ''),
             'targetName' => (string) ($meta['targetName'] ?? ''),
-            'message' => $message,
-            'metrics' => $context,
+            'message'    => $message,
             'executedAt' => now()->toDateTimeString(),
-            'msg_type' => 'text',
-            'content' => [
-                'text' => $message,
-            ],
         ];
 
-        $timeout = max(1, (int) ($action['timeoutSeconds'] ?? 10));
-        $headers = is_array($action['headers'] ?? null) ? $action['headers'] : [];
-        $headers = array_merge(['Content-Type' => 'application/json'], $headers);
+        // Redis Key：缓冲区列表 + 守卫 Key（用于 NX 去重投递）。
+        $urlHash   = substr(md5($webhookUrl), 0, 16);
+        $bufferKey = self::WEBHOOK_BUFFER_PREFIX . $urlHash;
+        $guardKey  = self::WEBHOOK_BUFFER_PREFIX . $urlHash . ':guard';
 
-        $signing = is_array($action['signing'] ?? null) ? $action['signing'] : [];
-        if ((int) ($signing['enabled'] ?? 0) === 1) {
-            $secret = (string) ($signing['secret'] ?? '');
-            if ($secret !== '') {
-                $timestamp = (string) time();
-                $timestampHeader = (string) ($signing['timestampHeader'] ?? 'X-Timestamp');
-                $signatureHeader = (string) ($signing['signatureHeader'] ?? 'X-Signature');
-                $headers[$timestampHeader] = $timestamp;
-                $headers[$signatureHeader] = $this->buildFeishuSignature($timestamp, $secret);
-            }
-        }
+        // 将 payload 追加到缓冲区（TTL 设为合并窗口的 2 倍，防止孤儿 Key）。
+        $ttl = self::WEBHOOK_MERGE_DELAY_SECONDS * 2;
+        Redis::rpush($bufferKey, json_encode($payload));
+        Redis::expire($bufferKey, $ttl);
 
-        $response = Http::timeout($timeout)
-            ->withHeaders($headers)
-            ->post($webhookUrl, $payload);
+        // NX：同一窗口内只投递一次 Job。
+        $isFirstInWindow = Redis::set($guardKey, '1', 'EX', self::WEBHOOK_MERGE_DELAY_SECONDS, 'NX');
+        if ($isFirstInWindow) {
+            // 动作配置（headers/signing/timeout）随 Job 一起存储，供发送时使用。
+            $actionConfig = array_intersect_key($action, array_flip(['headers', 'signing', 'timeoutSeconds']));
 
-        if (!$response->successful()) {
-            throw new \RuntimeException('webhook failed: HTTP ' . $response->status() . ' body=' . mb_substr($response->body(), 0, 1000));
+            SendWebhookJob::dispatch($webhookUrl, $bufferKey, $actionConfig)
+                ->delay(now()->addSeconds(self::WEBHOOK_MERGE_DELAY_SECONDS));
         }
 
         return [
-            'type' => 'webhook',
-            'ok' => true,
-            'status' => $response->status(),
-            'response' => mb_substr($response->body(), 0, 1000),
+            'type'      => 'webhook',
+            'ok'        => true,
+            'queued'    => true,
+            'merged'    => !$isFirstInWindow,
+            'bufferKey' => $bufferKey,
         ];
     }
 
     /**
-     * 构建动作通知消息。
+     * 构建动作通知消息（模板渲染）。
      */
     private function buildMessage(array $action, array $context, array $meta): string
     {
-        $defaultAlertTemplate = (string) ($meta['defaultAlertTemplate'] ?? '[Automation Alert] {rule_name} | {target_name}');
+        $defaultAlertTemplate   = (string) ($meta['defaultAlertTemplate'] ?? '[Automation Alert] {rule_name} | {target_name}');
         $defaultRecoverTemplate = (string) ($meta['defaultRecoverTemplate'] ?? '[Automation Recovery] {rule_name} | {target_name}');
         $template = $this->isRecovery($meta)
             ? (string) ($action['recoverTemplate'] ?? $defaultRecoverTemplate)
@@ -180,18 +190,9 @@ class AutomationActionDispatcher
     private function renderTemplate(string $template, array $context): string
     {
         return (string) preg_replace_callback('/\{([a-zA-Z0-9_]+)\}/', function ($matches) use ($context) {
-            $key = $matches[1] ?? '';
+            $key   = $matches[1] ?? '';
             $value = $context[$key] ?? '';
             return is_scalar($value) || $value === null ? (string) $value : json_encode($value);
         }, $template);
-    }
-
-    /**
-     * 生成飞书风格签名（可选启用）。
-     */
-    private function buildFeishuSignature(string $timestamp, string $secret): string
-    {
-        $stringToSign = $timestamp . "\n" . $secret;
-        return base64_encode(hash_hmac('sha256', $stringToSign, $secret, true));
     }
 }

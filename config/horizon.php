@@ -202,7 +202,7 @@ return [
             ],
             'notification' => [
                 'connection' => 'redis',
-                'queue' => ['send_email', 'send_telegram', 'send_email_mass', 'node_sync'],
+                'queue' => ['send_email', 'send_telegram', 'send_email_mass', 'node_sync', 'send_webhook'],
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'size',
                 'minProcesses' => 1,
@@ -233,6 +233,7 @@ return [
                     'send_email',
                     'send_email_mass',
                     'send_telegram',
+                    'send_webhook',
                     'user_alive_sync',
                     'node_sync',
                     'deploy',

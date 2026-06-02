@@ -93,3 +93,15 @@
 说明：
 
 - 当前接口仅接收参数并返回，不做业务处理。
+
+---
+
+## WooCommerce Order
+
+### 1) Paid order callback
+
+- Method/path: `POST /api/v3/application/woocommerce/order/paid`
+- Authentication: application authentication (`app` middleware)
+- Description: receives WooCommerce paid order events triggered by `processing` or `completed`
+- Idempotency: uses `order.order_id` with provider `woocommerce`; duplicate pushes do not create or open a second local order
+- Details: see `docs/api/woocommerce_order_api.md`

@@ -1,5 +1,35 @@
 # 版本日志
 
+## 2026-06-02
+
+### 自动化 Webhook 异步化：Redis 缓冲 + Horizon 合并发送
+
+- `AutomationActionDispatcher::dispatchWebhookAction` 改为异步：不再同步 `Http::post`，改为将 payload 写入 Redis 缓冲区后，delay 30s 投递 `SendWebhookJob`
+- 新增 `SendWebhookJob`（队列 `send_webhook`）：
+  - 从 Redis 缓冲区原子取出全部 payload（`LRANGE + DEL`）
+  - 单条保持原有结构；多条合并为 `events[]` 并拼接文本（飞书 `msg_type: text` 兼容）
+  - 支持可选签名（飞书风格 HMAC-SHA256），签名逻辑与原有一致
+  - `tries=3`、`backoff=[5,15,60]`、`timeout=30s`
+- Redis NX 守卫：同一 webhookUrl 在 30s 合并窗口内只投递一次 Job，后续事件只追加缓冲区
+- `config/horizon.php`：production `notification` supervisor 及 local supervisor 均追加 `send_webhook` 队列
+
+### 解决问题
+
+- 消除同步发送阻塞自动化主流程的风险
+- 解决飞书机器人 5 条/分钟限流（429）问题：同 URL 的多条告警合并为一条消息发出
+- Horizon retry 机制保障发送失败后自动重试
+
+### 影响范围
+
+- `app/Jobs/SendWebhookJob.php`（新增）
+- `app/Services/Automation/AutomationActionDispatcher.php`
+- `config/horizon.php`
+
+### 迁移说明
+
+- 无需数据库迁移
+- 重启 Horizon 后 `send_webhook` 队列自动生效
+
 ## 2026-05-13
 
 ### 项目接口规范化重构
@@ -1274,3 +1304,12 @@
 
 - 无新增迁移
 - 无需回滚
+
+## 2026-06-02 WooCommerce 三方订单接收接口
+
+- 变更摘要：新增 `POST /api/v3/application/woocommerce/order/paid`，用于接收 WooCommerce `processing` / `completed` 支付订单事件。
+- 影响范围：新增三方订单回执表、V3 Application 路由、请求校验、订单接收服务、接口控制器、接口文档和 Feature Test。
+- 幂等策略：按 `provider + order.order_id` 建唯一索引，重复推送直接返回 `duplicate=true`，不会重复创建或开通本地订单。
+- 业务规则：使用 `tracking.device_id + "@apple.com"` 匹配本地用户邮箱，使用 `woocommerce_product_mappings` 设置项映射 WooCommerce 商品到本地 `plan_id` 与 `period`。
+- 迁移说明：需要执行新增迁移 `2026_06_02_180000_create_external_order_receipts_table.php`。
+- 回滚说明：回滚该迁移会删除 `external_order_receipts` 表及其中的三方订单接收记录。
