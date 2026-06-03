@@ -131,22 +131,24 @@ class AdSpendPlatformService
         return $token;
     }
 
+    /**
+     * Fetch all daily report records by paging until the current page returns no data.
+     */
     public function fetchDailyRecords(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): array
     {
         $size = max(1, min(500, $size));
         $records = [];
         $current = 1;
-        $pages = 1;
 
-        while ($current <= $pages) {
+        while (true) {
             $body = $this->requestReportPage($account, $startDate, $endDate, $current, $size);
-
             $pageRecords = $this->extractRecords($body);
-            if (!empty($pageRecords)) {
-                $records = array_merge($records, $pageRecords);
+
+            if (empty($pageRecords)) {
+                break;
             }
 
-            $pages = $this->extractPages($body);
+            $records = array_merge($records, $pageRecords);
             $current++;
         }
 
