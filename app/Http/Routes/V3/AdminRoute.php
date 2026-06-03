@@ -36,6 +36,7 @@ use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\AutomationRuleController;
 use App\Http\Controllers\V3\Admin\ExternalOrderReceiptController;
 use App\Http\Controllers\V3\Admin\ReportController;
+use App\Http\Controllers\V3\Admin\WooCommerceOrderMappingController;
 use App\Http\Controllers\V3\Admin\DnsToolController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsDashboardController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsVpnSessionController;
@@ -305,6 +306,12 @@ class AdminRoute
             // External Order Receipts
             $router->group(['prefix' => 'external-order-receipt'], function ($router) {
                 $router->any('/fetch', [ExternalOrderReceiptController::class, 'fetch']);
+            });
+
+            // WooCommerce Product Mappings
+            $router->group(['prefix' => 'woocommerce-order-mapping'], function ($router) {
+                $router->get('/fetch', [WooCommerceOrderMappingController::class, 'fetch']);
+                $router->post('/save', [WooCommerceOrderMappingController::class, 'save']);
             });
 
             // Ad Platform Accounts

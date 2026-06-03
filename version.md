@@ -1321,3 +1321,11 @@
 - 查询能力：支持按 `provider`、`status`、`externalOrderId`、`userId`、`localOrderId`、`transactionId` 过滤，并返回关联本地用户和本地订单信息。
 - 迁移说明：无新增迁移。
 - 回滚说明：删除相关控制器、请求类、路由和文档即可回滚。
+
+## 2026-06-03 WooCommerce 商品映射配置接口
+
+- 变更摘要：新增管理员配置接口 `GET /api/v3/{secure_path}/woocommerce-order-mapping/fetch` 与 `POST /api/v3/{secure_path}/woocommerce-order-mapping/save`，用于维护 WooCommerce 商品到本地套餐周期的映射。
+- 影响范围：新增 Admin 配置控制器、请求校验、管理路由和接口文档。
+- 配置规则：保存时整表覆盖 `woocommerce_product_mappings`，每条映射包含 `product_id`、`plan_id`、`period`，并校验 `product_id` 唯一。
+- 迁移说明：无新增迁移。
+- 回滚说明：删除相关控制器、请求类、路由和文档即可回滚。
