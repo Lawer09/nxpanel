@@ -1313,3 +1313,11 @@
 - 业务规则：使用 `tracking.device_id + "@apple.com"` 匹配本地用户邮箱，使用 `woocommerce_product_mappings` 设置项映射 WooCommerce 商品到本地 `plan_id` 与 `period`。
 - 迁移说明：需要执行新增迁移 `2026_06_02_180000_create_external_order_receipts_table.php`。
 - 回滚说明：回滚该迁移会删除 `external_order_receipts` 表及其中的三方订单接收记录。
+
+## 2026-06-03 第三方订单回执查询接口
+
+- 变更摘要：新增管理员查询接口 `GET|POST /api/v3/{secure_path}/external-order-receipt/fetch`，用于分页查看第三方订单回执及本地订单转换结果。
+- 影响范围：新增 Admin 查询控制器、请求校验、管理路由和接口文档。
+- 查询能力：支持按 `provider`、`status`、`externalOrderId`、`userId`、`localOrderId`、`transactionId` 过滤，并返回关联本地用户和本地订单信息。
+- 迁移说明：无新增迁移。
+- 回滚说明：删除相关控制器、请求类、路由和文档即可回滚。

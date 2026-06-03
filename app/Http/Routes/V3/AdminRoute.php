@@ -34,6 +34,7 @@ use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAccountControll
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\AutomationRuleController;
+use App\Http\Controllers\V3\Admin\ExternalOrderReceiptController;
 use App\Http\Controllers\V3\Admin\ReportController;
 use App\Http\Controllers\V3\Admin\DnsToolController;
 use App\Http\Controllers\V3\Admin\Firebase\FirebaseAnalyticsDashboardController;
@@ -299,6 +300,11 @@ class AdminRoute
                 $router->post('/drop',        [AppController::class, 'drop']);
                 $router->get('/detail',       [AppController::class, 'detail']);
                 $router->post('/resetSecret', [AppController::class, 'resetSecret']);
+            });
+
+            // External Order Receipts
+            $router->group(['prefix' => 'external-order-receipt'], function ($router) {
+                $router->any('/fetch', [ExternalOrderReceiptController::class, 'fetch']);
             });
 
             // Ad Platform Accounts
