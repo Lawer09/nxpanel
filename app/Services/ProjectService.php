@@ -62,7 +62,6 @@ class ProjectService
             'project_code' => $params['projectCode'],
             'project_name' => $params['projectName'],
             'owner_name'   => $params['ownerName'] ?? null,
-            'department'   => $params['department'] ?? null,
             'status'       => $params['status'] ?? 'active',
             'remark'       => $params['remark'] ?? null,
         ]);

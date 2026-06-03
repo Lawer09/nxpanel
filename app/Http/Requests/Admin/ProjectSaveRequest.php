@@ -17,7 +17,6 @@ class ProjectSaveRequest extends FormRequest
             'projectCode' => 'required|string|max:100',
             'projectName' => 'required|string|max:100',
             'ownerName'   => 'nullable|string|max:100',
-            'department'  => 'nullable|string|max:100',
             'status'      => 'nullable|string|in:active,inactive,archived',
             'remark'      => 'nullable|string|max:255',
         ];
