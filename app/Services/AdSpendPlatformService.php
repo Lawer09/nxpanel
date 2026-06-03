@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 class AdSpendPlatformService
 {
     private const TOKEN_CACHE_TTL_SECONDS = 3600;
+    private const MAX_DAILY_REPORT_PAGES = 1000;
 
     public function queryDaily(array $payload): array
     {
@@ -132,7 +133,7 @@ class AdSpendPlatformService
     }
 
     /**
-     * Fetch all daily report records by paging until the current page returns no data.
+     * 分页拉取日报数据，直到当前页返回空数据时停止。
      */
     public function fetchDailyRecords(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): array
     {
@@ -141,6 +142,16 @@ class AdSpendPlatformService
         $current = 1;
 
         while (true) {
+            if ($current > self::MAX_DAILY_REPORT_PAGES) {
+                throw new \RuntimeException(sprintf(
+                    '广告花费报表分页超出安全上限，已停止拉取。account_id=%d, start_date=%s, end_date=%s, max_pages=%d',
+                    $account->id,
+                    $startDate,
+                    $endDate,
+                    self::MAX_DAILY_REPORT_PAGES
+                ));
+            }
+
             $body = $this->requestReportPage($account, $startDate, $endDate, $current, $size);
             $pageRecords = $this->extractRecords($body);
 

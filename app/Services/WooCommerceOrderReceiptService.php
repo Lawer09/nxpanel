@@ -21,16 +21,24 @@ class WooCommerceOrderReceiptService
     public function receive(array $payload): array
     {
         $externalOrderId = (string) data_get($payload, 'order.order_id');
+        $trigger = (string) data_get($payload, 'trigger');
         $receipt = $this->createReceipt($externalOrderId, $payload);
+        $isDuplicate = !$receipt->wasRecentlyCreated && $trigger === 'processing';
 
-        if (!$receipt->wasRecentlyCreated) {
+        if (!$receipt->wasRecentlyCreated && $receipt->status === ExternalOrderReceipt::STATUS_PROCESSED) {
             return $this->formatResult($receipt, true);
         }
 
         try {
-            DB::transaction(function () use ($receipt, $payload) {
+            DB::transaction(function () use ($receipt, $payload, $trigger) {
                 $lockedReceipt = ExternalOrderReceipt::lockForUpdate()->findOrFail($receipt->id);
-                $this->processReceipt($lockedReceipt, $payload);
+
+                if ($trigger === 'processing') {
+                    $this->markPaymentInProgress($lockedReceipt, $payload);
+                    return;
+                }
+
+                $this->processPaidReceipt($lockedReceipt, $payload);
             });
         } catch (Throwable $e) {
             Log::error('WooCommerce order receipt failed', [
@@ -42,7 +50,7 @@ class WooCommerceOrderReceiptService
             $this->markFailed($receipt, $e->getMessage());
         }
 
-        return $this->formatResult($receipt->refresh(), false);
+        return $this->formatResult($receipt->refresh(), $isDuplicate);
     }
 
     /**
@@ -74,9 +82,79 @@ class WooCommerceOrderReceiptService
     }
 
     /**
-     * Match user/product mapping, create a local order, and invoke the existing paid flow.
+     * Record a WooCommerce processing event as a local pending order.
      */
-    private function processReceipt(ExternalOrderReceipt $receipt, array $payload): void
+    private function markPaymentInProgress(ExternalOrderReceipt $receipt, array $payload): void
+    {
+        if ($receipt->status === ExternalOrderReceipt::STATUS_PROCESSED) {
+            return;
+        }
+
+        [$user, $productId, $plan, $period] = $this->resolveOrderContext($payload);
+        $order = $receipt->local_order_id
+            ? Order::find($receipt->local_order_id)
+            : $this->createLocalOrder($user, $plan, $period, $payload);
+
+        if (!$order) {
+            throw new ApiException('local_order_not_found');
+        }
+
+        $receipt->fill([
+            'status' => ExternalOrderReceipt::STATUS_PENDING,
+            'user_id' => $user->id,
+            'local_order_id' => $order->id,
+            'product_id' => $productId,
+            'plan_id' => $plan->id,
+            'period' => $period,
+            'transaction_id' => $this->nullableString(data_get($payload, 'order.transaction_id')),
+            'payload' => $payload,
+            'error_message' => null,
+        ])->save();
+    }
+
+    /**
+     * Match user/product mapping, create or reuse a local order, and invoke the existing paid flow.
+     */
+    private function processPaidReceipt(ExternalOrderReceipt $receipt, array $payload): void
+    {
+        if ($receipt->status === ExternalOrderReceipt::STATUS_PROCESSED) {
+            return;
+        }
+
+        [$user, $productId, $plan, $period] = $this->resolveOrderContext($payload);
+        $order = $receipt->local_order_id
+            ? Order::find($receipt->local_order_id)
+            : $this->createLocalOrder($user, $plan, $period, $payload);
+
+        if (!$order) {
+            throw new ApiException('local_order_not_found');
+        }
+
+        $receipt->fill([
+            'user_id' => $user->id,
+            'local_order_id' => $order->id,
+            'product_id' => $productId,
+            'plan_id' => $plan->id,
+            'period' => $period,
+            'transaction_id' => $this->nullableString(data_get($payload, 'order.transaction_id')),
+            'payload' => $payload,
+        ])->save();
+
+        $callbackNo = $this->nullableString(data_get($payload, 'order.transaction_id')) ?: $receipt->external_order_id;
+        if (!(new OrderService($order))->paid($callbackNo)) {
+            throw new ApiException('local_order_paid_failed');
+        }
+
+        $receipt->refresh();
+        $receipt->status = ExternalOrderReceipt::STATUS_PROCESSED;
+        $receipt->error_message = null;
+        $receipt->save();
+    }
+
+    /**
+     * Resolve the local user, WooCommerce product mapping, local plan, and period.
+     */
+    private function resolveOrderContext(array $payload): array
     {
         $deviceId = trim((string) data_get($payload, 'tracking.device_id'));
         $email = $deviceId . '@apple.com';
@@ -100,25 +178,7 @@ class WooCommerceOrderReceiptService
         $period = PlanService::getPeriodKey((string) $mapping['period']);
         (new PlanService($plan))->validatePurchase($user, $period);
 
-        $order = $this->createLocalOrder($user, $plan, $period, $payload);
-        $receipt->fill([
-            'user_id' => $user->id,
-            'local_order_id' => $order->id,
-            'product_id' => $productId,
-            'plan_id' => $plan->id,
-            'period' => $period,
-            'transaction_id' => $this->nullableString(data_get($payload, 'order.transaction_id')),
-        ])->save();
-
-        $callbackNo = $this->nullableString(data_get($payload, 'order.transaction_id')) ?: $receipt->external_order_id;
-        if (!(new OrderService($order))->paid($callbackNo)) {
-            throw new ApiException('local_order_paid_failed');
-        }
-
-        $receipt->refresh();
-        $receipt->status = ExternalOrderReceipt::STATUS_PROCESSED;
-        $receipt->error_message = null;
-        $receipt->save();
+        return [$user, $productId, $plan, $period];
     }
 
     /**

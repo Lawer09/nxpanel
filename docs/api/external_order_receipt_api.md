@@ -1,26 +1,26 @@
-# External Order Receipt API
+# 第三方订单回执查询接口文档
 
-## Basic
+## 基本说明
 
-- Admin route prefix: `/api/v3/{secure_path}`
-- Authentication: existing admin authentication middleware
-- Endpoint: `GET|POST /api/v3/{secure_path}/external-order-receipt/fetch`
-- Purpose: query third-party order receipt records and their local order conversion results
+- 管理路由前缀：`/api/v3/{secure_path}`
+- 鉴权方式：复用现有管理员鉴权中间件
+- 接口路径：`GET|POST /api/v3/{secure_path}/external-order-receipt/fetch`
+- 接口用途：查询第三方订单回执记录，以及它们转换成本地订单后的处理结果
 
-## Query Parameters
+## 查询参数
 
-| Field | Type | Required | Description |
+| 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| provider | string | No | Third-party provider code, currently `woocommerce` |
-| status | string | No | `pending` / `processed` / `failed` |
-| externalOrderId | string | No | Third-party order ID |
-| userId | integer | No | Local user ID |
-| localOrderId | integer | No | Local order ID created from the receipt |
-| transactionId | string | No | Third-party transaction ID |
-| page | integer | No | Page number, default `1` |
-| pageSize | integer | No | Page size, default `20`, max `200` |
+| provider | string | 否 | 第三方来源标识，当前主要为 `woocommerce` |
+| status | string | 否 | 回执状态，支持 `pending` / `processed` / `failed`。其中 `pending` 表示支付中，`processed` 表示已支付并完成本地处理 |
+| externalOrderId | string | 否 | 第三方订单 ID |
+| userId | integer | 否 | 本地用户 ID |
+| localOrderId | integer | 否 | 由该回执转换生成的本地订单 ID |
+| transactionId | string | 否 | 第三方交易流水号 |
+| page | integer | 否 | 页码，默认 `1` |
+| pageSize | integer | 否 | 每页条数，默认 `20`，最大 `200` |
 
-## Response
+## 返回示例
 
 ```json
 {
@@ -66,8 +66,16 @@
 }
 ```
 
-## Notes
+## 字段说明
 
-- `payload` stores the raw third-party callback body for troubleshooting.
-- `status=failed` means the callback was recorded but local conversion failed, for example `user_not_found` or `product_mapping_not_found`.
-- `local_order` is null when the callback has not produced a local order.
+- `payload`：保存第三方原始回调报文，便于后台排查问题。
+- `status=pending`：表示 WooCommerce 已推送 `processing`，用户仍处于支付中，本地订单保持待支付状态。
+- `status=processed`：表示 WooCommerce 已推送 `completed`，本地订单已进入支付/开通流程。
+- `status=failed`：表示系统已经接收到第三方回执，但在转换或更新本地订单时失败，例如 `user_not_found`、`product_mapping_not_found`。
+- `local_order`：当回执尚未成功生成本地订单时，该字段可能为 `null`。
+
+## 典型用途
+
+- 按第三方订单 ID 查询某一笔回执是否已接收
+- 查看某条回执是否已成功转换为本地订单
+- 通过 `failed` 状态筛查需要人工处理的异常订单

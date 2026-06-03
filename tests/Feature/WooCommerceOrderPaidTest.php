@@ -50,27 +50,27 @@ class WooCommerceOrderPaidTest extends TestCase
         ]);
     }
 
-    public function test_processing_order_creates_and_opens_local_order(): void
+    public function test_processing_order_creates_pending_local_order(): void
     {
         $this->createDeviceUser('550E8400-E29B-41D4-A716-446655440000');
 
         $response = $this->postJson($this->endpoint(), $this->payload(), $this->headers());
 
         $response->assertOk()
-            ->assertJsonPath('data.processed', true)
+            ->assertJsonPath('data.processed', false)
             ->assertJsonPath('data.duplicate', false)
-            ->assertJsonPath('data.status', ExternalOrderReceipt::STATUS_PROCESSED);
+            ->assertJsonPath('data.status', ExternalOrderReceipt::STATUS_PENDING);
 
         $this->assertDatabaseHas('external_order_receipts', [
             'provider' => ExternalOrderReceipt::PROVIDER_WOOCOMMERCE,
             'external_order_id' => '1234',
-            'status' => ExternalOrderReceipt::STATUS_PROCESSED,
+            'status' => ExternalOrderReceipt::STATUS_PENDING,
         ]);
 
-        $this->assertSame(1, Order::where('status', Order::STATUS_COMPLETED)->count());
+        $this->assertSame(1, Order::where('status', Order::STATUS_PENDING)->count());
     }
 
-    public function test_completed_duplicate_does_not_create_second_local_order(): void
+    public function test_completed_event_updates_pending_order_to_paid(): void
     {
         $this->createDeviceUser('550E8400-E29B-41D4-A716-446655440000');
 
@@ -83,11 +83,13 @@ class WooCommerceOrderPaidTest extends TestCase
         ]), $this->headers());
 
         $response->assertOk()
-            ->assertJsonPath('data.duplicate', true)
-            ->assertJsonPath('data.processed', true);
+            ->assertJsonPath('data.duplicate', false)
+            ->assertJsonPath('data.processed', true)
+            ->assertJsonPath('data.status', ExternalOrderReceipt::STATUS_PROCESSED);
 
         $this->assertSame(1, ExternalOrderReceipt::count());
         $this->assertSame(1, Order::count());
+        $this->assertSame(1, Order::where('status', Order::STATUS_COMPLETED)->count());
     }
 
     public function test_missing_device_id_is_validation_error(): void
