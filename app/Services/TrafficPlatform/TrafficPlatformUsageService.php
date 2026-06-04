@@ -7,24 +7,41 @@ use Illuminate\Support\Facades\DB;
 
 class TrafficPlatformUsageService
 {
-    private const TABLE = 'traffic_platform_usage_stat';
+    private const HOURLY_TABLE = 'traffic_platform_usage_hourly';
+    private const DAILY_TABLE = 'traffic_platform_usage_daily';
 
     /**
-     * 小时流量明细查询。
+     * 查询小时流量明细。
      */
     public function hourly(array $params): array
     {
-        $query = DB::table(self::TABLE);
-        $this->applyCommonFilters($query, $params);
+        $query = DB::table(self::HOURLY_TABLE)
+            ->selectRaw('
+                report_hour,
+                report_date,
+                platform_account_id,
+                platform_code,
+                COALESCE(external_uid, "") AS external_uid,
+                external_username,
+                COALESCE(geo, "") AS geo,
+                COALESCE(region, "") AS region,
+                traffic_bytes,
+                traffic_mb,
+                baseline_snapshot_time,
+                current_snapshot_time,
+                is_anomaly,
+                anomaly_reason
+            ');
+        $this->applyCommonFilters($query, $params, false);
 
         if (!empty($params['startTime'])) {
-            $query->where('stat_time', '>=', $params['startTime']);
+            $query->where('report_hour', '>=', $params['startTime']);
         }
         if (!empty($params['endTime'])) {
-            $query->where('stat_time', '<=', $params['endTime']);
+            $query->where('report_hour', '<=', $params['endTime']);
         }
 
-        $query->orderByDesc('stat_time');
+        $query->orderByDesc('report_hour');
 
         $page = (int) ($params['page'] ?? 1);
         $pageSize = (int) ($params['pageSize'] ?? 50);
@@ -46,40 +63,38 @@ class TrafficPlatformUsageService
     }
 
     /**
-     * 日流量汇总查询。
+     * 查询日累计流量明细。
      */
     public function daily(array $params): array
     {
-        $query = DB::table(self::TABLE)
+        $query = DB::table(self::DAILY_TABLE)
             ->selectRaw('
-                stat_date,
+                report_date,
                 platform_account_id,
                 platform_code,
                 COALESCE(external_uid, "") AS external_uid,
                 external_username,
                 COALESCE(geo, "") AS geo,
                 COALESCE(region, "") AS region,
-                SUM(traffic_bytes) AS traffic_bytes,
-                SUM(traffic_mb) AS traffic_mb,
-                ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb
+                traffic_bytes_cum AS traffic_bytes,
+                traffic_mb_cum AS traffic_mb,
+                ROUND(traffic_mb_cum / 1024, 6) AS traffic_gb,
+                snapshot_time
             ')
-            ->groupByRaw('stat_date, platform_account_id, platform_code, COALESCE(external_uid, ""), external_username, COALESCE(geo, ""), COALESCE(region, "")')
-            ->orderByDesc('stat_date');
+            ->orderByDesc('report_date');
 
-        $this->applyCommonFilters($query, $params);
+        $this->applyCommonFilters($query, $params, true);
 
         if (!empty($params['startDate'])) {
-            $query->where('stat_date', '>=', $params['startDate']);
+            $query->where('report_date', '>=', $params['startDate']);
         }
         if (!empty($params['endDate'])) {
-            $query->where('stat_date', '<=', $params['endDate']);
+            $query->where('report_date', '<=', $params['endDate']);
         }
 
         $page = (int) ($params['page'] ?? 1);
         $pageSize = (int) ($params['pageSize'] ?? 50);
-
-        $countQuery = DB::table(DB::raw("({$query->toSql()}) as sub"))->mergeBindings($query);
-        $total = $countQuery->count();
+        $total = $query->count();
 
         $items = $query->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
@@ -97,23 +112,32 @@ class TrafficPlatformUsageService
     }
 
     /**
-     * 月流量汇总查询。
+     * 查询月累计流量汇总。
      */
     public function monthly(array $params): array
     {
-        $query = DB::table(self::TABLE)
-            ->selectRaw("DATE_FORMAT(stat_date, '%Y-%m') AS stat_month, platform_account_id, platform_code, COALESCE(external_uid, '') AS external_uid, external_username, SUM(traffic_bytes) AS traffic_bytes, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
-            ->groupByRaw("DATE_FORMAT(stat_date, '%Y-%m'), platform_account_id, platform_code, COALESCE(external_uid, ''), external_username")
-            ->orderByDesc('stat_month');
+        $query = DB::table(self::DAILY_TABLE)
+            ->selectRaw("
+                DATE_FORMAT(report_date, '%Y-%m') AS report_month,
+                platform_account_id,
+                platform_code,
+                COALESCE(external_uid, '') AS external_uid,
+                external_username,
+                SUM(traffic_bytes_cum) AS traffic_bytes,
+                SUM(traffic_mb_cum) AS traffic_mb,
+                ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb
+            ")
+            ->groupByRaw("DATE_FORMAT(report_date, '%Y-%m'), platform_account_id, platform_code, COALESCE(external_uid, ''), external_username")
+            ->orderByDesc('report_month');
 
-        $this->applyCommonFilters($query, $params);
+        $this->applyCommonFilters($query, $params, false);
 
         if (!empty($params['startMonth'])) {
-            $query->where('stat_date', '>=', $params['startMonth'] . '-01');
+            $query->where('report_date', '>=', $params['startMonth'] . '-01');
         }
         if (!empty($params['endMonth'])) {
             $endDate = date('Y-m-t', strtotime($params['endMonth'] . '-01'));
-            $query->where('stat_date', '<=', $endDate);
+            $query->where('report_date', '<=', $endDate);
         }
 
         $page = (int) ($params['page'] ?? 1);
@@ -138,37 +162,57 @@ class TrafficPlatformUsageService
     }
 
     /**
-     * 流量趋势查询。
+     * 查询流量趋势。
      */
     public function trend(array $params): array
     {
         $dimension = $params['dimension'] ?? 'day';
 
-        $query = DB::table(self::TABLE);
-        $this->applyCommonFilters($query, $params);
-
-        if (!empty($params['startDate'])) {
-            $query->where('stat_date', '>=', $params['startDate']);
-        }
-        if (!empty($params['endDate'])) {
-            $query->where('stat_date', '<=', $params['endDate']);
-        }
-
         switch ($dimension) {
             case 'hour':
-                $query->selectRaw("DATE_FORMAT(stat_time, '%Y-%m-%d %H:00:00') AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
-                    ->groupByRaw("DATE_FORMAT(stat_time, '%Y-%m-%d %H:00:00')")
+                $query = DB::table(self::HOURLY_TABLE);
+                $this->applyCommonFilters($query, $params, false);
+
+                if (!empty($params['startDate'])) {
+                    $query->where('report_date', '>=', $params['startDate']);
+                }
+                if (!empty($params['endDate'])) {
+                    $query->where('report_date', '<=', $params['endDate']);
+                }
+
+                $query->selectRaw('report_hour AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                    ->groupBy('report_hour')
                     ->orderBy('time');
                 break;
             case 'month':
-                $query->selectRaw("DATE_FORMAT(stat_date, '%Y-%m') AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
-                    ->groupByRaw("DATE_FORMAT(stat_date, '%Y-%m')")
+                $query = DB::table(self::DAILY_TABLE);
+                $this->applyCommonFilters($query, $params, false);
+
+                if (!empty($params['startDate'])) {
+                    $query->where('report_date', '>=', $params['startDate']);
+                }
+                if (!empty($params['endDate'])) {
+                    $query->where('report_date', '<=', $params['endDate']);
+                }
+
+                $query->selectRaw("DATE_FORMAT(report_date, '%Y-%m') AS time, SUM(traffic_mb_cum) AS traffic_mb, ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb")
+                    ->groupByRaw("DATE_FORMAT(report_date, '%Y-%m')")
                     ->orderBy('time');
                 break;
             default:
-                $query->selectRaw("stat_date AS time, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb")
-                    ->groupBy('stat_date')
-                    ->orderBy('stat_date');
+                $query = DB::table(self::DAILY_TABLE);
+                $this->applyCommonFilters($query, $params, false);
+
+                if (!empty($params['startDate'])) {
+                    $query->where('report_date', '>=', $params['startDate']);
+                }
+                if (!empty($params['endDate'])) {
+                    $query->where('report_date', '<=', $params['endDate']);
+                }
+
+                $query->selectRaw('report_date AS time, SUM(traffic_mb_cum) AS traffic_mb, ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb')
+                    ->groupBy('report_date')
+                    ->orderBy('report_date');
                 break;
         }
 
@@ -178,36 +222,36 @@ class TrafficPlatformUsageService
     }
 
     /**
-     * 流量排行查询。
+     * 查询流量排行。
      */
     public function ranking(array $params): array
     {
         $rankBy = $params['rankBy'] ?? 'account';
         $limit = (int) ($params['limit'] ?? 20);
 
-        $query = DB::table(self::TABLE);
+        $query = DB::table(self::DAILY_TABLE);
 
         if (!empty($params['platformCode'])) {
             $query->where('platform_code', $params['platformCode']);
         }
         if (!empty($params['startDate'])) {
-            $query->where('stat_date', '>=', $params['startDate']);
+            $query->where('report_date', '>=', $params['startDate']);
         }
         if (!empty($params['endDate'])) {
-            $query->where('stat_date', '<=', $params['endDate']);
+            $query->where('report_date', '<=', $params['endDate']);
         }
 
         switch ($rankBy) {
             case 'external_uid':
-                $query->selectRaw('platform_account_id, platform_code, COALESCE(external_uid, "") AS external_uid, external_username, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                $query->selectRaw('platform_account_id, platform_code, COALESCE(external_uid, "") AS external_uid, external_username, SUM(traffic_mb_cum) AS traffic_mb, ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb')
                     ->groupByRaw('platform_account_id, platform_code, COALESCE(external_uid, ""), external_username');
                 break;
             case 'geo':
-                $query->selectRaw('COALESCE(geo, "") AS geo, COALESCE(region, "") AS region, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                $query->selectRaw('COALESCE(geo, "") AS geo, COALESCE(region, "") AS region, SUM(traffic_mb_cum) AS traffic_mb, ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb')
                     ->groupByRaw('COALESCE(geo, ""), COALESCE(region, "")');
                 break;
             default:
-                $query->selectRaw('platform_account_id, platform_code, SUM(traffic_mb) AS traffic_mb, ROUND(SUM(traffic_mb) / 1024, 6) AS traffic_gb')
+                $query->selectRaw('platform_account_id, platform_code, SUM(traffic_mb_cum) AS traffic_mb, ROUND(SUM(traffic_mb_cum) / 1024, 6) AS traffic_gb')
                     ->groupBy('platform_account_id', 'platform_code');
                 break;
         }
@@ -229,7 +273,7 @@ class TrafficPlatformUsageService
     /**
      * 应用公共筛选条件。
      */
-    private function applyCommonFilters($query, array $params): void
+    private function applyCommonFilters($query, array $params, bool $supportsGeo = true): void
     {
         if (!empty($params['platformCode'])) {
             $query->where('platform_code', $params['platformCode']);
@@ -240,7 +284,7 @@ class TrafficPlatformUsageService
         if (array_key_exists('externalUid', $params)) {
             $query->whereRaw('COALESCE(external_uid, "") = ?', [$this->normalizeDimensionValue($params['externalUid'])]);
         }
-        if (array_key_exists('geo', $params)) {
+        if ($supportsGeo && array_key_exists('geo', $params)) {
             $query->whereRaw('COALESCE(geo, "") = ?', [$this->normalizeDimensionValue($params['geo'])]);
         }
     }

@@ -289,25 +289,28 @@ Body：
 
 ## 4. 流量查询接口
 
+说明：
+- 小时明细与小时趋势使用 `traffic_platform_usage_hourly`
+- 日汇总、月汇总、日/月趋势与排行使用 `traffic_platform_usage_daily`
+- 本节接口已切换到新字段，不再返回旧 `statDate` / `statTime` / `statHour` / `statMinute`
+
 ### 4.1 小时流量明细
 
 `GET /traffic-platform/usages/hourly`
 
 Query 参数：
-
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | platformCode | string | 否 | 平台编码 |
-| accountId | int | 否 | 平台账号ID |
-| externalUid | string | 否 | 子账号ID；空维度请传空字符串 `""` |
-| startTime | string | 否 | 开始时间（基于 `stat_time` 过滤） |
-| endTime | string | 否 | 结束时间（基于 `stat_time` 过滤） |
-| geo | string | 否 | 地区；空维度请传空字符串 `""` |
-| page | int | 否 | 默认1 |
-| pageSize | int | 否 | 默认50，最大200 |
+| accountId | int | 否 | 平台账号 ID |
+| externalUid | string | 否 | 子账号 ID；空维度请传空字符串 `""` |
+| startTime | string | 否 | 开始时间，基于 `report_hour` 过滤 |
+| endTime | string | 否 | 结束时间，基于 `report_hour` 过滤 |
+| geo | string | 否 | 地区编码；空维度请传空字符串 `""` |
+| page | int | 否 | 默认 1 |
+| pageSize | int | 否 | 默认 50，最大 200 |
 
 返回字段：
-
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | page | int | 当前页 |
@@ -315,23 +318,23 @@ Query 参数：
 | total | int | 总条数 |
 | data | array | 小时流量明细 |
 
-data[] 字段说明：
-
+`data[]` 字段说明：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| reportHour | string | 小时起点时间，对应 `report_hour` |
+| reportDate | string | 归属日期，对应 `report_date` |
 | platformAccountId | int | 平台账号 ID |
 | platformCode | string | 平台编码 |
-| balance | int | 账号剩余可用流量（MB） |
-| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUid | string | 子账号 ID |
 | externalUsername | string/null | 子账号名称 |
-| statTime | string | 统计时间 |
-| statDate | string | 统计日期 |
-| statHour | int | 统计小时 |
-| statMinute | int | 统计分钟 |
-| geo | string | 地区编码（空维度时为空字符串） |
-| region | string | 地区名称（空维度时为空字符串） |
-| trafficBytes | int | 流量字节数 |
-| trafficMb | float | 流量 MB |
+| geo | string | 地理编码 |
+| region | string | 区域名称 |
+| trafficBytes | int | 小时流量字节数 |
+| trafficMb | float | 小时流量 MB |
+| baselineSnapshotTime | string/null | 基线快照时间 |
+| currentSnapshotTime | string | 当前快照时间 |
+| isAnomaly | int | 是否异常，1 是 / 0 否 |
+| anomalyReason | string | 异常原因 |
 | accountName | string | 平台账号名称 |
 
 ### 4.2 日流量汇总
@@ -339,20 +342,18 @@ data[] 字段说明：
 `GET /traffic-platform/usages/daily`
 
 Query 参数：
-
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | platformCode | string | 否 | 平台编码 |
-| accountId | int | 否 | 平台账号ID |
-| externalUid | string | 否 | 子账号ID；空维度请传空字符串 `""` |
+| accountId | int | 否 | 平台账号 ID |
+| externalUid | string | 否 | 子账号 ID；空维度请传空字符串 `""` |
 | startDate | string | 否 | 开始日期 `YYYY-MM-DD` |
 | endDate | string | 否 | 结束日期 `YYYY-MM-DD` |
-| geo | string | 否 | 地区；空维度请传空字符串 `""` |
-| page | int | 否 | 默认1 |
-| pageSize | int | 否 | 默认50，最大200 |
+| geo | string | 否 | 地区编码；空维度请传空字符串 `""` |
+| page | int | 否 | 默认 1 |
+| pageSize | int | 否 | 默认 50，最大 200 |
 
 返回字段：
-
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | page | int | 当前页 |
@@ -360,20 +361,20 @@ Query 参数：
 | total | int | 总条数 |
 | data | array | 日流量汇总 |
 
-data[] 字段说明：
-
+`data[]` 字段说明：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| statDate | string | 统计日期 |
+| reportDate | string | 归属日期，对应 `report_date` |
 | platformAccountId | int | 平台账号 ID |
 | platformCode | string | 平台编码 |
-| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUid | string | 子账号 ID |
 | externalUsername | string/null | 子账号名称 |
-| geo | string | 地区编码（空维度时为空字符串） |
-| region | string | 地区名称（空维度时为空字符串） |
-| trafficBytes | int | 流量字节数（日累计） |
-| trafficMb | float | 流量 MB（日累计） |
+| geo | string | 地理编码 |
+| region | string | 区域名称 |
+| trafficBytes | int | 当天累计流量字节数，对应 `traffic_bytes_cum` |
+| trafficMb | float | 当天累计流量 MB，对应 `traffic_mb_cum` |
 | trafficGb | float | 兼容字段，`trafficMb / 1024` |
+| snapshotTime | string | 最近采样时间，对应 `snapshot_time` |
 | accountName | string | 平台账号名称 |
 
 ### 4.3 月流量汇总
@@ -381,19 +382,17 @@ data[] 字段说明：
 `GET /traffic-platform/usages/monthly`
 
 Query 参数：
-
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | platformCode | string | 否 | 平台编码 |
-| accountId | int | 否 | 平台账号ID |
-| externalUid | string | 否 | 子账号ID；空维度请传空字符串 `""` |
+| accountId | int | 否 | 平台账号 ID |
+| externalUid | string | 否 | 子账号 ID；空维度请传空字符串 `""` |
 | startMonth | string | 否 | 开始月份 `YYYY-MM` |
 | endMonth | string | 否 | 结束月份 `YYYY-MM` |
-| page | int | 否 | 默认1 |
-| pageSize | int | 否 | 默认50，最大200 |
+| page | int | 否 | 默认 1 |
+| pageSize | int | 否 | 默认 50，最大 200 |
 
 返回字段：
-
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | page | int | 当前页 |
@@ -401,17 +400,16 @@ Query 参数：
 | total | int | 总条数 |
 | data | array | 月流量汇总 |
 
-data[] 字段说明：
-
+`data[]` 字段说明：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| statMonth | string | 统计月份，格式 `YYYY-MM` |
+| reportMonth | string | 月份，格式 `YYYY-MM` |
 | platformAccountId | int | 平台账号 ID |
 | platformCode | string | 平台编码 |
-| externalUid | string | 子账号 ID（空维度时为空字符串） |
+| externalUid | string | 子账号 ID |
 | externalUsername | string/null | 子账号名称 |
-| trafficBytes | int | 流量字节数（月累计） |
-| trafficMb | float | 流量 MB（月累计） |
+| trafficBytes | int | 月累计流量字节数 |
+| trafficMb | float | 月累计流量 MB |
 | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 | accountName | string | 平台账号名称 |
 
@@ -420,21 +418,23 @@ data[] 字段说明：
 `GET /traffic-platform/usages/trend`
 
 Query 参数：
-
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | platformCode | string | 否 | 平台编码 |
-| accountId | int | 否 | 平台账号ID |
-| externalUid | string | 否 | 子账号ID；空维度请传空字符串 `""` |
+| accountId | int | 否 | 平台账号 ID |
+| externalUid | string | 否 | 子账号 ID；空维度请传空字符串 `""` |
 | startDate | string | 否 | 开始日期 |
 | endDate | string | 否 | 结束日期 |
 | dimension | string | 否 | `hour` / `day` / `month`，默认 `day` |
 
-返回字段（data[]）：
+说明：
+- `dimension=hour` 使用 `traffic_platform_usage_hourly`，按 `report_hour` 聚合 `traffic_mb`
+- `dimension=day` 与 `dimension=month` 使用 `traffic_platform_usage_daily`，按 `traffic_mb_cum` 聚合
 
+返回字段 `data[]`：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| time | string | 时间点（随 `dimension` 变化） |
+| time | string | 时间点，随 `dimension` 变化 |
 | trafficMb | float | 该时间点流量 MB |
 | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 
@@ -443,34 +443,35 @@ Query 参数：
 `GET /traffic-platform/usages/ranking`
 
 Query 参数：
-
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | platformCode | string | 否 | 平台编码 |
 | startDate | string | 否 | 开始日期 |
 | endDate | string | 否 | 结束日期 |
 | rankBy | string | 否 | `account` / `external_uid` / `geo`，默认 `account` |
-| limit | int | 否 | 默认20，最大100 |
+| limit | int | 否 | 默认 20，最大 100 |
 
-返回字段（data[]，按 `rankBy` 不同）：
+说明：
+- 排行使用 `traffic_platform_usage_daily`，按日期范围内累计值求和
 
+返回字段 `data[]`（按 `rankBy` 不同）：
 | rankBy | 字段 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | account | platformAccountId | int | 平台账号 ID |
 | account | platformCode | string | 平台编码 |
-| account | trafficMb | float | 流量 MB |
+| account | trafficMb | float | 累计流量 MB |
 | account | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 | account | accountName | string | 平台账号名称 |
 | external_uid | platformAccountId | int | 平台账号 ID |
 | external_uid | platformCode | string | 平台编码 |
 | external_uid | externalUid | string | 子账号 ID |
 | external_uid | externalUsername | string/null | 子账号名称 |
-| external_uid | trafficMb | float | 流量 MB |
+| external_uid | trafficMb | float | 累计流量 MB |
 | external_uid | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 | external_uid | accountName | string | 平台账号名称 |
-| geo | geo | string | 地区编码 |
-| geo | region | string | 地区名称 |
-| geo | trafficMb | float | 流量 MB |
+| geo | geo | string | 地理编码 |
+| geo | region | string | 区域名称 |
+| geo | trafficMb | float | 累计流量 MB |
 | geo | trafficGb | float | 兼容字段，`trafficMb / 1024` |
 
 ---

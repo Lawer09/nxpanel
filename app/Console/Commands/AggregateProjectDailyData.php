@@ -487,35 +487,8 @@ class AggregateProjectDailyData extends Command
                 return trim((string) ($row->external_uid ?? '')) === '';
             });
 
-            $snapshotQuery = DB::table('traffic_platform_daily_snapshots')
-                ->where('stat_date', '=', $date)
-                ->where('platform_account_id', '=', (int) $accountId);
-
-            if (!$hasAccountLevel) {
-                if (empty($uidList)) {
-                    continue;
-                }
-                $snapshotQuery->whereIn('external_uid', $uidList);
-            }
-
-            $snapshotRows = $snapshotQuery
-                ->selectRaw('COALESCE(external_uid, "") as external_uid')
-                ->selectRaw('UPPER(COALESCE(geo, "")) as country')
-                ->selectRaw('COALESCE(region, "") as region')
-                ->selectRaw('MAX(total_mb) as max_total_mb')
-                ->groupByRaw('COALESCE(external_uid, ""), UPPER(COALESCE(geo, "")), COALESCE(region, "")')
-                ->get();
-
-            if ($snapshotRows->isNotEmpty()) {
-                foreach ($snapshotRows as $row) {
-                    $country = $this->normalizeCountry((string) ($row->country ?? ''));
-                    $countryUsageMb[$country] = ($countryUsageMb[$country] ?? 0.0) + $this->decimal($row->max_total_mb);
-                }
-                continue;
-            }
-
-            $usageQuery = DB::table('traffic_platform_usage_stat')
-                ->where('stat_date', '=', $date)
+            $usageQuery = DB::table('traffic_platform_usage_daily')
+                ->where('report_date', '=', $date)
                 ->where('platform_account_id', '=', (int) $accountId);
 
             if (!$hasAccountLevel) {
@@ -529,13 +502,13 @@ class AggregateProjectDailyData extends Command
                 ->selectRaw('COALESCE(external_uid, "") as external_uid')
                 ->selectRaw('UPPER(COALESCE(geo, "")) as country')
                 ->selectRaw('COALESCE(region, "") as region')
-                ->selectRaw('MAX(traffic_mb) as max_traffic_mb')
+                ->selectRaw('SUM(traffic_mb_cum) as traffic_mb_cum')
                 ->groupByRaw('COALESCE(external_uid, ""), UPPER(COALESCE(geo, "")), COALESCE(region, "")')
                 ->get();
 
             foreach ($usageRows as $row) {
                 $country = $this->normalizeCountry((string) ($row->country ?? ''));
-                $countryUsageMb[$country] = ($countryUsageMb[$country] ?? 0.0) + $this->decimal($row->max_traffic_mb);
+                $countryUsageMb[$country] = ($countryUsageMb[$country] ?? 0.0) + $this->decimal($row->traffic_mb_cum);
             }
         }
 
