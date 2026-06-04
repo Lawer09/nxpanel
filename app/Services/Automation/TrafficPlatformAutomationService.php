@@ -14,6 +14,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
 {
     public const MODULE_KEY = 'traffic_platform';
     public const TARGET_TYPE = 'traffic_platform_account';
+    private const HOURLY_USAGE_TABLE = 'traffic_platform_usage_hourly';
 
     private const EXEC_STATUS_TRIGGERED = 'triggered';
     private const EXEC_STATUS_RECOVERED = 'recovered';
@@ -303,21 +304,25 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
         }
 
         $now = now();
-        $oneHourAgo = $now->copy()->subHour()->toDateTimeString();
-        $sixHourAgo = $now->copy()->subHours(6)->toDateTimeString();
+        $currentHourStart = $now->copy()->startOfHour();
+        $nextHourStart = $currentHourStart->copy()->addHour()->toDateTimeString();
+        $oneHourWindowStart = $currentHourStart->copy()->toDateTimeString();
+        $sixHourWindowStart = $currentHourStart->copy()->subHours(5)->toDateTimeString();
 
-        $rows = DB::table('traffic_platform_usage_stat')
+        // 小时差分表按 report_hour 存储每小时流量，这里按小时桶聚合当前 1h / 6h 指标。
+        $rows = DB::table(self::HOURLY_USAGE_TABLE)
             ->select('platform_account_id')
             ->selectRaw(
-                'SUM(CASE WHEN stat_time >= ? THEN traffic_mb ELSE 0 END) AS usage_1h_mb',
-                [$oneHourAgo]
+                'SUM(CASE WHEN report_hour >= ? THEN traffic_mb ELSE 0 END) AS usage_1h_mb',
+                [$oneHourWindowStart]
             )
             ->selectRaw(
-                'SUM(CASE WHEN stat_time >= ? THEN traffic_mb ELSE 0 END) AS usage_6h_mb',
-                [$sixHourAgo]
+                'SUM(CASE WHEN report_hour >= ? THEN traffic_mb ELSE 0 END) AS usage_6h_mb',
+                [$sixHourWindowStart]
             )
             ->whereIn('platform_account_id', $accountIds)
-            ->where('stat_time', '>=', $sixHourAgo)
+            ->where('report_hour', '>=', $sixHourWindowStart)
+            ->where('report_hour', '<', $nextHourStart)
             ->groupBy('platform_account_id')
             ->get();
 
