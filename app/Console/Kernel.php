@@ -78,6 +78,7 @@ class Kernel extends ConsoleKernel
         // 自动化检测与告警（每 5 分钟触发一次，实际由 Horizon 消费 automation 队列执行）
         $schedule->command('automation:run traffic_platform')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
         $schedule->command('automation:run project_aggregate')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
+        $schedule->command('automation:run project_ad_revenue_hourly')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
 
         // Firebase 事件汇总（每5分钟重算最近3天）
         $schedule->command('firebase_report:aggregate --hours=72')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);

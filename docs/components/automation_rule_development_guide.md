@@ -1,4 +1,4 @@
-# 自动化规则开发说明（通用模块版）
+﻿# 自动化规则开发说明（通用模块版）
 
 ## 1. 总体目标
 
@@ -168,3 +168,18 @@ project_aggregate 模块实现约束：
 3. 是否补齐 FormRequest 校验。
 4. 是否同步更新 `docs/` 与 `version.md`。
 5. 是否确认执行记录仍为每模块 100 条上限。
+
+## 9. `project_ad_revenue_hourly` 模块约束
+
+- 模块标识：`project_ad_revenue_hourly`
+- 默认目标类型：`project_ad_revenue_hourly`
+- 数据来源：`ad_revenue_hourly`
+- 时间口径：上一完整小时，即 `now()->startOfHour()->subHour()`
+- 项目归属：不依赖 `ad_revenue_hourly.project_id`，统一通过 `project_ad_platform_accounts.ad_platform_account_id` 映射到 `project_code`
+- 目标集合：来自 `project_ad_platform_accounts`，因此即使上一小时完全无收入数据，项目也仍会被评估
+- 目标筛选：
+  - `targetScope.projectCodes`
+  - `targetScope.includeDisabled`
+  - 手动运行 `targetIds` 对应 `project_code`
+- 可用指标：`has_data`、`row_count`、`ad_requests`、`matched_requests`、`match_rate`、`impressions`、`show_rate`、`clicks`、`ctr`、`estimated_earnings_micros`、`estimated_earnings`、`ecpm_micros`、`ecpm`、`anomaly_count`
+- 调度：`Kernel` 每 5 分钟触发 `automation:run project_ad_revenue_hourly`
