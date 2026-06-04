@@ -1362,3 +1362,10 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复上述文件到修复前版本即可，数据库与配置无需回滚。
 
+## 2026-06-04 send_webhook 队列诊断接口
+
+- 日期：2026-06-04
+- 变更摘要：新增管理端接口 GET /api/v2/{secure_path}/system/getSendWebhookTasks，专门排查 send_webhook 队列的 pending、delayed、reserved 和 failed 状态，并新增队列任务接口文档 docs/api/queue_task_api.md。
+- 影响范围：app/Http/Controllers/V2/Admin/SystemController.php、app/Http/Routes/V2/AdminRoute.php、app/Http/Requests/Admin/SendWebhookTaskIndexRequest.php、docs/api/queue_task_api.md
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：删除新增路由、请求类和文档，并移除 SystemController 中对应诊断方法即可回滚。
