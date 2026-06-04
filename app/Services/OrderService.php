@@ -69,6 +69,7 @@ class OrderService
                 'period' => $newPeriod,
                 'trade_no' => Helper::generateOrderNo(),
                 'total_amount' => (int) (optional($plan->prices)[$newPeriod] * 100),
+                'status' => Order::STATUS_PENDING,
             ]);
 
             $orderService = new self($order);
@@ -307,7 +308,13 @@ class OrderService
     public function paid(string $callbackNo)
     {
         $order = $this->order;
-        if ($order->status !== Order::STATUS_PENDING)
+        // Treat null as pending so newly created in-memory orders can continue
+        // into the paid flow before database defaults are reloaded.
+        $orderStatus = $order->status === null
+            ? Order::STATUS_PENDING
+            : (int) $order->status;
+
+        if ($orderStatus !== Order::STATUS_PENDING)
             return true;
         $order->status = Order::STATUS_PROCESSING;
         $order->paid_at = time();

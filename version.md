@@ -1369,3 +1369,11 @@
 - 影响范围：app/Http/Controllers/V2/Admin/SystemController.php、app/Http/Routes/V2/AdminRoute.php、app/Http/Requests/Admin/SendWebhookTaskIndexRequest.php、docs/api/queue_task_api.md
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：删除新增路由、请求类和文档，并移除 SystemController 中对应诊断方法即可回滚。
+
+## 2026-06-04 WooCommerce 订单状态短路修复
+
+- 日期：2026-06-04
+- 变更摘要：修复 `OrderService::paid()` 对订单待支付状态的严格比较短路问题，避免 WooCommerce 回执已标记 `processed` 但本地订单仍停留在 `0`。
+- 影响范围：`app/Models/Order.php`、`app/Services/OrderService.php`、`tests/Feature/WooCommerceOrderPaidTest.php`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复上述文件到修复前版本即可，数据库数据无需回滚。

@@ -47,6 +47,8 @@ class Order extends Model
     protected $dateFormat = 'U';
     protected $guarded = ['id'];
     protected $casts = [
+        'type' => 'integer',
+        'status' => 'integer',
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',
         'surplus_order_ids' => 'array',
