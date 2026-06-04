@@ -170,11 +170,27 @@ class AutomationActionDispatcher
     {
         $defaultAlertTemplate   = (string) ($meta['defaultAlertTemplate'] ?? '[Automation Alert] {rule_name} | {target_name}');
         $defaultRecoverTemplate = (string) ($meta['defaultRecoverTemplate'] ?? '[Automation Recovery] {rule_name} | {target_name}');
+        $defaultTemplate = $this->isRecovery($meta) ? $defaultRecoverTemplate : $defaultAlertTemplate;
         $template = $this->isRecovery($meta)
             ? (string) ($action['recoverTemplate'] ?? $defaultRecoverTemplate)
             : (string) ($action['template'] ?? $defaultAlertTemplate);
 
-        return $this->renderTemplate($template, $context);
+        $renderContext = array_merge([
+            'rule_name' => (string) ($meta['ruleName'] ?? ''),
+            'rule_id' => (int) ($meta['ruleId'] ?? 0),
+            'target_name' => (string) ($meta['targetName'] ?? ''),
+            'target_id' => (string) ($meta['targetId'] ?? ''),
+            'target_type' => (string) ($meta['targetType'] ?? ''),
+            'module' => (string) ($meta['module'] ?? ''),
+            'status' => $this->isRecovery($meta) ? 'recovered' : 'alert',
+        ], $context);
+
+        $message = trim($this->renderTemplate($template, $renderContext));
+        if ($message !== '') {
+            return $message;
+        }
+
+        return trim($this->renderTemplate($defaultTemplate, $renderContext));
     }
 
     /**

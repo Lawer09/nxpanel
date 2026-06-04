@@ -1392,3 +1392,10 @@
 - 影响范围：app/Jobs/SendWebhookJob.php、docs/api/automation_rules_api.md
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复上述文件到调整前版本即可，数据库与配置无需回滚。
+## 2026-06-04 webhook 空消息兜底修复
+
+- 日期：2026-06-04
+- 变更摘要：修复自动化 webhook 在自定义模板缺少上下文变量时可能渲染为空消息的问题；现统一注入通用目标变量，并在自定义模板渲染为空时自动回退到默认模板。
+- 影响范围：app/Services/Automation/AutomationActionDispatcher.php、docs/api/automation_rules_api.md
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复上述文件到修复前版本即可，数据库与配置无需回滚。
