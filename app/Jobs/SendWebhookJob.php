@@ -37,17 +37,16 @@ class SendWebhookJob implements ShouldQueue
      */
     public function handle(): void
     {
-        // 原子取出并清空缓冲区，避免重复消费。
         $raw = Redis::lrange($this->bufferKey, 0, -1);
         Redis::del($this->bufferKey);
 
         if (empty($raw)) {
-            // 已被其他 Job 消费（极端竞争场景），安全退出。
             return;
         }
 
         $payloads = array_values(array_filter(array_map(static function (string $item): ?array {
             $decoded = json_decode($item, true);
+
             return is_array($decoded) ? $decoded : null;
         }, $raw)));
 
@@ -60,17 +59,19 @@ class SendWebhookJob implements ShouldQueue
     }
 
     /**
-     * 构建发送 body，单条保持原结构，多条追加 events[] 摘要。
+     * 根据目标 webhook 类型构建请求体。
      */
     private function buildBody(array $payloads): array
     {
-        $count = count($payloads);
+        if ($this->isFeishuWebhookUrl()) {
+            return $this->buildFeishuBody($payloads);
+        }
 
+        $count = count($payloads);
         if ($count === 1) {
             return $payloads[0];
         }
 
-        // 多条合并：将每条 message 拼接为飞书文本。
         $lines = [];
         foreach ($payloads as $index => $payload) {
             $event = (string) ($payload['event'] ?? 'triggered');
@@ -80,7 +81,6 @@ class SendWebhookJob implements ShouldQueue
         }
 
         $text = implode("\n", $lines);
-
         $alertCount = count(array_filter($payloads, fn ($p) => ($p['event'] ?? '') !== 'recovered'));
         $recoverCount = $count - $alertCount;
         $summary = [];
@@ -94,24 +94,9 @@ class SendWebhookJob implements ShouldQueue
         $headerText = '[Automation] ' . implode(', ', $summary) . " ({$count} total)";
 
         return [
-            // 飞书 text 消息兼容字段。
-            'msg_type' => 'text',
-            'content' => [
-                'text' => $headerText . "\n" . $text,
-            ],
-            // 扩展字段，供非飞书系统使用。
+            'message' => $headerText . "\n" . $text,
             'mergedCount' => $count,
-            'events' => array_map(static fn ($p) => [
-                'event' => $p['event'] ?? '',
-                'module' => $p['module'] ?? '',
-                'ruleId' => $p['ruleId'] ?? null,
-                'ruleName' => $p['ruleName'] ?? '',
-                'targetType' => $p['targetType'] ?? '',
-                'targetId' => $p['targetId'] ?? '',
-                'targetName' => $p['targetName'] ?? '',
-                'message' => $p['message'] ?? '',
-                'executedAt' => $p['executedAt'] ?? '',
-            ], $payloads),
+            'events' => $payloads,
         ];
     }
 
@@ -126,16 +111,7 @@ class SendWebhookJob implements ShouldQueue
         $headers = array_merge(['Content-Type' => 'application/json'], $headers);
 
         $signing = is_array($this->action['signing'] ?? null) ? $this->action['signing'] : [];
-        if ((int) ($signing['enabled'] ?? 0) === 1) {
-            $secret = (string) ($signing['secret'] ?? '');
-            if ($secret !== '') {
-                $timestamp = (string) time();
-                $timestampHeader = (string) ($signing['timestampHeader'] ?? 'X-Timestamp');
-                $signatureHeader = (string) ($signing['signatureHeader'] ?? 'X-Signature');
-                $headers[$timestampHeader] = $timestamp;
-                $headers[$signatureHeader] = $this->buildFeishuSignature($timestamp, $secret);
-            }
-        }
+        $body = $this->appendSigningPayload($body, $headers, $signing);
 
         $response = Http::timeout($timeout)
             ->withHeaders($headers)
@@ -151,6 +127,8 @@ class SendWebhookJob implements ShouldQueue
                 . ' body=' . mb_substr($response->body(), 0, 500)
             );
         }
+
+        $this->assertWebhookResponse($response);
 
         Log::info('SendWebhookJob sent', [
             'method' => $method,
@@ -171,11 +149,127 @@ class SendWebhookJob implements ShouldQueue
     }
 
     /**
+     * 判断当前 webhook 是否为飞书自定义机器人地址。
+     */
+    private function isFeishuWebhookUrl(): bool
+    {
+        $host = (string) parse_url($this->webhookUrl, PHP_URL_HOST);
+        $path = (string) parse_url($this->webhookUrl, PHP_URL_PATH);
+
+        return in_array($host, ['open.feishu.cn', 'open.larksuite.com'], true)
+            && str_starts_with($path, '/open-apis/bot/');
+    }
+
+    /**
+     * 构建飞书自定义机器人消息体。
+     */
+    private function buildFeishuBody(array $payloads): array
+    {
+        $count = count($payloads);
+        if ($count === 1) {
+            return [
+                'msg_type' => 'text',
+                'content' => [
+                    'text' => (string) ($payloads[0]['message'] ?? ''),
+                ],
+            ];
+        }
+
+        $lines = [];
+        foreach ($payloads as $index => $payload) {
+            $event = (string) ($payload['event'] ?? 'triggered');
+            $label = $event === 'recovered' ? '[Recovered]' : '[Alert]';
+            $message = (string) ($payload['message'] ?? '');
+            $lines[] = ($index + 1) . ". {$label} {$message}";
+        }
+
+        $text = implode("\n", $lines);
+        $alertCount = count(array_filter($payloads, fn ($p) => ($p['event'] ?? '') !== 'recovered'));
+        $recoverCount = $count - $alertCount;
+        $summary = [];
+        if ($alertCount > 0) {
+            $summary[] = "{$alertCount} alert(s)";
+        }
+        if ($recoverCount > 0) {
+            $summary[] = "{$recoverCount} recovery(s)";
+        }
+
+        $headerText = '[Automation] ' . implode(', ', $summary) . " ({$count} total)";
+
+        return [
+            'msg_type' => 'text',
+            'content' => [
+                'text' => $headerText . "\n" . $text,
+            ],
+        ];
+    }
+
+    /**
+     * 根据 webhook 类型附加签名信息。
+     */
+    private function appendSigningPayload(array $body, array &$headers, array $signing): array
+    {
+        if ((int) ($signing['enabled'] ?? 0) !== 1) {
+            return $body;
+        }
+
+        $secret = (string) ($signing['secret'] ?? '');
+        if ($secret === '') {
+            return $body;
+        }
+
+        $timestamp = (string) time();
+        $signature = $this->buildFeishuSignature($timestamp, $secret);
+
+        if ($this->isFeishuWebhookUrl()) {
+            $body['timestamp'] = $timestamp;
+            $body['sign'] = $signature;
+
+            return $body;
+        }
+
+        $timestampHeader = (string) ($signing['timestampHeader'] ?? 'X-Timestamp');
+        $signatureHeader = (string) ($signing['signatureHeader'] ?? 'X-Signature');
+        $headers[$timestampHeader] = $timestamp;
+        $headers[$signatureHeader] = $signature;
+
+        return $body;
+    }
+
+    /**
+     * 校验第三方 webhook 的业务响应。
+     */
+    private function assertWebhookResponse(\Illuminate\Http\Client\Response $response): void
+    {
+        if (!$this->isFeishuWebhookUrl()) {
+            return;
+        }
+
+        $json = $response->json();
+        if (!is_array($json)) {
+            return;
+        }
+
+        $code = $json['code'] ?? null;
+        if ($code === null || (int) $code === 0) {
+            return;
+        }
+
+        $message = (string) ($json['msg'] ?? 'unknown feishu webhook error');
+        throw new \RuntimeException(
+            'SendWebhookJob failed: Feishu business code=' . $code
+            . ' message=' . $message
+            . ' url=' . $this->webhookUrl
+        );
+    }
+
+    /**
      * 生成飞书风格签名：base64(hmac_sha256(timestamp+"\n"+secret, secret))。
      */
     private function buildFeishuSignature(string $timestamp, string $secret): string
     {
         $stringToSign = $timestamp . "\n" . $secret;
+
         return base64_encode(hash_hmac('sha256', $stringToSign, $secret, true));
     }
 }

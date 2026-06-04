@@ -465,11 +465,19 @@ Query 参数：
 - `timeoutSeconds`：请求超时秒数（可选，默认 10）
 - `signing`：签名配置（可选）
   - `enabled`：`1/0`，默认 `0`
-  - `secret`：签名密钥（你们当前方案可直接传）
-  - `timestampHeader`：时间戳请求头名，默认 `X-Timestamp`
-  - `signatureHeader`：签名请求头名，默认 `X-Signature`
+  - `secret`：签名密钥
+  - `timestampHeader`：非飞书 webhook 使用的时间戳请求头名，默认 `X-Timestamp`
+  - `signatureHeader`：非飞书 webhook 使用的签名请求头名，默认 `X-Signature`
 
-说明：当 `signing.enabled=1` 且有 `secret` 时，会按飞书风格生成签名并追加到请求头。
+说明：
+
+- 当 `webhookUrl` 为飞书自定义机器人地址（如 `https://open.feishu.cn/open-apis/bot/v2/hook/...`）时：
+  - 单条与多条告警都会按飞书 `msg_type=text` / `content.text` 结构发送
+  - 当 `signing.enabled=1` 且传入 `secret` 时，会将 `timestamp` 和 `sign` 写入请求体
+- 当 `webhookUrl` 为普通 webhook 地址时：
+  - 单条消息保持原始事件 JSON 结构
+  - 多条消息返回 `message + mergedCount + events` 的合并结构
+  - 签名信息按请求头方式追加
 
 ### 10.5 创建规则示例（project_aggregate）
 

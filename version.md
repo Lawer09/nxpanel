@@ -1377,3 +1377,11 @@
 - 影响范围：`app/Models/Order.php`、`app/Services/OrderService.php`、`tests/Feature/WooCommerceOrderPaidTest.php`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复上述文件到修复前版本即可，数据库数据无需回滚。
+## 2026-06-04 飞书 webhook 发送格式修复
+
+- 日期：2026-06-04
+- 变更摘要：修复自动化 webhook 对飞书机器人发送单条消息时请求体结构不兼容的问题，并调整飞书签名写入方式为请求体 timestamp/sign；同时补充对应回归测试和自动化 webhook 文档说明。
+- 影响范围：app/Jobs/SendWebhookJob.php、tests/Feature/SendWebhookJobTest.php、docs/api/automation_rules_api.md
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复上述文件到修复前版本即可，数据库与配置无需回滚。
+
