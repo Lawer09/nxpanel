@@ -120,6 +120,7 @@ class SendWebhookJob implements ShouldQueue
      */
     private function sendRequest(array $body): void
     {
+        $method = $this->resolveMethod();
         $timeout = max(1, (int) ($this->action['timeoutSeconds'] ?? 10));
         $headers = is_array($this->action['headers'] ?? null) ? $this->action['headers'] : [];
         $headers = array_merge(['Content-Type' => 'application/json'], $headers);
@@ -138,21 +139,35 @@ class SendWebhookJob implements ShouldQueue
 
         $response = Http::timeout($timeout)
             ->withHeaders($headers)
-            ->post($this->webhookUrl, $body);
+            ->send($method, $this->webhookUrl, [
+                'json' => $body,
+            ]);
 
         if (!$response->successful()) {
             throw new \RuntimeException(
                 'SendWebhookJob failed: HTTP ' . $response->status()
+                . ' method=' . $method
                 . ' url=' . $this->webhookUrl
                 . ' body=' . mb_substr($response->body(), 0, 500)
             );
         }
 
         Log::info('SendWebhookJob sent', [
+            'method' => $method,
             'url' => $this->webhookUrl,
             'merged_count' => $body['mergedCount'] ?? 1,
             'status' => $response->status(),
         ]);
+    }
+
+    /**
+     * 解析并规范化 webhook 请求方法。
+     */
+    private function resolveMethod(): string
+    {
+        $method = strtoupper((string) ($this->action['method'] ?? 'POST'));
+
+        return in_array($method, ['POST', 'PUT', 'PATCH'], true) ? $method : 'POST';
     }
 
     /**

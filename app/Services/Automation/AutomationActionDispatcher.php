@@ -146,8 +146,8 @@ class AutomationActionDispatcher
         // NX：同一窗口内只投递一次 Job。
         $isFirstInWindow = Redis::set($guardKey, '1', 'EX', self::WEBHOOK_MERGE_DELAY_SECONDS, 'NX');
         if ($isFirstInWindow) {
-            // 动作配置（headers/signing/timeout）随 Job 一起存储，供发送时使用。
-            $actionConfig = array_intersect_key($action, array_flip(['headers', 'signing', 'timeoutSeconds']));
+            // 动作配置（method/headers/signing/timeout）随 Job 一起存储，供发送时使用。
+            $actionConfig = array_intersect_key($action, array_flip(['method', 'headers', 'signing', 'timeoutSeconds']));
 
             SendWebhookJob::dispatch($webhookUrl, $bufferKey, $actionConfig)
                 ->delay(now()->addSeconds(self::WEBHOOK_MERGE_DELAY_SECONDS));
@@ -158,6 +158,7 @@ class AutomationActionDispatcher
             'ok'        => true,
             'queued'    => true,
             'merged'    => !$isFirstInWindow,
+            'method'    => strtoupper((string) ($action['method'] ?? 'POST')),
             'bufferKey' => $bufferKey,
         ];
     }
