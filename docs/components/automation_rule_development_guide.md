@@ -181,5 +181,5 @@ project_aggregate 模块实现约束：
   - `targetScope.projectCodes`
   - `targetScope.includeDisabled`
   - 手动运行 `targetIds` 对应 `project_code`
-- 可用指标：`has_data`、`row_count`、`ad_requests`、`matched_requests`、`match_rate`、`impressions`、`show_rate`、`clicks`、`ctr`、`estimated_earnings_micros`、`estimated_earnings`、`ecpm_micros`、`ecpm`、`anomaly_count`
+- 可用指标：`row_count`、`ad_requests`、`matched_requests`、`match_rate`、`impressions`、`show_rate`、`clicks`、`ctr`、`estimated_earnings_micros`、`estimated_earnings`、`ecpm_micros`、`ecpm`、`anomaly_count`
 - 调度：`Kernel` 每 5 分钟触发 `automation:run project_ad_revenue_hourly`

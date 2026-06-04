@@ -1,5 +1,8 @@
 ﻿# 版本日志
 
+- 说明，不可修改本说明，并严格遵守如下条件
+- 1. 日志内容只追加，不修改
+
 ## 2026-06-04 自动化 webhook 请求方法修复
 
 - 日期：2026-06-04
@@ -68,4 +71,12 @@
 - 影响范围：`database/migrations/2026_04_28_000001_create_traffic_platform_tables.php`、`database/migrations/2026_04_23_000001_create_ad_platform_tables.php`、`app/Services/Automation/ProjectAdRevenueHourlyAutomationService.php`、`app/Providers/AutomationServiceProvider.php`、`app/Console/Kernel.php`、`docs/api/automation_rules_api.md`、`docs/components/automation_rule_development_guide.md`、`version.md`
 - 是否需要迁移：否，本次未新增迁移文件；仅修正原始 migration 基线定义并新增自动化模块代码。
 - 回滚说明：恢复上述文件到变更前版本，并移除 `project_ad_revenue_hourly` 模块的注册、调度和文档说明即可回滚。
+
+## 2026-06-04 项目小时广告自动化指标收敛
+
+- 日期：2026-06-04
+- 变更摘要：收窄 `project_ad_revenue_hourly` 模块的条件指标范围，移除 `project_code`、`project_name`、`report_hour`、`has_data` 等非统计字段，仅保留统计字段用于规则条件判断；默认通知模板同步移除上报小时和是否有数据字段。
+- 影响范围：`app/Services/Automation/ProjectAdRevenueHourlyAutomationService.php`、`docs/api/automation_rules_api.md`、`docs/components/automation_rule_development_guide.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复上述文件到本次调整前版本即可，数据库无需回滚。
 

@@ -488,10 +488,6 @@ Query 参数
 
 ### 11.3 conditions[].metric 可用指标
 
-- `project_code`
-- `project_name`
-- `report_hour`
-- `has_data`
 - `row_count`
 - `ad_requests`
 - `matched_requests`
@@ -507,7 +503,6 @@ Query 参数
 - `anomaly_count`
 
 口径说明：
-- `has_data`：上一完整小时是否存在收入明细，存在为 `1`，否则为 `0`
 - `match_rate = matched_requests / ad_requests`
 - `show_rate = impressions / matched_requests`
 - `ctr = clicks / impressions`
@@ -522,16 +517,16 @@ Query 参数
 - `webhook`
 
 默认模板：
-- Alert：`[Project Hourly Ad Alert] {rule_name} | {project_name}({project_code}) | hour={report_hour} | has_data={has_data} | revenue={estimated_earnings} | imp={impressions} | ctr={ctr} | ecpm={ecpm}`
-- Recover：`[Project Hourly Ad Recovery] {rule_name} | {project_name}({project_code}) | hour={report_hour} | revenue={estimated_earnings}`
+- Alert：`[Project Hourly Ad Alert] {rule_name} | {project_name}({project_code}) | revenue={estimated_earnings} | imp={impressions} | ctr={ctr} | ecpm={ecpm}`
+- Recover：`[Project Hourly Ad Recovery] {rule_name} | {project_name}({project_code}) | revenue={estimated_earnings}`
 
 ### 11.5 创建规则示例（project_ad_revenue_hourly）
 
 ```json
 {
   "module": "project_ad_revenue_hourly",
-  "name": "上一小时广告收益缺失告警",
-  "description": "上一完整小时没有任何广告收入数据时通知",
+  "name": "上一小时广告收益过低告警",
+  "description": "上一完整小时广告收益低于阈值时通知",
   "targetType": "project_ad_revenue_hourly",
   "targetScope": {
     "projectCodes": ["A003", "A005"],
@@ -539,7 +534,7 @@ Query 参数
   },
   "conditionLogic": "all",
   "conditions": [
-    { "metric": "has_data", "operator": "eq", "value": 0 }
+    { "metric": "estimated_earnings", "operator": "lt", "value": 1 }
   ],
   "actions": [
     { "type": "telegram_admin" }
@@ -554,4 +549,4 @@ Query 参数
 
 - `POST /run` 时，`targetIds` 对应 `project_code`
 - 仅传 `targetIds` 时，会在模块默认目标集合上按项目代号过滤
-- 无数据项目仍会被评估，因此可以直接用 `has_data = 0` 编写缺数告警
+- 无数据项目仍会被评估，因此可以直接使用 `row_count = 0`、`estimated_earnings = 0` 等统计字段编写规则

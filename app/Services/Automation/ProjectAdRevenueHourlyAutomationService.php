@@ -319,8 +319,6 @@ class ProjectAdRevenueHourlyAutomationService implements AutomationModuleHandler
             $estimatedEarnings = (float) ($row->estimated_earnings ?? 0);
 
             $result[(string) $row->project_code] = [
-                'report_hour' => $reportHour,
-                'has_data' => $rowCount > 0 ? 1 : 0,
                 'row_count' => $rowCount,
                 'ad_requests' => $adRequests,
                 'matched_requests' => $matchedRequests,
@@ -346,8 +344,6 @@ class ProjectAdRevenueHourlyAutomationService implements AutomationModuleHandler
     private function buildMetrics(array $target, ?array $usage): array
     {
         $defaults = [
-            'report_hour' => now()->startOfHour()->subHour()->toDateTimeString(),
-            'has_data' => 0,
             'row_count' => 0,
             'ad_requests' => 0,
             'matched_requests' => 0,
@@ -366,10 +362,6 @@ class ProjectAdRevenueHourlyAutomationService implements AutomationModuleHandler
         $usage = array_merge($defaults, $usage ?? []);
 
         return [
-            'project_code' => (string) ($target['project_code'] ?? ''),
-            'project_name' => (string) ($target['project_name'] ?? $target['project_code'] ?? ''),
-            'report_hour' => (string) $usage['report_hour'],
-            'has_data' => (int) $usage['has_data'],
             'row_count' => (int) $usage['row_count'],
             'ad_requests' => (int) $usage['ad_requests'],
             'matched_requests' => (int) $usage['matched_requests'],
@@ -494,6 +486,8 @@ class ProjectAdRevenueHourlyAutomationService implements AutomationModuleHandler
             'rule_name' => $rule->name,
             'rule_id' => $rule->id,
             'status' => $recovery ? 'recovered' : 'alert',
+            'project_code' => (string) ($target['project_code'] ?? ''),
+            'project_name' => (string) ($target['project_name'] ?? $target['project_code'] ?? ''),
             'target_name' => (string) ($target['project_name'] ?? $target['project_code'] ?? ''),
         ]);
 
@@ -507,8 +501,8 @@ class ProjectAdRevenueHourlyAutomationService implements AutomationModuleHandler
                 'targetType' => self::TARGET_TYPE,
                 'targetId' => (string) ($target['project_code'] ?? ''),
                 'targetName' => (string) ($target['project_name'] ?? ''),
-                'defaultAlertTemplate' => '[Project Hourly Ad Alert] {rule_name} | {project_name}({project_code}) | hour={report_hour} | has_data={has_data} | revenue={estimated_earnings} | imp={impressions} | ctr={ctr} | ecpm={ecpm}',
-                'defaultRecoverTemplate' => '[Project Hourly Ad Recovery] {rule_name} | {project_name}({project_code}) | hour={report_hour} | revenue={estimated_earnings}',
+                'defaultAlertTemplate' => '[Project Hourly Ad Alert] {rule_name} | {project_name}({project_code}) | revenue={estimated_earnings} | imp={impressions} | ctr={ctr} | ecpm={ecpm}',
+                'defaultRecoverTemplate' => '[Project Hourly Ad Recovery] {rule_name} | {project_name}({project_code}) | revenue={estimated_earnings}',
             ];
 
             return $this->actionDispatcher->dispatch($action, $context, $meta);
