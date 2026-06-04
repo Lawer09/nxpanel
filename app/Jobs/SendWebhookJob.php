@@ -72,29 +72,13 @@ class SendWebhookJob implements ShouldQueue
             return $payloads[0];
         }
 
-        $lines = [];
-        foreach ($payloads as $index => $payload) {
-            $event = (string) ($payload['event'] ?? 'triggered');
-            $label = $event === 'recovered' ? '[Recovered]' : '[Alert]';
-            $message = (string) ($payload['message'] ?? '');
-            $lines[] = ($index + 1) . ". {$label} {$message}";
-        }
-
-        $text = implode("\n", $lines);
-        $alertCount = count(array_filter($payloads, fn ($p) => ($p['event'] ?? '') !== 'recovered'));
-        $recoverCount = $count - $alertCount;
-        $summary = [];
-        if ($alertCount > 0) {
-            $summary[] = "{$alertCount} alert(s)";
-        }
-        if ($recoverCount > 0) {
-            $summary[] = "{$recoverCount} recovery(s)";
-        }
-
-        $headerText = '[Automation] ' . implode(', ', $summary) . " ({$count} total)";
+        $text = implode("\n", array_map(
+            static fn (array $payload): string => (string) ($payload['message'] ?? ''),
+            $payloads
+        ));
 
         return [
-            'message' => $headerText . "\n" . $text,
+            'message' => $text,
             'mergedCount' => $count,
             'events' => $payloads,
         ];
@@ -175,31 +159,14 @@ class SendWebhookJob implements ShouldQueue
             ];
         }
 
-        $lines = [];
-        foreach ($payloads as $index => $payload) {
-            $event = (string) ($payload['event'] ?? 'triggered');
-            $label = $event === 'recovered' ? '[Recovered]' : '[Alert]';
-            $message = (string) ($payload['message'] ?? '');
-            $lines[] = ($index + 1) . ". {$label} {$message}";
-        }
-
-        $text = implode("\n", $lines);
-        $alertCount = count(array_filter($payloads, fn ($p) => ($p['event'] ?? '') !== 'recovered'));
-        $recoverCount = $count - $alertCount;
-        $summary = [];
-        if ($alertCount > 0) {
-            $summary[] = "{$alertCount} alert(s)";
-        }
-        if ($recoverCount > 0) {
-            $summary[] = "{$recoverCount} recovery(s)";
-        }
-
-        $headerText = '[Automation] ' . implode(', ', $summary) . " ({$count} total)";
-
+         $text = implode("\n", array_map(
+            static fn (array $payload): string => (string) ($payload['message'] ?? ''),
+            $payloads
+        ));
         return [
             'msg_type' => 'text',
             'content' => [
-                'text' => $headerText . "\n" . $text,
+                 'text' => $text,
             ],
         ];
     }
