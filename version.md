@@ -80,3 +80,11 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复上述文件到本次调整前版本即可，数据库无需回滚。
 
+## 2026-06-05 报表查询 Service 下沉与项目日报汇总
+
+- 日期：2026-06-05
+- 变更摘要：将 `ReportController` 中原本直接访问数据库和缓存的报表查询逻辑下沉到 Service；新增 `ReportQueryService`；扩展 `ProjectReportService` 接管项目日报查询，并在返回结果中新增与 `page` 同级的 `summary` 汇总数据。
+- 影响范围：`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Services/ReportQueryService.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `ReportController` 旧版查询实现，移除 `ReportQueryService`，并回退项目日报响应中的 `summary` 字段即可。
+
