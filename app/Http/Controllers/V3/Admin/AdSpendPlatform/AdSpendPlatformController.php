@@ -9,6 +9,7 @@ use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
 use App\Services\AdSpendPlatformService;
+use App\Services\AdSpendSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -265,10 +266,12 @@ class AdSpendPlatformController extends Controller
         }
     }
 
-    public function sync(Request $request, AdSpendPlatformService $service): JsonResponse
+    public function sync(
+        Request $request,
+        AdSpendPlatformService $platformService,
+        AdSpendSyncService $syncService
+    ): JsonResponse
     {
-        $job = null;
-
         try {
             $this->normalizeQueryParams($request);
 
@@ -290,104 +293,13 @@ class AdSpendPlatformController extends Controller
                 return $this->error([422, '账号已禁用']);
             }
 
-            $requestParams = [
-                'objectName' => 'account',
-                'dims' => ['date', 'group_name', 'group_id', 'country'],
-                'startDate' => $startDate,
-                'endDate' => $endDate,
-                'size' => 200,
-            ];
-
-            $job = AdSpendSyncJob::create([
-                'platform_account_id' => $account->id,
-                'platform_code' => $account->platform_code,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'status' => AdSpendSyncJob::STATUS_RUNNING,
-                'request_params' => $requestParams,
-                'total_records' => 0,
-                'matched_records' => 0,
-                'unmatched_records' => 0,
-            ]);
-
-            $records = $service->fetchDailyRecords($account, $startDate, $endDate, 200);
-            $projectCodeLookup = DB::table('project_projects')
-                ->pluck('project_code')
-                ->mapWithKeys(function ($code) {
-                    $value = trim((string) $code);
-                    if ($value === '') {
-                        return [];
-                    }
-                    return [strtoupper($value) => $value];
-                })
-                ->toArray();
-
-            $totalRecords = 0;
-            $matchedRecords = 0;
-            $unmatchedRecords = 0;
-
-            foreach ($records as $record) {
-                if (!is_array($record)) {
-                    continue;
-                }
-
-                $totalRecords++;
-
-                $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
-                $mappedProjectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
-                $projectCode = $mappedProjectCode;
-                $reportDate = (string) ($record['date'] ?? '');
-                if ($reportDate === '') {
-                    $unmatchedRecords++;
-                    continue;
-                }
-
-                $country = (string) ($record['country'] ?? '');
-                $country = $country === 'null' ? '' : $country;
-
-                $impressions = (int) ($record['impressions'] ?? 0);
-                $clicks = (int) ($record['clicks'] ?? 0);
-                $spend = $this->toDecimal($record['spend'] ?? 0, true);
-                $ctr = $this->toDecimal($record['ctr'] ?? null, false);
-                $cpm = $this->toDecimal($record['cpm'] ?? null, false);
-                $cpc = $this->toDecimal($record['cpc'] ?? null, false);
-
-                if ($projectCode === '') {
-                    $unmatchedRecords++;
-                    continue;
-                }
-
-                AdSpendDailyReport::updateOrCreate(
-                    [
-                        'platform_account_id' => $account->id,
-                        'project_code' => $projectCode,
-                        'report_date' => $reportDate,
-                        'country' => $country,
-                    ],
-                    [
-                        'platform_code' => $account->platform_code,
-                        'project_code' => $projectCode,
-                        'impressions' => $impressions,
-                        'clicks' => $clicks,
-                        'spend' => $spend,
-                        'ctr' => $ctr,
-                        'cpm' => $cpm,
-                        'cpc' => $cpc,
-                        'raw_group_name' => $rawGroupName,
-                    ]
-                );
-                $matchedRecords++;
-            }
-
-            $job->update([
-                'status' => AdSpendSyncJob::STATUS_SUCCESS,
-                'total_records' => $totalRecords,
-                'matched_records' => $matchedRecords,
-                'unmatched_records' => $unmatchedRecords,
-                'error_message' => null,
-            ]);
-
-            $account->update(['last_sync_at' => now()]);
+            $job = $syncService->syncAccount(
+                $account,
+                $startDate,
+                $endDate,
+                $platformService,
+                AdSpendSyncService::SOURCE_MANUAL
+            );
 
             return $this->ok([
                 'jobId' => $job->id,
@@ -395,13 +307,6 @@ class AdSpendPlatformController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->error([422, $e->getMessage()]);
         } catch (\Exception $e) {
-            if ($job) {
-                $job->update([
-                    'status' => AdSpendSyncJob::STATUS_FAILED,
-                    'error_message' => mb_substr($e->getMessage(), 0, 2000),
-                ]);
-            }
-
             Log::error('AdSpendPlatform sync error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
@@ -858,15 +763,6 @@ class AdSpendPlatformController extends Controller
         }
     }
 
-    private function toDecimal($value, bool $defaultZero)
-    {
-        if ($value === null || $value === '') {
-            return $defaultZero ? 0 : null;
-        }
-
-        return is_numeric($value) ? (string) $value : ($defaultZero ? 0 : null);
-    }
-
     private function formatDecimal($value): ?string
     {
         if ($value === null || $value === '') {
@@ -874,30 +770,5 @@ class AdSpendPlatformController extends Controller
         }
 
         return number_format((float) $value, 6, '.', '');
-    }
-
-    private function resolveProjectCode(string $rawGroupName, array $projectCodeLookup): string
-    {
-        $raw = trim($rawGroupName);
-        if ($raw === '' || empty($projectCodeLookup)) {
-            return '';
-        }
-
-        $upperRaw = strtoupper($raw);
-        if (isset($projectCodeLookup[$upperRaw])) {
-            return $projectCodeLookup[$upperRaw];
-        }
-
-        $keys = array_keys($projectCodeLookup);
-        usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
-
-        foreach ($keys as $upperCode) {
-            $pattern = '/(^|[^A-Z0-9])' . preg_quote($upperCode, '/') . '([^A-Z0-9]|$)/';
-            if (preg_match($pattern, $upperRaw) === 1) {
-                return $projectCodeLookup[$upperCode];
-            }
-        }
-
-        return '';
     }
 }

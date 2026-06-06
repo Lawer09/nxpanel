@@ -88,3 +88,11 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `ReportController` 旧版查询实现，移除 `ReportQueryService`，并回退项目日报响应中的 `summary` 字段即可。
 
+## 2026-06-06 投放消耗同步链路统一修复
+
+- 日期：2026-06-06
+- 变更摘要：新增共享 `AdSpendSyncService`，将手动接口 `POST /api/v3/admin/{securePath}/ad-spend-platform/sync` 与定时命令 `ad-spend:sync --lookback-days=2` 的任务建单、拉取、项目匹配、写库和状态回写逻辑统一到同一条链路；同时为 `Octane::tick(... schedule:run)` 增加数据库事务回滚与重连防护，并补充同步回归测试与投放同步文档。
+- 影响范围：`app/Services/AdSpendSyncService.php`、`app/Http/Controllers/V3/Admin/AdSpendPlatform/AdSpendPlatformController.php`、`app/Console/Commands/SyncAdSpendReports.php`、`app/Providers/OctaneServiceProvider.php`、`tests/Feature/AdSpendSyncServiceTest.php`、`tests/Feature/OctaneServiceProviderTest.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复上述文件到修复前版本，移除共享同步 Service 和 Octane 调度前数据库重置逻辑即可回滚。
+

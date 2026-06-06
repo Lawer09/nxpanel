@@ -2,14 +2,11 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
-use App\Models\AdSpendSyncJob;
 use App\Services\AdSpendPlatformService;
+use App\Services\AdSpendSyncService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class SyncAdSpendReports extends Command
 {
@@ -21,23 +18,15 @@ class SyncAdSpendReports extends Command
 
     protected $description = '同步投放平台日报到 ad_spend_platform_daily_reports';
 
-    public function handle(AdSpendPlatformService $service): int
+    public function handle(
+        AdSpendPlatformService $platformService,
+        AdSpendSyncService $syncService
+    ): int
     {
         [$startDate, $endDate] = $this->resolveDateRange();
         if (!$startDate || !$endDate) {
             return self::FAILURE;
         }
-
-        $projectCodeLookup = DB::table('project_projects')
-            ->pluck('project_code')
-            ->mapWithKeys(function ($code) {
-                $value = trim((string) $code);
-                if ($value === '') {
-                    return [];
-                }
-                return [strtoupper($value) => $value];
-            })
-            ->toArray();
 
         $accountIds = array_values(array_filter(array_map('intval', (array) $this->option('account-id'))));
 
@@ -57,119 +46,24 @@ class SyncAdSpendReports extends Command
         $failedAccounts = 0;
 
         foreach ($accounts as $account) {
-            $job = null;
-
             try {
-                $requestParams = [
-                    'objectName' => 'account',
-                    'dims' => ['date', 'group_name', 'group_id', 'country'],
-                    'startDate' => $startDate,
-                    'endDate' => $endDate,
-                    'size' => 200,
-                ];
-
-                $job = AdSpendSyncJob::create([
-                    'platform_account_id' => $account->id,
-                    'platform_code' => $account->platform_code,
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                    'status' => AdSpendSyncJob::STATUS_RUNNING,
-                    'request_params' => $requestParams,
-                    'total_records' => 0,
-                    'matched_records' => 0,
-                    'unmatched_records' => 0,
-                ]);
-
-                $records = $service->fetchDailyRecords($account, $startDate, $endDate, 200);
-                $totalRecords = 0;
-                $matchedRecords = 0;
-                $unmatchedRecords = 0;
-
-                foreach ($records as $record) {
-                    if (!is_array($record)) {
-                        continue;
-                    }
-
-                    $totalRecords++;
-
-                    $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
-                    $projectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
-                    $reportDate = (string) ($record['date'] ?? '');
-
-                    if ($reportDate === '' || $projectCode === '') {
-                        $unmatchedRecords++;
-                        continue;
-                    }
-
-                    $country = (string) ($record['country'] ?? '');
-                    if ($country === 'null') {
-                        $country = '';
-                    }
-
-                    $impressions = (int) ($record['impressions'] ?? 0);
-                    $clicks = (int) ($record['clicks'] ?? 0);
-                    $spend = $this->toDecimal($record['spend'] ?? 0, true);
-                    $ctr = $this->toDecimal($record['ctr'] ?? null, false);
-                    $cpm = $this->toDecimal($record['cpm'] ?? null, false);
-                    $cpc = $this->toDecimal($record['cpc'] ?? null, false);
-
-                    AdSpendDailyReport::updateOrCreate(
-                        [
-                            'platform_account_id' => $account->id,
-                            'project_code' => $projectCode,
-                            'report_date' => $reportDate,
-                            'country' => $country,
-                        ],
-                        [
-                            'platform_code' => $account->platform_code,
-                            'project_code' => $projectCode,
-                            'impressions' => $impressions,
-                            'clicks' => $clicks,
-                            'spend' => $spend,
-                            'ctr' => $ctr,
-                            'cpm' => $cpm,
-                            'cpc' => $cpc,
-                            'raw_group_name' => $rawGroupName,
-                        ]
-                    );
-
-                    $matchedRecords++;
-                }
-
-                $job->update([
-                    'status' => AdSpendSyncJob::STATUS_SUCCESS,
-                    'total_records' => $totalRecords,
-                    'matched_records' => $matchedRecords,
-                    'unmatched_records' => $unmatchedRecords,
-                    'error_message' => null,
-                ]);
-
-                $account->update(['last_sync_at' => now()]);
+                $job = $syncService->syncAccount(
+                    $account,
+                    $startDate,
+                    $endDate,
+                    $platformService,
+                    AdSpendSyncService::SOURCE_SCHEDULED
+                );
 
                 $this->info(sprintf(
                     'Account #%d synced. total=%d, matched=%d, unmatched=%d',
                     $account->id,
-                    $totalRecords,
-                    $matchedRecords,
-                    $unmatchedRecords
+                    (int) $job->total_records,
+                    (int) $job->matched_records,
+                    (int) $job->unmatched_records
                 ));
             } catch (\Throwable $e) {
                 $failedAccounts++;
-
-                if ($job) {
-                    $job->update([
-                        'status' => AdSpendSyncJob::STATUS_FAILED,
-                        'error_message' => mb_substr($e->getMessage(), 0, 2000),
-                    ]);
-                }
-
-                Log::error('ad-spend:sync failed', [
-                    'account_id' => $account->id,
-                    'platform_code' => $account->platform_code,
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                    'error' => $e->getMessage(),
-                ]);
 
                 $this->error(sprintf('Account #%d sync failed: %s', $account->id, $e->getMessage()));
             }
@@ -214,37 +108,4 @@ class SyncAdSpendReports extends Command
         }
     }
 
-    private function toDecimal($value, bool $defaultZero)
-    {
-        if ($value === null || $value === '') {
-            return $defaultZero ? 0 : null;
-        }
-
-        return is_numeric($value) ? (string) $value : ($defaultZero ? 0 : null);
-    }
-
-    private function resolveProjectCode(string $rawGroupName, array $projectCodeLookup): string
-    {
-        $raw = trim($rawGroupName);
-        if ($raw === '' || empty($projectCodeLookup)) {
-            return '';
-        }
-
-        $upperRaw = strtoupper($raw);
-        if (isset($projectCodeLookup[$upperRaw])) {
-            return $projectCodeLookup[$upperRaw];
-        }
-
-        $keys = array_keys($projectCodeLookup);
-        usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
-
-        foreach ($keys as $upperCode) {
-            $pattern = '/(^|[^A-Z0-9])' . preg_quote($upperCode, '/') . '([^A-Z0-9]|$)/';
-            if (preg_match($pattern, $upperRaw) === 1) {
-                return $projectCodeLookup[$upperCode];
-            }
-        }
-
-        return '';
-    }
 }
