@@ -155,7 +155,7 @@
 
 - 命令：`php artisan ad-spend:sync --lookback-days=2`
 - 调度定义：`app/Console/Kernel.php`
-- 当前配置：按小时执行，保留 `onOneServer()` 与 `withoutOverlapping(55)`
+- 当前配置：每小时第 `5` 分钟执行，保留 `onOneServer()` 与 `withoutOverlapping(55)`
 
 日期参数规则：
 
@@ -173,7 +173,7 @@
 2. `DB::purge()` 清理默认连接
 3. `DB::reconnect()` 重新建立默认连接
 
-该改动不改变原有调度频率，也不改变对外接口和命令用法。
+该改动不改变对外接口和命令用法；当前仅将调度触发时间明确为每小时第 `5` 分钟。
 
 ## 6. 可观测性
 
