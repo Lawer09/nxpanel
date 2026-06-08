@@ -183,7 +183,7 @@ class LoginService
 
         $inviteCode = new InviteCode();
         $inviteCode->user_id = $userId;
-        $inviteCode->code = 'MU-' . Helper::randomChar(8);
+        $inviteCode->code = 'MU-' . Helper::randomChar(4);
         $inviteCode->status = InviteCode::STATUS_UNUSED;
         $inviteCode->save();
     }
