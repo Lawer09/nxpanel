@@ -104,3 +104,11 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将 `app/Console/Kernel.php` 中对应调度恢复为整点执行，并同步回退文档说明即可。
 
+## 2026-06-08 项目日报 CSV 导出
+
+- 日期：2026-06-08
+- 变更摘要：为项目日报查询新增管理端 CSV 导出接口 `POST /api/v3/{secure_path}/report/project/export`；复用原有筛选、分组、排序逻辑导出全量结果，并补充项目报表导出文档与前端调用说明。
+- 影响范围：`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除管理端导出路由、导出请求类与 CSV 导出逻辑，并回退项目报表文档中的导出说明即可。
+

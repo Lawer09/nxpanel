@@ -275,6 +275,7 @@ class AdminRoute
                 $router->post('/userReport/traffic/query', [ReportController::class, 'queryUserReportTraffic']);
                 $router->post('/userReport/nodeFail/query', [ReportController::class, 'queryUserReportNodeFail']);
                 $router->post('/project/query',           [ReportController::class, 'queryProjectReport']);
+                $router->post('/project/export',          [ReportController::class, 'exportProjectReport']);
                 $router->post('/project/hourly/query',    [ReportController::class, 'queryProjectReportHourly']);
             });
 

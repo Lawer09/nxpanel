@@ -1,15 +1,18 @@
-# 项目报表查询接口
+# 项目报表查询与导出接口
 
 ## 基本说明
 
-- 管理端路径：`POST /api/v3/{secure_path}/report/project/query`
-- 应用端路径：`POST /api/v3/application/report/project/query`
-- 控制器：`App\Http\Controllers\V3\Admin\ReportController::queryProjectReport`
-- Service：`App\Services\ProjectReportService::queryDaily`
+- 管理端查询路径：`POST /api/v3/{secure_path}/report/project/query`
+- 管理端导出路径：`POST /api/v3/{secure_path}/report/project/export`
+- 应用端查询路径：`POST /api/v3/application/report/project/query`
+- 控制器：`App\Http\Controllers\V3\Admin\ReportController`
+- Service：`App\Services\ProjectReportService`
 
-两条路径共用同一套查询逻辑和返回结构。
+项目日报查询与导出共用同一套筛选、分组、排序逻辑。导出接口仅开放管理端，不开放 application 路由。
 
-## 请求参数
+## 查询接口
+
+### 请求参数
 
 ```json
 {
@@ -72,7 +75,7 @@
 - `id`
 - `updatedAt`
 
-## 返回示例
+### 返回示例
 
 ```json
 {
@@ -150,16 +153,90 @@
 }
 ```
 
-## 返回说明
+### 返回说明
 
-- `summary` 为当前筛选条件下的整体验证汇总，不受分页影响。
-- `summary` 与 `page`、`pageSize`、`total` 同级，位于 `data` 对象内部。
-- 其他报表接口当前没有新增 `summary` 字段，本次只有项目日报查询接口支持。
+- `summary` 为当前筛选条件下的整体汇总，不受分页影响
+- `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
 - `totalCost = adSpendCost + trafficCost`
 - `impressionsPerUser = adImpressions / dauUsers`
 - `arpu = adRevenue / dauUsers`
 
-## 实现说明
+## CSV 导出接口
 
-- Controller 只负责接收请求和返回响应，具体查询逻辑已经下沉到 `ProjectReportService`。
-- `ReportController` 中其他原本直接查询数据库的报表接口，也已统一改为调用 Service。
+### 请求参数
+
+导出接口请求体与查询接口保持一致，但会忽略 `page` 和 `pageSize`，按当前筛选条件导出全量结果。
+
+```json
+{
+  "dateFrom": "2026-06-01",
+  "dateTo": "2026-06-05",
+  "groupBy": ["projectCode"],
+  "filters": {
+    "projectCodes": ["A003"],
+    "countries": ["US"]
+  },
+  "orderBy": "adRevenue",
+  "orderDirection": "desc"
+}
+```
+
+### 返回说明
+
+- 响应类型：`text/csv; charset=UTF-8`
+- 文件名格式：`project_report_daily_YYYYMMDD_HHMMSS.csv`
+- 编码：`UTF-8 with BOM`
+- 返回内容为文件流，不走统一 JSON 响应结构
+
+### CSV 列顺序
+
+1. 日期
+2. 项目编码
+3. 国家
+4. 新增用户
+5. 上报新增用户
+6. FB 新增用户
+7. DAU
+8. FB DAU
+9. 广告收入
+10. 广告请求数
+11. 广告匹配请求数
+12. 广告展示数
+13. 广告点击数
+14. eCPM
+15. CTR
+16. 匹配率
+17. 展示率
+18. 人均展示
+19. ARPU
+20. 投放成本
+21. CPI
+22. CPC
+23. CPM
+24. 流量用量 MB
+25. 流量成本
+26. 总成本
+27. 利润
+28. ROI
+29. 更新时间
+
+### 导出规则
+
+- 导出复用查询接口的筛选、分组、排序逻辑
+- 当 `groupBy` 不包含 `reportDate`、`projectCode` 或 `country` 时，对应 CSV 维度列留空
+- 导出结果不包含 `summary` 汇总行
+- 无数据时仍会返回仅包含表头的 CSV 文件
+
+## 前端配合说明
+
+- 导出按钮调用：`POST /api/v3/{secure_path}/report/project/export`
+- 请求体直接复用当前项目日报查询表单条件，可以不传 `page`、`pageSize`
+- Axios 示例：
+
+```js
+axios.post(url, payload, { responseType: 'blob' })
+```
+
+- 前端应优先从响应头 `Content-Disposition` 解析文件名
+- 如果文件名解析失败，可回退为 `project_report_daily.csv`
+- 该接口返回的是 CSV 文件流，前端不要按 `code`、`msg`、`data` 结构解析

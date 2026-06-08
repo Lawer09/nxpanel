@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\NodeReportQueryRequest;
 use App\Http\Requests\Admin\NodeServerRealtimeRequest;
+use App\Http\Requests\Admin\ProjectAggregateDailyExportRequest;
 use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyQueryRequest;
@@ -17,6 +18,7 @@ use App\Http\Requests\Admin\UserReportTrafficQueryRequest;
 use App\Services\ProjectReportService;
 use App\Services\ReportQueryService;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
@@ -123,6 +125,26 @@ class ReportController extends Controller
         return $this->ok(
             $this->projectReportService->queryDaily($request->validated())
         );
+    }
+
+    /**
+     * Export project daily aggregate report as CSV.
+     */
+    public function exportProjectReport(ProjectAggregateDailyExportRequest $request): StreamedResponse
+    {
+        $filename = $this->projectReportService->makeDailyExportFilename();
+        $headers = $this->projectReportService->dailyCsvHeaders();
+
+        return response()->streamDownload(function () use ($request, $headers) {
+            $output = fopen('php://output', 'w');
+            fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fputcsv($output, $headers);
+            $this->projectReportService->writeDailyCsvRows($request->validated(), $output);
+            fclose($output);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 
     /**

@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Http\Requests\Admin;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class ProjectAggregateDailyExportRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'dateFrom' => 'nullable|date',
+            'dateTo' => 'nullable|date',
+            'groupBy' => 'nullable|array',
+            'groupBy.*' => 'required|string|distinct|in:reportDate,projectCode,country',
+            'filters' => 'nullable|array',
+            'filters.projectCodes' => 'nullable|array',
+            'filters.projectCodes.*' => 'string|max:100',
+            'filters.countries' => 'nullable|array',
+            'filters.countries.*' => 'string|max:50',
+            'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,fbNewUsers,dauUsers,fbDauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,profit,roi,id,updatedAt',
+            'orderDirection' => 'nullable|string|in:asc,desc',
+        ];
+    }
+}
