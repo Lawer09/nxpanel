@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Postback\PostbackController;
 use App\Services\ThemeService;
 use App\Services\UpdateService;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\File;
 |
 */
 
+Route::get('/pb/com.jkcl.zwx.vpn', [PostbackController::class, 'store']);
 
 Route::get('/', function (Request $request) {
     if (admin_setting('app_url') && admin_setting('safe_mode_enable', 0)) {

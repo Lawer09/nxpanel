@@ -112,3 +112,11 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除管理端导出路由、导出请求类与 CSV 导出逻辑，并回退项目报表文档中的导出说明即可。
 
+## 2026-06-08 PB 点击归因回调接口
+
+- 日期：2026-06-08
+- 变更摘要：新增公开接口 `GET /pb/com.jkcl.zwx.vpn`，用于接收 `clickid` 与 `deviceid` 并落库，按 `clickid` 做唯一去重。
+- 影响范围：`routes/web.php`、`app/Http/Controllers/Postback/PostbackController.php`、`app/Http/Requests/Postback/PostbackStoreRequest.php`、`app/Services/PostbackReceiptService.php`、`app/Models/PostbackReceipt.php`、`database/migrations/2026_06_08_120000_create_postback_receipts_table.php`、`tests/Feature/PostbackStoreTest.php`、`docs/api/postback_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_08_120000_create_postback_receipts_table.php`。
+- 回滚说明：回滚该迁移并删除对应路由、控制器、请求类、服务、模型、测试和文档即可。
+

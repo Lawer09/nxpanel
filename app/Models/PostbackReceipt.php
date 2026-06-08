@@ -1,0 +1,18 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class PostbackReceipt extends Model
+{
+    public const PACKAGE_NAME = 'com.jkcl.zwx.vpn';
+
+    protected $table = 'postback_receipts';
+    protected $dateFormat = 'U';
+    protected $guarded = ['id'];
+    protected $casts = [
+        'created_at' => 'timestamp',
+        'updated_at' => 'timestamp',
+    ];
+}
