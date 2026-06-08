@@ -6,8 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class PostbackReceipt extends Model
 {
-    public const PACKAGE_NAME = 'com.jkcl.zwx.vpn';
-
     protected $table = 'postback_receipts';
     protected $dateFormat = 'U';
     protected $guarded = ['id'];

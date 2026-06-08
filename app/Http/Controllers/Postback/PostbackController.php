@@ -16,9 +16,10 @@ class PostbackController extends Controller
     /**
      * Receive and persist the public click attribution callback.
      */
-    public function store(PostbackStoreRequest $request): JsonResponse
+    public function store(PostbackStoreRequest $request, string $packageName): JsonResponse
     {
         return $this->ok($this->postbackReceiptService->store(
+            packageName: $packageName,
             payload: $request->validated(),
             requestIp: $request->ip(),
             userAgent: $request->userAgent()
