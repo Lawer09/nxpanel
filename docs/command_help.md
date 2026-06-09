@@ -240,3 +240,42 @@ php artisan user_report:replay-oss 2026-05-01 --to=2026-05-11 --clear-day
 # 4. 重建小时表
 php artisan report_hourly:rebuild 2026-05-01 --to=2026-05-11
 ```
+---
+
+## 6. 套餐到期降级命令
+
+### 6.1 subscription:downgrade-expired-to-free
+
+将已过期用户自动降级到默认免费套餐。
+
+免费套餐查找优先级：
+
+- `plan_id = 1`
+- 套餐名精确等于 `Free`
+- 套餐名精确等于 `免费`
+
+如果以上都不存在，则命令只记录 warning，不修改任何用户，保持系统当前逻辑不变。
+
+降级时会同步免费套餐属性，并重置用户流量：
+
+- `plan_id`
+- `group_id`
+- `transfer_enable`
+- `speed_limit`
+- `device_limit`
+- `expired_at = null`
+- `u = 0`
+- `d = 0`
+
+```bash
+# 默认每批处理 100 个用户
+php artisan subscription:downgrade-expired-to-free
+
+# 指定批大小
+php artisan subscription:downgrade-expired-to-free --chunk=200
+```
+
+调度说明：
+
+- 已在 `app/Console/Kernel.php` 中配置为每分钟执行一次
+- 使用 `onOneServer()` 和 `withoutOverlapping()` 防止重复调度

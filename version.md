@@ -120,3 +120,18 @@
 - 是否需要迁移：是，需执行新增迁移 `2026_06_08_120000_create_postback_receipts_table.php`。
 - 回滚说明：回滚该迁移并删除对应路由、控制器、请求类、服务、模型、测试和文档即可。
 
+## 2026-06-08 PB 点击归因回调路径调整
+
+- 日期：2026-06-08
+- 变更摘要：将公开 PB 回调路径从 `GET /pb/com.jkcl.zwx.vpn` 调整为无认证的 `GET /api/v3/pb/{package_name}`，避免未命中的 `/pb/*` 请求落到前端页面；同时将幂等规则调整为按 `package_name + clickid` 去重。
+- 影响范围：`app/Http/Routes/V3/PbRoute.php`、`routes/web.php`、`app/Http/Controllers/Postback/PostbackController.php`、`app/Services/PostbackReceiptService.php`、`app/Models/PostbackReceipt.php`、`database/migrations/2026_06_08_130000_update_postback_receipts_unique_index.php`、`tests/Feature/PostbackStoreTest.php`、`docs/api/postback_api.md`、`version.md`
+- 是否需要迁移：是，除创建表外，还需执行新增迁移 `2026_06_08_130000_update_postback_receipts_unique_index.php`。
+- 回滚说明：删除 V3 PB 路由，恢复旧的 `web.php` 路由，并回滚新增索引迁移即可。
+
+## 2026-06-09 到期套餐自动降级到免费套餐
+
+- 日期：2026-06-09
+- 变更摘要：新增 `subscription:downgrade-expired-to-free` 定时命令，按 `plan_id=1`、套餐名 `Free`、套餐名 `免费` 的优先级解析默认免费套餐，并将已过期用户自动降级到该套餐；降级后同步免费套餐属性并重置流量。
+- 影响范围：`app/Services/ExpiredPlanDowngradeService.php`、`app/Console/Commands/DowngradeExpiredUsersToFreePlan.php`、`app/Services/TrafficResetService.php`、`app/Console/Kernel.php`、`tests/Feature/ExpiredPlanDowngradeCommandTest.php`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：删除降级服务、命令、调度和测试，并回退命令文档与本条版本记录即可。
