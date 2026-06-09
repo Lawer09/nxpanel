@@ -81,9 +81,9 @@ class ProjectService
         if (array_key_exists('ownerName', $params)) {
             $project->owner_name = $params['ownerName'];
         }
-        if (array_key_exists('department', $params)) {
-            $project->department = $params['department'];
-        }
+        // if (array_key_exists('department', $params)) {
+        //     $project->department = $params['department'];
+        // }
         if (array_key_exists('status', $params)) {
             $project->status = $params['status'];
         }
