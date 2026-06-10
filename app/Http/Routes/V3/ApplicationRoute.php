@@ -25,7 +25,11 @@ class ApplicationRoute
             });
 
             $router->group(['prefix' => 'report'], function ($router) {
-                $router->post('/project/query', [ReportController::class, 'queryProjectReport']);
+                $router->post('/project/query', [ReportController::class, 'queryProjectReportHourly']);
+            });
+
+            $router->group(['prefix' => 'report'], function ($router) {
+                $router->post('/project/queryDaily', [ReportController::class, 'queryProjectReport']);
             });
 
             $router->group(['prefix' => 'tg-bot'], function ($router) {
