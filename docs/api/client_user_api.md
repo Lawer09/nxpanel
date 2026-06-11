@@ -5,7 +5,7 @@
 ### 基本说明
 
 - 路由前缀：`/api/v3/user`
-- 鉴权方式：用户登录鉴权，需要携带 `Authorization`
+- 鉴权方式：用户登录鉴权，支持 `Authorization` 请求头，也兼容 `auth_data` / `authorization` 请求参数
 - 请求方法：`GET`
 - 接口路径：`/api/v3/user/getSubscribe`
 - 接口用途：查询当前登录用户的订阅、套餐、流量、订阅链接和流量重置信息。
@@ -14,17 +14,39 @@
 
 | Header | 必填 | 说明 |
 | --- | --- | --- |
-| Authorization | 是 | 用户登录后返回的认证信息，格式为 `Bearer {auth_data}` |
+| Authorization | 否 | 用户登录后返回的认证信息，格式为 `Bearer xxxxxx` |
 
 ### 请求参数
 
-无。
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| auth_data | string | 否 | 用户登录后返回的认证信息，支持 `Bearer xxxxxx` 或裸 token |
+| authorization | string | 否 | 兼容参数，含义同 `auth_data` |
+
+`Authorization`、`auth_data`、`authorization` 三者传一个即可。
+
+该认证兼容方式适用于以下 V3 用户接口：
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/api/v3/user/getSubscribe` | GET | 查询当前用户订阅信息 |
+| `/api/v3/user/invite-codes/create` | POST | 创建或返回当前用户的邀请码 |
+| `/api/v3/user/invite-codes/use` | POST | 使用邀请码绑定邀请关系 |
+| `/api/v3/user/invite/summary` | GET | 查询当前用户邀请统计 |
 
 ### 请求示例
 
 ```http
 GET /api/v3/user/getSubscribe
 Authorization: Bearer xxxxxx
+```
+
+```http
+GET /api/v3/user/getSubscribe?auth_data=Bearer%20xxxxxx
+```
+
+```http
+GET /api/v3/user/getSubscribe?auth_data=xxxxxx
 ```
 
 ### 成功返回示例

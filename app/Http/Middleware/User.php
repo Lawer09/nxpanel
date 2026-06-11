@@ -4,9 +4,8 @@ namespace App\Http\Middleware;
 
 use App\Exceptions\ApiException;
 use App\Services\AuthService;
-use Illuminate\Support\Facades\Auth;
 use Closure;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
 
 class User
 {
@@ -20,8 +19,40 @@ class User
     public function handle($request, Closure $next)
     {
         if (!Auth::guard('sanctum')->check()) {
-            throw new ApiException('未登录或登陆已过期', 403);
+            $authorization = $this->resolveAuthorization($request);
+            $user = $authorization ? AuthService::findUserByBearerToken($authorization) : null;
+
+            if (!$user) {
+                throw new ApiException('未登录或登陆已过期', 403);
+            }
+
+            Auth::guard('sanctum')->setUser($user);
+            Auth::setUser($user);
         }
+
         return $next($request);
+    }
+
+    /**
+     * Resolve Bearer token from request parameters for clients that cannot set headers.
+     */
+    private function resolveAuthorization($request): ?string
+    {
+        $authorization = $request->input('auth_data')
+            ?? $request->input('authorization')
+            ?? $request->header('authorization');
+
+        if (!$authorization) {
+            return null;
+        }
+
+        $authorization = trim((string) $authorization);
+        if ($authorization === '') {
+            return null;
+        }
+
+        return str_starts_with($authorization, 'Bearer ')
+            ? $authorization
+            : 'Bearer ' . $authorization;
     }
 }

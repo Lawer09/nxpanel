@@ -135,3 +135,11 @@
 - 影响范围：`app/Services/ExpiredPlanDowngradeService.php`、`app/Console/Commands/DowngradeExpiredUsersToFreePlan.php`、`app/Services/TrafficResetService.php`、`app/Console/Kernel.php`、`tests/Feature/ExpiredPlanDowngradeCommandTest.php`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：删除降级服务、命令、调度和测试，并回退命令文档与本条版本记录即可。
+
+## 2026-06-11 V3 用户接口认证参数兼容
+
+- 日期：2026-06-11
+- 变更摘要：调整 `user` 中间件，在保留 Sanctum `Authorization` 请求头认证的基础上，兼容通过 `auth_data` 或 `authorization` 请求参数传递用户认证 token，并支持 `Bearer xxxxxx` 与裸 token 两种格式。
+- 影响范围：`app/Http/Middleware/User.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/client_user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `User` 中间件为仅依赖 Sanctum Header 认证，并删除对应测试和文档说明即可。
