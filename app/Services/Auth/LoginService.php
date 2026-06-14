@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\InviteCode;
 use App\Models\User;
+use App\Services\BlockedUserIpService;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
 use App\Utils\Helper;
@@ -109,6 +110,10 @@ class LoginService
                     return [false, [500, 'User creation failed']];
                 }
 
+                if ($this->banCreatedUserWhenIpBlocked($user, $normalizedMetadata)) {
+                    return [false, [400, __('Your account has been suspended')]];
+                }
+
                 $this->ensureAidReusableInviteCode((int) $user->id);
 
                 $created = true;
@@ -202,6 +207,7 @@ class LoginService
             'country',
             'city',
             'device_id',
+            'ip',
             'channel',
         ];
 
@@ -251,6 +257,24 @@ class LoginService
         }
 
         return $result;
+    }
+
+    /**
+     * Ban a newly created AID user when its registration IP is already blocked.
+     */
+    private function banCreatedUserWhenIpBlocked(User $user, array $metadata): bool
+    {
+        $ip = $metadata['ip'] ?? null;
+        $blockedUserIpService = app(BlockedUserIpService::class);
+
+        if (!$blockedUserIpService->isBlocked(is_string($ip) ? $ip : null)) {
+            return false;
+        }
+
+        $user->banned = 1;
+        $user->save();
+
+        return true;
     }
 
     /**

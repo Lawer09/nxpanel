@@ -136,6 +136,14 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：删除降级服务、命令、调度和测试，并回退命令文档与本条版本记录即可。
 
+## 2026-06-14 AID 注册 IP 封禁与管理端批量封禁
+
+- 日期：2026-06-14
+- 变更摘要：`loginByAid` 支持保存 `metadata.ip`，新增 `blocked_user_ips` 封禁 IP 表；管理端新增 `POST /api/v3/{secure_path}/user/batchBan` 批量封禁用户并记录注册 IP，用户列表新增 `onlyBanned` 查询参数；AID 新注册用户如果 IP 命中封禁列表会立即封禁。
+- 影响范围：`app/Services/Auth/LoginService.php`、`app/Services/BlockedUserIpService.php`、`app/Models/BlockedUserIp.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Requests/Admin/UserBatchBanRequest.php`、`app/Http/Routes/V3/AdminRoute.php`、`database/migrations/2026_06_14_120000_create_blocked_user_ips_table.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行 `2026_06_14_120000_create_blocked_user_ips_table.php`。
+- 回滚说明：回滚新增迁移并移除封禁 IP 服务、模型、管理端接口、AID 注册封禁检查、测试和文档说明即可。
+
 ## 2026-06-11 V3 用户接口认证参数兼容
 
 - 日期：2026-06-11

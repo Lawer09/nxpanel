@@ -16,6 +16,7 @@
 | `meta` | `object` | 否 | 按 `register_metadata` JSON 字段筛选，key 为元数据字段名 |
 | `filter` | `array` | 否 | 通用字段筛选，格式 `[{id, value}]` |
 | `sort` | `array` | 否 | 排序，格式 `[{id, desc: bool}]` |
+| `onlyBanned` | `bool` | 否 | 只查询已封禁用户 |
 
 ### 示例
 
@@ -141,6 +142,73 @@ POST /api/v3/admin/user/update
 {
     "code": 400202,
     "message": "用户不存在"
+}
+```
+
+---
+
+## 批量封禁用户并记录注册 IP
+
+`POST /api/v3/admin/user/batchBan`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `user_ids` | `int[]` | 是 | 需要封禁的用户 ID 列表 |
+| `reason` | `string` | 否 | 封禁原因，最长 500 字符 |
+
+接口会将用户 `banned` 更新为 `1`，清理用户登录会话，并从 `register_metadata.ip` 提取注册 IP 写入 `blocked_user_ips`。没有合法注册 IP 的用户仍会被封禁，但会出现在 `skippedIpUserIds`。
+
+### 请求示例
+
+```json
+POST /api/v3/admin/user/batchBan
+{
+    "user_ids": [1001, 1002],
+    "reason": "fraud batch"
+}
+```
+
+### 返回示例
+
+```json
+{
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+        "bannedUserCount": 2,
+        "blockedIpCount": 1,
+        "blockedIps": [
+            "203.0.113.30"
+        ],
+        "skippedIpUserIds": [
+            1002
+        ]
+    }
+}
+```
+
+### AID 注册 IP 封禁规则
+
+`POST /api/v1/passport/auth/loginByAid` 与 `POST /api/v3/passport/auth/loginByAid` 支持在 `metadata.ip` 中传客户端 IP。
+
+当 AID 自动注册新用户时：
+
+- `metadata.ip` 会保存到 `v2_user.register_metadata.ip`
+- 如果该 IP 已存在于 `blocked_user_ips.ip`，新用户会立即被标记为 `banned=1`
+- 被封禁的新用户不会返回登录凭证，接口返回账号已封禁错误
+
+请求示例：
+
+```json
+POST /api/v3/passport/auth/loginByAid
+{
+    "aid": "device-001",
+    "metadata": {
+        "app_id": "com.example.app",
+        "ip": "203.0.113.30"
+    }
 }
 ```
 

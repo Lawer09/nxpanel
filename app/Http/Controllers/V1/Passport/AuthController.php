@@ -191,6 +191,7 @@ class AuthController extends Controller
             'metadata.country' => 'nullable|string|max:100',
             'metadata.city' => 'nullable|string|max:100',
             'metadata.device_id' => 'nullable|string|max:255',
+            'metadata.ip' => 'nullable|ip',
             'metadata.channel' => 'nullable|string|max:100',
             'metadata.channelType' => 'nullable|string|in:paid,organic,unknown',
             'metadata.channel_type' => 'nullable|string|in:paid,organic,unknown',

@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\V2\Admin\UserController as V2UserController;
+use App\Http\Requests\Admin\UserBatchBanRequest;
 use App\Http\Requests\Admin\UserUpdate;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\BlockedUserIpService;
 use App\Services\NodeSyncService;
 use App\Http\Resources\CamelizeResource;
 use App\Utils\Helper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -36,6 +39,10 @@ class UserController extends V2UserController
         if ($request->filled('id')) {
             $ids = is_array($id = $request->input('id')) ? $id : explode(',', $id);
             $userModel->whereIn('id', $ids);
+        }
+
+        if ($request->boolean('onlyBanned')) {
+            $userModel->where('banned', 1);
         }
 
         $current  = (int) $request->input('current', 1);
@@ -179,6 +186,50 @@ class UserController extends V2UserController
         }
         NodeSyncService::notifyUsersUpdated();
         return $this->ok(true);
+    }
+
+    /**
+     * Batch ban users and persist their registration IPs in the block list.
+     */
+    public function batchBan(UserBatchBanRequest $request, BlockedUserIpService $blockedUserIpService): JsonResponse
+    {
+        $userIds = collect($request->validated('user_ids'))
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+        $reason = $request->validated('reason') ?? null;
+        $operatorUserId = Auth::guard('sanctum')->id();
+
+        try {
+            $result = DB::transaction(function () use ($userIds, $reason, $operatorUserId, $blockedUserIpService) {
+                $users = User::query()
+                    ->whereIn('id', $userIds->all())
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($users as $user) {
+                    $user->banned = 1;
+                    $user->save();
+                    (new AuthService($user))->removeAllSessions();
+                }
+
+                $ipResult = $blockedUserIpService->blockIpsForUsers($users, $operatorUserId, $reason);
+
+                return [
+                    'bannedUserCount' => $users->count(),
+                    'blockedIpCount' => count($ipResult['blocked_ips']),
+                    'blockedIps' => $ipResult['blocked_ips'],
+                    'skippedIpUserIds' => $ipResult['skipped_user_ids'],
+                ];
+            });
+        } catch (\Exception $e) {
+            Log::error('Batch ban users failed', ['error' => $e->getMessage()]);
+            return $this->error([500, 'Batch ban failed']);
+        }
+
+        NodeSyncService::notifyUsersUpdated();
+
+        return $this->ok($result);
     }
 
     /**

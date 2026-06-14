@@ -92,6 +92,7 @@ class AdminRoute
                 $router->post('/dumpCSV',           [UserController::class, 'dumpCSV']);
                 $router->post('/sendMail',          [UserController::class, 'sendMail']);
                 $router->post('/ban',               [UserController::class, 'ban']);
+                $router->post('/batchBan',          [UserController::class, 'batchBan']);
                 $router->post('/resetSecret',       [UserController::class, 'resetSecret']);
                 $router->post('/setInviteUser',     [UserController::class, 'setInviteUser']);
                 $router->post('/destroy',           [UserController::class, 'destroy']);
