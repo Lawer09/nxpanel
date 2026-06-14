@@ -129,3 +129,58 @@ GET /api/v3/user/getSubscribe?auth_data=xxxxxx
   "msg": "Subscription plan does not exist"
 }
 ```
+
+---
+
+## 客户端订阅 JSON
+
+### 基本说明
+
+- 路由前缀：`/api/v3/client`
+- 鉴权方式：`token` 查询参数
+- 请求方法：`GET`
+- 接口路径：`/api/v3/client/sub/json`
+- 接口用途：返回按国家缩写分组的客户端订阅节点 JSON。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| token | string | 是 | 用户订阅 token |
+| types | string | 否 | 节点类型过滤，多个值可用逗号分隔 |
+| filter | string | 否 | 节点名称或标签关键字过滤 |
+| flag | string | 否 | 客户端标识 |
+
+### 成功返回说明
+
+- 顶层对象 key 仍为国家缩写，例如 `US`、`JP`。
+- 每个节点新增以下字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| country_code | string | 节点所属国家缩写 |
+| country_name | string | 国家缩写对应的英文全称 |
+
+### 成功返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "US": [
+      {
+        "id": 1,
+        "name": "US-LosAngeles-01",
+        "type": "vmess",
+        "country_code": "US",
+        "country_name": "United States of America",
+        "host": "example.com",
+        "port": 443,
+        "uri": "vmess://...",
+        "fast": true
+      }
+    ]
+  }
+}
+```

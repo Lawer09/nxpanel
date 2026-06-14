@@ -34,7 +34,8 @@ class UserIpBanTest extends TestCase
                 'app_id' => 'com.example.app',
                 'ip' => '203.0.113.10',
             ],
-        ])->assertOk();
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
 
         $user = User::query()->where('email', 'device-001@apple.com')->firstOrFail();
 

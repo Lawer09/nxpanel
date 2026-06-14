@@ -167,3 +167,19 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Requests/Admin/BlockedUserIpFetchRequest.php`、`app/Http/Requests/Admin/BlockedUserIpDeleteRequest.php`、`app/Services/BlockedUserIpService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除封禁 IP 列表查询/删除接口、对应请求校验、服务方法、测试和文档说明即可。
+
+## 2026-06-14 loginByAid 返回增加 is_ban
+
+- 日期：2026-06-14
+- 变更摘要：`POST /api/v1/passport/auth/loginByAid` 与 `POST /api/v3/passport/auth/loginByAid` 的成功返回新增 `is_ban` 字段，用于显式表示当前用户是否处于封禁状态。
+- 影响范围：`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `loginByAid` 成功返回中的 `is_ban` 字段，以及对应测试和文档说明即可。
+
+## 2026-06-14 client/sub/json 增加国家全称
+
+- 日期：2026-06-14
+- 变更摘要：`GET /api/v3/client/sub/json` 返回的每个节点新增 `country_code` 与 `country_name` 字段，其中 `country_name` 为国家缩写对应的英文全称；同时保留原有按国家缩写分组的返回结构。
+- 影响范围：`app/Http/Controllers/V3/Client/ClientController.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/client_user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除订阅 JSON 节点中的 `country_code` / `country_name` 字段，以及对应测试和文档说明即可。

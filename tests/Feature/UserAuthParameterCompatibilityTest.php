@@ -82,8 +82,19 @@ class UserAuthParameterCompatibilityTest extends TestCase
     {
         $user = $this->createUser();
 
-        $this->getJson('/api/v3/client/sub/json?token=' . urlencode($user->token))
+        $response = $this->getJson('/api/v3/client/sub/json?token=' . urlencode($user->token))
             ->assertOk();
+
+        $groups = $response->json('data');
+        if (!empty($groups)) {
+            $firstGroup = collect($groups)->first();
+            $firstNode = is_array($firstGroup) ? ($firstGroup[0] ?? null) : null;
+
+            if (is_array($firstNode)) {
+                $this->assertArrayHasKey('country_code', $firstNode);
+                $this->assertArrayHasKey('country_name', $firstNode);
+            }
+        }
     }
 
     private function createUser(string $email = 'user@example.com'): User

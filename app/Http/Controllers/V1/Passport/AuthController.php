@@ -215,6 +215,9 @@ class AuthController extends Controller
         }
 
         $authService = new AuthService($result);
-        return $this->success($authService->generateAuthData());
+        $data = $authService->generateAuthData();
+        $data['is_ban'] = (bool) $result->banned;
+
+        return $this->success($data);
     }
 }
