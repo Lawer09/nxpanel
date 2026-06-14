@@ -159,3 +159,11 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除用户列表注册时间范围过滤逻辑、对应测试与文档说明即可。
+
+## 2026-06-14 管理端封禁用户 IP 列表查询与删除
+
+- 日期：2026-06-14
+- 变更摘要：管理端新增 `POST /api/v3/{secure_path}/user/blockedIp/fetch` 封禁用户 IP 列表查询接口和 `POST /api/v3/{secure_path}/user/blockedIp/delete` 删除接口，用于查询和解除 `blocked_user_ips` 中的封禁 IP 记录。
+- 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Requests/Admin/BlockedUserIpFetchRequest.php`、`app/Http/Requests/Admin/BlockedUserIpDeleteRequest.php`、`app/Services/BlockedUserIpService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除封禁 IP 列表查询/删除接口、对应请求校验、服务方法、测试和文档说明即可。

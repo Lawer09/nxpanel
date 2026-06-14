@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BlockedUserIp;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class BlockedUserIpService
@@ -60,6 +61,49 @@ class BlockedUserIpService
             'blocked_ips' => array_values(array_unique($blockedIps)),
             'skipped_user_ids' => $skippedUsers,
         ];
+    }
+
+    /**
+     * Paginate blocked registration IP records for admin management.
+     */
+    public function paginate(array $filters = []): LengthAwarePaginator
+    {
+        $current = (int) ($filters['current'] ?? 1);
+        $pageSize = (int) ($filters['pageSize'] ?? 10);
+
+        $query = BlockedUserIp::query()
+            ->with([
+                'bannedUser:id,email',
+                'operatorUser:id,email',
+            ])
+            ->orderByDesc('id');
+
+        if (!empty($filters['ip'])) {
+            $query->where('ip', $filters['ip']);
+        }
+
+        if (!empty($filters['bannedUserId'])) {
+            $query->where('banned_user_id', (int) $filters['bannedUserId']);
+        }
+
+        if (!empty($filters['operatorUserId'])) {
+            $query->where('operator_user_id', (int) $filters['operatorUserId']);
+        }
+
+        return $query->paginate($pageSize, ['*'], 'page', $current);
+    }
+
+    /**
+     * Delete a blocked registration IP record by id.
+     */
+    public function deleteById(int $id): bool
+    {
+        $record = BlockedUserIp::query()->find($id);
+        if (!$record) {
+            return false;
+        }
+
+        return (bool) $record->delete();
     }
 
     public function extractRegisterIp(User $user): ?string

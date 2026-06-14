@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\V2\Admin\UserController as V2UserController;
+use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
+use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
 use App\Http\Requests\Admin\UserUpdate;
+use App\Models\BlockedUserIp;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\AuthService;
@@ -236,6 +239,56 @@ class UserController extends V2UserController
 
     /**
      * 删除用户
+     */
+    /**
+     * Query blocked registration IP records for admin management.
+     */
+    public function fetchBlockedIps(BlockedUserIpFetchRequest $request, BlockedUserIpService $blockedUserIpService): JsonResponse
+    {
+        $result = $blockedUserIpService->paginate($request->validated());
+
+        return $this->ok([
+            'data' => collect($result->items())->map(function (BlockedUserIp $record): array {
+                return [
+                    'id' => (int) $record->id,
+                    'ip' => (string) $record->ip,
+                    'reason' => $record->reason,
+                    'metadata' => $record->metadata,
+                    'banned_user_id' => $record->banned_user_id,
+                    'operator_user_id' => $record->operator_user_id,
+                    'banned_user' => $record->bannedUser ? [
+                        'id' => (int) $record->bannedUser->id,
+                        'email' => $record->bannedUser->email,
+                    ] : null,
+                    'operator_user' => $record->operatorUser ? [
+                        'id' => (int) $record->operatorUser->id,
+                        'email' => $record->operatorUser->email,
+                    ] : null,
+                    'created_at' => $record->created_at,
+                    'updated_at' => $record->updated_at,
+                ];
+            })->values(),
+            'total' => $result->total(),
+            'page' => $result->currentPage(),
+            'pageSize' => $result->perPage(),
+        ]);
+    }
+
+    /**
+     * Delete a blocked registration IP record by id.
+     */
+    public function deleteBlockedIp(BlockedUserIpDeleteRequest $request, BlockedUserIpService $blockedUserIpService): JsonResponse
+    {
+        $deleted = $blockedUserIpService->deleteById((int) $request->validated('id'));
+        if (!$deleted) {
+            return $this->error([400202, '封禁IP记录不存在']);
+        }
+
+        return $this->ok(true);
+    }
+
+    /**
+     * Delete a user and related records.
      */
     public function destroy(Request $request): JsonResponse
     {

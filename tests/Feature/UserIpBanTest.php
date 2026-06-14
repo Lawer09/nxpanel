@@ -139,6 +139,55 @@ class UserIpBanTest extends TestCase
         $this->assertEqualsCanonicalizing([$insideFirst->id, $insideSecond->id], $ids);
     }
 
+    public function test_admin_can_fetch_blocked_ip_records(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+        $bannedUser = $this->createUser('banned@example.com');
+
+        $targetRecord = BlockedUserIp::create([
+            'ip' => '203.0.113.50',
+            'banned_user_id' => $bannedUser->id,
+            'operator_user_id' => $admin->id,
+            'reason' => 'manual review',
+            'metadata' => ['source' => 'admin_batch_ban'],
+        ]);
+        BlockedUserIp::create([
+            'ip' => '203.0.113.51',
+            'reason' => 'other record',
+        ]);
+
+        $response = $this->postJson($this->adminUserUri('blockedIp/fetch'), [
+            'ip' => '203.0.113.50',
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin));
+
+        $response->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $targetRecord->id)
+            ->assertJsonPath('data.data.0.ip', '203.0.113.50')
+            ->assertJsonPath('data.data.0.banned_user.id', $bannedUser->id)
+            ->assertJsonPath('data.data.0.operator_user.id', $admin->id);
+    }
+
+    public function test_admin_can_delete_blocked_ip_record(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+        $record = BlockedUserIp::create([
+            'ip' => '203.0.113.60',
+            'reason' => 'temporary block',
+        ]);
+
+        $this->postJson($this->adminUserUri('blockedIp/delete'), [
+            'id' => $record->id,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data', true);
+
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'id' => $record->id,
+            'ip' => '203.0.113.60',
+        ]);
+    }
+
     private function createPlan(array $overrides = []): Plan
     {
         return Plan::query()->forceCreate(array_replace([
