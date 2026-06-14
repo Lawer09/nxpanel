@@ -17,6 +17,8 @@
 | `filter` | `array` | 否 | 通用字段筛选，格式 `[{id, value}]` |
 | `sort` | `array` | 否 | 排序，格式 `[{id, desc: bool}]` |
 | `onlyBanned` | `bool` | 否 | 只查询已封禁用户 |
+| `createdAtFrom` | `string\|int` | 否 | 注册时间起始，包含边界；支持 Unix 时间戳、`YYYY-MM-DD`、`YYYY-MM-DD HH:mm:ss` |
+| `createdAtTo` | `string\|int` | 否 | 注册时间结束，包含边界；支持 Unix 时间戳、`YYYY-MM-DD`、`YYYY-MM-DD HH:mm:ss`，仅日期格式会按当天 `23:59:59` 处理 |
 
 ### 示例
 
@@ -29,6 +31,8 @@ POST /api/v3/admin/user/fetch
     },
     "current": 1,
     "pageSize": 20,
+    "createdAtFrom": "2026-06-10",
+    "createdAtTo": "2026-06-12",
     "filter": [
         {"id": "email", "value": "test"}
     ],

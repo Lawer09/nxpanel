@@ -151,3 +151,11 @@
 - 影响范围：`app/Http/Middleware/User.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/client_user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `User` 中间件为仅依赖 Sanctum Header 认证，并删除对应测试和文档说明即可。
+
+## 2026-06-14 管理端用户注册日期范围查询
+
+- 日期：2026-06-14
+- 变更摘要：管理端用户列表查询支持 `createdAtFrom` 与 `createdAtTo` 参数，按 `v2_user.created_at` 注册时间戳进行包含边界的范围过滤；日期字符串会转换为 Unix 时间戳，结束日期仅传 `YYYY-MM-DD` 时按当天 `23:59:59` 处理。
+- 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除用户列表注册时间范围过滤逻辑、对应测试与文档说明即可。
