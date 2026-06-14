@@ -110,6 +110,35 @@ class UserIpBanTest extends TestCase
             ->assertJsonPath('data.data.0.id', $bannedUser->id);
     }
 
+    public function test_admin_user_fetch_can_filter_by_registration_date_range(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+        $insideFirst = $this->createUser('inside-first@example.com', [
+            'created_at' => strtotime('2026-06-10 10:00:00'),
+        ]);
+        $insideSecond = $this->createUser('inside-second@example.com', [
+            'created_at' => strtotime('2026-06-12 23:59:59'),
+        ]);
+        $this->createUser('before@example.com', [
+            'created_at' => strtotime('2026-06-09 23:59:59'),
+        ]);
+        $this->createUser('after@example.com', [
+            'created_at' => strtotime('2026-06-13 00:00:00'),
+        ]);
+
+        $response = $this->postJson($this->adminUserUri('fetch'), [
+            'createdAtFrom' => '2026-06-10',
+            'createdAtTo' => '2026-06-12',
+            'pageSize' => 20,
+        ], $this->adminHeaders($admin));
+
+        $response->assertOk()
+            ->assertJsonPath('data.total', 2);
+
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        $this->assertEqualsCanonicalizing([$insideFirst->id, $insideSecond->id], $ids);
+    }
+
     private function createPlan(array $overrides = []): Plan
     {
         return Plan::query()->forceCreate(array_replace([

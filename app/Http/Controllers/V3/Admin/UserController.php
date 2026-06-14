@@ -45,6 +45,8 @@ class UserController extends V2UserController
             $userModel->where('banned', 1);
         }
 
+        $this->applyCreatedAtRange($request, $userModel);
+
         $current  = (int) $request->input('current', 1);
         $pageSize = (int) $request->input('pageSize', 10);
 
@@ -412,6 +414,50 @@ class UserController extends V2UserController
     // ----------------------------------------------------------------
     // Helpers: expose private methods from V2 via reflection
     // ----------------------------------------------------------------
+
+    /**
+     * Apply registration timestamp range filters to the admin user list.
+     */
+    protected function applyCreatedAtRange(Request $request, Builder $builder): void
+    {
+        $from = $this->parseCreatedAtBoundary($request->input('createdAtFrom'), false);
+        $to = $this->parseCreatedAtBoundary($request->input('createdAtTo'), true);
+
+        if ($from !== null) {
+            $builder->where('created_at', '>=', $from);
+        }
+
+        if ($to !== null) {
+            $builder->where('created_at', '<=', $to);
+        }
+    }
+
+    /**
+     * Convert a Unix timestamp or date string into a user.created_at boundary.
+     */
+    protected function parseCreatedAtBoundary(mixed $value, bool $endOfDay): ?int
+    {
+        if (is_array($value) || $value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            $value .= $endOfDay ? ' 23:59:59' : ' 00:00:00';
+        }
+
+        $timestamp = strtotime($value);
+
+        return $timestamp === false ? null : $timestamp;
+    }
 
     protected function applyFiltersAndSortsPublic(Request $request, Builder $builder): void
     {
