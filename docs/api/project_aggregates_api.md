@@ -271,8 +271,8 @@
 - `adShowRate`: 展示率
 - `adSpendCost`: 广告投放成本
 - `adSpendCpi`: CPI（`adSpendCost / newUsers`）
-- `adSpendCpc`: CPC（`adSpendCost / adClicks`）
-- `adSpendCpm`: CPM（`adSpendCost * 1000 / adImpressions`）
+- `adSpendCpc`: CPC（`adSpendCost / 投放点击数`，来源 `ad_spend_platform_daily_reports.clicks`）
+- `adSpendCpm`: CPM（`adSpendCost * 1000 / 投放展示数`，来源 `ad_spend_platform_daily_reports.impressions`）
 - `trafficUsageMb`: 代理流量使用量（MB）
 - `trafficCost`: 代理流量成本（`trafficUsageMb * 0.16 / 1024`）
 - `profit`: 毛利（`adRevenue - adSpendCost - trafficCost`）

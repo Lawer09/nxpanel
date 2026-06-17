@@ -157,6 +157,9 @@
 
 - `summary` 为当前筛选条件下的整体汇总，不受分页影响
 - `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
+- 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
+- `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
+- `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`
 - `totalCost = adSpendCost + trafficCost`
 - `impressionsPerUser = adImpressions / dauUsers`
 - `arpu = adRevenue / dauUsers`

@@ -191,3 +191,11 @@
 - 影响范围：`database/migrations/2026_06_17_120000_add_app_link_to_project_user_app_map_table.php`、`app/Services/ProjectUserAppMapService.php`、`app/Http/Requests/Admin/ProjectUserAppMapStoreRequest.php`、`app/Http/Requests/Admin/ProjectUserAppMapUpdateRequest.php`、`app/Http/Resources/ProjectResource.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_17_120000_add_app_link_to_project_user_app_map_table.php`。
 - 回滚说明：回滚该迁移并删除 `app_link` 字段相关读写、返回和文档说明即可。
+
+## 2026-06-17 项目报表投放 CPC 口径修复
+
+- 日期：2026-06-17
+- 变更摘要：修复项目报表查询与导出中投放 CPC/CPM 等字段错误使用广告收入侧点击和展示重算的问题；改为统一基于 `ad_spend_platform_daily_reports` 聚合生成 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm`、`totalCost`、`profit`、`roi`，并同步修正文档口径说明。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复项目报表查询服务对 `project_daily_aggregates` 中投放字段的旧汇总逻辑，并回退相关文档说明即可。
