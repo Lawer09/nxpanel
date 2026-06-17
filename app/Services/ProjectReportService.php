@@ -265,9 +265,9 @@ class ProjectReportService
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $dimensionMap = [
-            'reportDate' => 'report_date',
-            'projectCode' => 'project_code',
-            'country' => 'country',
+            'reportDate' => 'project_daily_aggregates.report_date',
+            'projectCode' => 'project_daily_aggregates.project_code',
+            'country' => 'project_daily_aggregates.country',
         ];
 
         $metricMap = [
@@ -371,12 +371,12 @@ class ProjectReportService
             $groupDimensions = ['reportDate'];
         }
 
-        $groupColumns = array_map(static fn ($key) => $dimensionMap[$key], $groupDimensions);
         $query = clone $baseQuery;
         $this->joinDailySpendMetrics($query, $spendMetricsQuery);
 
-        foreach ($groupColumns as $groupColumn) {
-            $query->selectRaw($groupColumn);
+        foreach ($groupDimensions as $groupDimension) {
+            $groupColumn = $dimensionMap[$groupDimension];
+            $query->selectRaw($groupColumn . ' as ' . $this->dailyDimensionAlias($groupDimension));
             $query->groupBy($groupColumn);
         }
 
@@ -573,6 +573,19 @@ class ProjectReportService
     private function normalizedCountrySql(string $column): string
     {
         return "CASE WHEN TRIM(COALESCE({$column}, '')) = '' THEN 'XX' ELSE UPPER(COALESCE({$column}, '')) END";
+    }
+
+    /**
+     * Get the stable select alias for a grouped daily dimension.
+     */
+    private function dailyDimensionAlias(string $dimension): string
+    {
+        return match ($dimension) {
+            'reportDate' => 'report_date',
+            'projectCode' => 'project_code',
+            'country' => 'country',
+            default => $dimension,
+        };
     }
 
     private function formatDailyRow(object $row): array
