@@ -55,6 +55,7 @@ class ProjectResource extends JsonResource
                 $this->userApps->map(fn($ua) => [
                     'id'         => $ua->id,
                     'appId'      => $ua->app_id,
+                    'appLink'    => $ua->app_link,
                     'enabled'    => $ua->enabled,
                     'remark'     => $ua->remark,
                     'createdAt'  => $ua->created_at,

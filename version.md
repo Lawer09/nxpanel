@@ -183,3 +183,11 @@
 - 影响范围：`app/Http/Controllers/V3/Client/ClientController.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/client_user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除订阅 JSON 节点中的 `country_code` / `country_name` 字段，以及对应测试和文档说明即可。
+
+## 2026-06-17 项目用户 App 绑定增加 app_link
+
+- 日期：2026-06-17
+- 变更摘要：为 `project_user_app_map` 增加 `app_link` 字段，支持在项目用户 App 绑定中保存 App 跳转或下载链接；同步更新管理端新增/修改接口校验、返回字段与项目接口文档。
+- 影响范围：`database/migrations/2026_06_17_120000_add_app_link_to_project_user_app_map_table.php`、`app/Services/ProjectUserAppMapService.php`、`app/Http/Requests/Admin/ProjectUserAppMapStoreRequest.php`、`app/Http/Requests/Admin/ProjectUserAppMapUpdateRequest.php`、`app/Http/Resources/ProjectResource.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_17_120000_add_app_link_to_project_user_app_map_table.php`。
+- 回滚说明：回滚该迁移并删除 `app_link` 字段相关读写、返回和文档说明即可。

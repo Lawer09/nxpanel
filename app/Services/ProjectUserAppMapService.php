@@ -8,6 +8,9 @@ use App\Models\ProjectUserAppMap;
 
 class ProjectUserAppMapService
 {
+    /**
+     * Query user app bindings for the specified project.
+     */
     public function index(int $projectId, array $filters): array
     {
         $project = Project::find($projectId);
@@ -30,6 +33,9 @@ class ProjectUserAppMapService
         return ['data' => $items];
     }
 
+    /**
+     * Create a new user app binding for the specified project.
+     */
     public function store(int $projectId, array $data): ProjectUserAppMap
     {
         $project = Project::find($projectId);
@@ -52,11 +58,15 @@ class ProjectUserAppMapService
         return ProjectUserAppMap::create([
             'project_code' => $project->project_code,
             'app_id'       => $appId,
+            'app_link'     => $this->normalizeOptionalString($data['appLink'] ?? null),
             'enabled'      => $data['enabled'] ?? 1,
-            'remark'       => $data['remark'] ?? null,
+            'remark'       => $this->normalizeOptionalString($data['remark'] ?? null),
         ]);
     }
 
+    /**
+     * Update an existing user app binding for the specified project.
+     */
     public function update(int $projectId, int $relationId, array $data): void
     {
         $project = Project::find($projectId);
@@ -93,8 +103,11 @@ class ProjectUserAppMapService
         if (array_key_exists('enabled', $data)) {
             $updateData['enabled'] = (int) $data['enabled'];
         }
+        if (array_key_exists('appLink', $data)) {
+            $updateData['app_link'] = $this->normalizeOptionalString($data['appLink']);
+        }
         if (array_key_exists('remark', $data)) {
-            $updateData['remark'] = $data['remark'];
+            $updateData['remark'] = $this->normalizeOptionalString($data['remark']);
         }
 
         if (!empty($updateData)) {
@@ -102,6 +115,9 @@ class ProjectUserAppMapService
         }
     }
 
+    /**
+     * Delete an existing user app binding for the specified project.
+     */
     public function destroy(int $projectId, int $relationId): void
     {
         $project = Project::find($projectId);
@@ -117,5 +133,19 @@ class ProjectUserAppMapService
         }
 
         $relation->delete();
+    }
+
+    /**
+     * Normalize optional string fields to nullable trimmed values.
+     */
+    private function normalizeOptionalString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
     }
 }

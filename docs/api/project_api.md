@@ -96,6 +96,7 @@
         {
           "id": 1,
           "appId": "com.example.app",
+          "appLink": "https://apps.apple.com/app/example",
           "enabled": 1,
           "remark": null,
           "createdAt": "2026-05-12T00:00:00.000Z",
@@ -163,6 +164,7 @@
 | --- | --- | --- |
 | id | int | 绑定记录 ID |
 | appId | string | 用户注册 metadata 中的 app_id |
+| appLink | string/null | App 跳转或下载链接 |
 | enabled | int | 是否启用（1=启用） |
 | remark | string/null | 备注 |
 | createdAt | string | 创建时间 |
@@ -467,6 +469,7 @@
     {
       "id": 1,
       "appId": "com.example.app",
+      "appLink": "https://apps.apple.com/app/example",
       "enabled": 1,
       "remark": null,
       "createdAt": "2026-05-12T00:00:00.000Z",
@@ -488,6 +491,7 @@
 | --- | --- | --- | --- |
 | projectId | int | 是 | 项目 ID |
 | appId | string | 是 | 用户注册 metadata 中的 app_id |
+| appLink | string | 否 | App 跳转或下载链接，最大长度 500 |
 | enabled | int | 否 | 默认 1 |
 | remark | string | 否 | 备注 |
 
@@ -503,6 +507,8 @@
 | --- | --- | --- | --- |
 | id | int | 是 | 绑定记录 ID |
 | projectId | int | 是 | 项目 ID |
+| appId | string | 否 | 用户注册 metadata 中的 app_id |
+| appLink | string | 否 | App 跳转或下载链接，最大长度 500 |
 | enabled | int | 否 | 是否启用 |
 | remark | string | 否 | 备注 |
 

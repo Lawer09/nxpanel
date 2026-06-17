@@ -17,6 +17,7 @@ class ProjectUserAppMapUpdateRequest extends FormRequest
             'id'        => 'required|integer|min:1',
             'projectId' => 'required|integer|min:1',
             'appId'     => 'nullable|string|max:255',
+            'appLink'   => 'nullable|string|max:500',
             'enabled'   => 'nullable|integer|in:0,1',
             'remark'    => 'nullable|string|max:255',
         ];
