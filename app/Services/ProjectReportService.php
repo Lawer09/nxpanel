@@ -299,17 +299,17 @@ class ProjectReportService
         ];
 
         $baseQuery = DB::table('project_daily_aggregates')
-            ->where('report_date', '>=', $dateFrom)
-            ->where('report_date', '<=', $dateTo);
+            ->where('project_daily_aggregates.report_date', '>=', $dateFrom)
+            ->where('project_daily_aggregates.report_date', '<=', $dateTo);
 
         $projectCodes = is_array($filters['projectCodes'] ?? null) ? $filters['projectCodes'] : [];
         if (!empty($projectCodes)) {
-            $baseQuery->whereIn('project_code', $projectCodes);
+            $baseQuery->whereIn('project_daily_aggregates.project_code', $projectCodes);
         }
 
         $countries = is_array($filters['countries'] ?? null) ? $filters['countries'] : [];
         if (!empty($countries)) {
-            $baseQuery->whereIn('country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
+            $baseQuery->whereIn('project_daily_aggregates.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
 
         $spendMetricsQuery = $this->buildDailySpendMetricSubquery($dateFrom, $dateTo, $filters);
