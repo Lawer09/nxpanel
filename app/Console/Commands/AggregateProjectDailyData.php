@@ -122,7 +122,7 @@ class AggregateProjectDailyData extends Command
 
         $rows = [];
         $now = now();
-        $trafficCostPerMb = 0.3 / 1024;
+        $trafficCostPerMb = 0.16 / 1024;
 
         foreach (array_keys($allKeys) as $key) {
             [$reportDate, $projectCode, $country] = $this->parseDimensionKey($key);
