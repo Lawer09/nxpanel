@@ -32,7 +32,7 @@
 | groupBy | string[] | 否 | 按维度聚合，支持 `reportDate` / `projectCode` / `country`，默认明细 |
 | page | int | 否 | 默认 `1` |
 | pageSize | int | 否 | 默认 `50`，最大 `200` |
-| orderBy | string | 否 | 默认 `reportDate`，支持：`reportDate` / `projectCode` / `country` / `newUsers` / `reportNewUsers` / `fbNewUsers` / `dauUsers` / `fbDauUsers` / `adRevenue` / `adSpendCost` / `trafficCost` / `profit` / `roi` / `adSpendCpi` / `updatedAt` |
+| orderBy | string | 否 | 默认 `reportDate`，支持：`reportDate` / `projectCode` / `country` / `newUsers` / `reportNewUsers` / `fbNewUsers` / `dauUsers` / `fbDauUsers` / `adRevenue` / `adSpendCost` / `trafficCost` / `totalCost` / `trafficCostRatio` / `profit` / `roi` / `adSpendCpi` / `updatedAt` |
 | orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
 
 `groupBy` 定义：
@@ -77,6 +77,8 @@
       "adSpendCpm": "2.142857",
       "trafficUsageMb": "53555.200000",
       "trafficCost": "8.368000",
+      "totalCost": "218.368000",
+      "trafficCostRatio": "0.038321",
       "profit": "125.972000",
       "roi": "1.580370",
       "updatedAt": "2026-04-28 10:05:02"
@@ -205,6 +207,8 @@
     "adSpendCpm": "2.080537",
     "trafficUsageMb": "782344.120000",
     "trafficCost": "122.241269",
+    "totalCost": "3222.241269",
+    "trafficCostRatio": "0.037937",
     "profit": "2008.088731",
     "roi": "1.624269"
   }
@@ -243,6 +247,8 @@
     "adSpendCpi": "5.833333",
     "trafficUsageMb": "53555.200000",
     "trafficCost": "8.368000",
+    "totalCost": "218.368000",
+    "trafficCostRatio": "0.038321",
     "profit": "125.972000",
     "roi": "1.580370"
   }
@@ -275,6 +281,8 @@
 - `adSpendCpm`: CPM（`adSpendCost * 1000 / 投放展示数`，来源 `ad_spend_platform_daily_reports.impressions`）
 - `trafficUsageMb`: 代理流量使用量（MB）
 - `trafficCost`: 代理流量成本（`trafficUsageMb * 0.16 / 1024`）
+- `totalCost`: 总成本（`adSpendCost + trafficCost`）
+- `trafficCostRatio`: 流量成本占比（`trafficCost / totalCost`，当 `totalCost` 为 0 时返回 `null`）
 - `profit`: 毛利（`adRevenue - adSpendCost - trafficCost`）
 - `roi`: ROI（`adRevenue / (adSpendCost + trafficCost)`）
 - `updatedAt`: 更新时间

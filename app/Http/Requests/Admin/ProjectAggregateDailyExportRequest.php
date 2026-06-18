@@ -23,7 +23,7 @@ class ProjectAggregateDailyExportRequest extends FormRequest
             'filters.projectCodes.*' => 'string|max:100',
             'filters.countries' => 'nullable|array',
             'filters.countries.*' => 'string|max:50',
-            'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,fbNewUsers,dauUsers,fbDauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,profit,roi,id,updatedAt',
+            'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,fbNewUsers,dauUsers,fbDauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,trafficCostRatio,profit,roi,id,updatedAt',
             'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }

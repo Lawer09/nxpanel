@@ -70,6 +70,7 @@
 - `trafficUsageMb`
 - `trafficCost`
 - `totalCost`
+- `trafficCostRatio`
 - `profit`
 - `roi`
 - `id`
@@ -110,6 +111,7 @@
         "trafficUsageMb": "20480.000000",
         "trafficCost": "3.200000",
         "totalCost": "183.200000",
+        "trafficCostRatio": "0.017467",
         "profit": "137.300000",
         "roi": "1.749454",
         "updatedAt": "2026-06-05 10:00:00"
@@ -139,6 +141,7 @@
       "trafficUsageMb": "65536.000000",
       "trafficCost": "10.240000",
       "totalCost": "510.240000",
+      "trafficCostRatio": "0.020070",
       "profit": "370.260000",
       "roi": "1.725597",
       "updatedAt": "2026-06-05 10:00:00"
@@ -161,6 +164,7 @@
 - `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
 - `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`
 - `totalCost = adSpendCost + trafficCost`
+- `trafficCostRatio = trafficCost / totalCost`，当 `totalCost` 为 0 时返回 `null`
 - `impressionsPerUser = adImpressions / dauUsers`
 - `arpu = adRevenue / dauUsers`
 
@@ -219,9 +223,10 @@
 24. 流量用量 MB
 25. 流量成本
 26. 总成本
-27. 利润
-28. ROI
-29. 更新时间
+27. 流量成本占比
+28. 利润
+29. ROI
+30. 更新时间
 
 ### 导出规则
 

@@ -199,3 +199,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复项目报表查询服务对 `project_daily_aggregates` 中投放字段的旧汇总逻辑，并回退相关文档说明即可。
+
+## 2026-06-18 项目报表新增流量成本占比
+
+- 日期：2026-06-18
+- 变更摘要：项目日报查询、汇总与 CSV 导出新增 `trafficCostRatio` 字段，按 `trafficCost / (adSpendCost + trafficCost)` 计算流量成本占总成本比例，并支持按该字段排序。
+- 影响范围：`app/Services/ProjectReportService.php`、`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`docs/api/project_report_query_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `trafficCostRatio` 计算、返回、排序白名单、CSV 列与文档说明即可。

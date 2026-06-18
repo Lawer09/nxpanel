@@ -85,6 +85,7 @@ class ProjectReportService
             '流量用量 MB',
             '流量成本',
             '总成本',
+            '流量成本占比',
             '利润',
             'ROI',
             '更新时间',
@@ -292,6 +293,7 @@ class ProjectReportService
             'trafficUsageMb' => 'traffic_usage_mb',
             'trafficCost' => 'traffic_cost',
             'totalCost' => 'total_cost',
+            'trafficCostRatio' => 'traffic_cost_ratio',
             'profit' => 'profit',
             'roi' => 'roi',
             'id' => 'id',
@@ -350,6 +352,7 @@ class ProjectReportService
                 ->selectRaw('CASE WHEN COALESCE(spend_metrics.ad_spend_clicks, 0)=0 THEN NULL ELSE ROUND(COALESCE(spend_metrics.ad_spend_cost, 0)/spend_metrics.ad_spend_clicks,6) END as ad_spend_cpc')
                 ->selectRaw('CASE WHEN COALESCE(spend_metrics.ad_spend_impressions, 0)=0 THEN NULL ELSE ROUND(COALESCE(spend_metrics.ad_spend_cost, 0)*1000/spend_metrics.ad_spend_impressions,6) END as ad_spend_cpm')
                 ->selectRaw('(COALESCE(spend_metrics.ad_spend_cost, 0) + project_daily_aggregates.traffic_cost) as total_cost')
+                ->selectRaw('CASE WHEN (COALESCE(spend_metrics.ad_spend_cost, 0)+COALESCE(project_daily_aggregates.traffic_cost, 0))=0 THEN NULL ELSE ROUND(COALESCE(project_daily_aggregates.traffic_cost, 0)/(COALESCE(spend_metrics.ad_spend_cost, 0)+COALESCE(project_daily_aggregates.traffic_cost, 0)),6) END as traffic_cost_ratio')
                 ->selectRaw('(project_daily_aggregates.ad_revenue - COALESCE(spend_metrics.ad_spend_cost, 0) - project_daily_aggregates.traffic_cost) as profit')
                 ->selectRaw('CASE WHEN (COALESCE(spend_metrics.ad_spend_cost, 0)+project_daily_aggregates.traffic_cost)=0 THEN NULL ELSE ROUND(project_daily_aggregates.ad_revenue/(COALESCE(spend_metrics.ad_spend_cost, 0)+project_daily_aggregates.traffic_cost),6) END as roi');
 
@@ -396,6 +399,7 @@ class ProjectReportService
             ->selectRaw('SUM(traffic_usage_mb) as traffic_usage_mb')
             ->selectRaw('SUM(traffic_cost) as traffic_cost')
             ->selectRaw('(COALESCE(SUM(spend_metrics.ad_spend_cost), 0) + SUM(traffic_cost)) as total_cost')
+            ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(traffic_cost), 0))=0 THEN NULL ELSE ROUND(COALESCE(SUM(traffic_cost), 0)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(traffic_cost), 0)),6) END as traffic_cost_ratio')
             ->selectRaw('(SUM(ad_revenue) - COALESCE(SUM(spend_metrics.ad_spend_cost), 0) - SUM(traffic_cost)) as profit')
             ->selectRaw('MAX(updated_at) as updated_at')
             ->selectRaw('CASE WHEN SUM(ad_impressions)=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/SUM(ad_impressions)*1000,6) END as ad_ecpm')
@@ -411,7 +415,7 @@ class ProjectReportService
             'newUsers', 'reportNewUsers', 'fbNewUsers', 'dauUsers', 'fbDauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
             'adImpressions', 'adClicks', 'adEcpm', 'adCtr', 'adMatchRate', 'adShowRate',
             'adSpendCost', 'adSpendCpi', 'adSpendCpc', 'adSpendCpm', 'trafficUsageMb',
-            'trafficCost', 'totalCost', 'profit', 'roi', 'updatedAt',
+            'trafficCost', 'totalCost', 'trafficCostRatio', 'profit', 'roi', 'updatedAt',
         ])));
 
         $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'adRevenue';
@@ -429,7 +433,7 @@ class ProjectReportService
     }
 
     /**
-     * Apply daily report ordering, including computed total cost.
+     * Apply daily report ordering, including computed cost aliases.
      */
     private function applyDailyOrder(
         Builder $query,
@@ -490,6 +494,7 @@ class ProjectReportService
             ->selectRaw('CASE WHEN SUM(new_users)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)/SUM(new_users),6) END as ad_spend_cpi')
             ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_clicks), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)/SUM(spend_metrics.ad_spend_clicks),6) END as ad_spend_cpc')
             ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_impressions), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)*1000/SUM(spend_metrics.ad_spend_impressions),6) END as ad_spend_cpm')
+            ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(traffic_cost), 0))=0 THEN NULL ELSE ROUND(COALESCE(SUM(traffic_cost), 0)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(traffic_cost), 0)),6) END as traffic_cost_ratio')
             ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(traffic_cost)),6) END as roi')
             ->first();
 
@@ -517,6 +522,7 @@ class ProjectReportService
             'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb ?? null),
             'trafficCost' => $this->formatDecimal($row->traffic_cost ?? null),
             'totalCost' => $this->formatDecimal(($row->ad_spend_cost ?? 0) + ($row->traffic_cost ?? 0)),
+            'trafficCostRatio' => $this->formatDecimal($row->traffic_cost_ratio ?? null),
             'profit' => $this->formatDecimal($row->profit ?? null),
             'roi' => $this->formatDecimal($row->roi ?? null),
             'updatedAt' => $row->updated_at ?? null,
@@ -618,6 +624,7 @@ class ProjectReportService
             'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb ?? null),
             'trafficCost' => $this->formatDecimal($row->traffic_cost ?? null),
             'totalCost' => $this->formatDecimal($row->total_cost ?? (($row->ad_spend_cost ?? 0) + ($row->traffic_cost ?? 0))),
+            'trafficCostRatio' => $this->formatDecimal($row->traffic_cost_ratio ?? null),
             'profit' => $this->formatDecimal($row->profit ?? null),
             'roi' => $this->formatDecimal($row->roi ?? null),
             'updatedAt' => $row->updated_at ?? null,
@@ -653,6 +660,7 @@ class ProjectReportService
             $row['trafficUsageMb'] ?? '',
             $row['trafficCost'] ?? '',
             $row['totalCost'] ?? '',
+            $row['trafficCostRatio'] ?? '',
             $row['profit'] ?? '',
             $row['roi'] ?? '',
             $row['updatedAt'] ?? '',
