@@ -279,3 +279,29 @@ php artisan subscription:downgrade-expired-to-free --chunk=200
 
 - 已在 `app/Console/Kernel.php` 中配置为每分钟执行一次
 - 使用 `onOneServer()` 和 `withoutOverlapping()` 防止重复调度
+
+---
+
+## 7. 零流量无上报用户禁用命令
+
+### 7.1 user:ban-inactive-zero-usage
+
+每日检查并禁用满足以下条件的用户：
+
+- 注册日期为运行当天往前第 `--days + 1` 天，默认仅判断注册第 8 天的用户
+- 套餐为 Free（按 `plan_id = 1`、套餐名 `Free/free/免费` 识别）
+- `v2_user.u + v2_user.d = 0`
+- 最近 `--days` 天的 `v3_report_user_hourly` 中没有用户上报流量、节点上报流量或上报数
+- 当前未被封禁
+
+```bash
+# 默认检查 7 天窗口，每批处理 100 个用户
+php artisan user:ban-inactive-zero-usage
+
+# 指定检查窗口和批大小
+php artisan user:ban-inactive-zero-usage --days=7 --chunk=200
+```
+
+调度说明：
+- 已在 `app/Console/Kernel.php` 中配置为每日 `01:30` 执行
+- 使用 `onOneServer()` 和 `withoutOverlapping()` 防止重复调度

@@ -207,3 +207,27 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`docs/api/project_report_query_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `trafficCostRatio` 计算、返回、排序白名单、CSV 列与文档说明即可。
+
+## 2026-06-21 零流量无上报用户自动禁用
+
+- 日期：2026-06-21
+- 变更摘要：新增 `user:ban-inactive-zero-usage` 定时命令，每日检查注册超过 7 天、累计消耗流量为 0、最近 7 天无上报流量且无上报数的未封禁用户，并自动设置 `banned = 1`。
+- 影响范围：`app/Services/InactiveZeroUsageUserBanService.php`、`app/Console/Commands/BanInactiveZeroUsageUsers.php`、`app/Console/Kernel.php`、`tests/Feature/BanInactiveZeroUsageUsersCommandTest.php`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：删除新增服务、命令、调度和测试，并回退命令文档与本条版本记录即可。
+
+## 2026-06-21 零流量无上报用户禁用限定 Free 套餐
+
+- 日期：2026-06-21
+- 变更摘要：调整 `user:ban-inactive-zero-usage` 筛选条件，仅禁用 Free 套餐用户；Free 套餐按 `plan_id = 1`、套餐名 `Free/free/免费` 识别，避免付费套餐用户因无流量无上报被自动禁用。
+- 影响范围：`app/Services/InactiveZeroUsageUserBanService.php`、`tests/Feature/BanInactiveZeroUsageUsersCommandTest.php`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除服务中的 Free 套餐筛选条件，并回退对应测试、文档与本条版本记录即可。
+
+## 2026-06-21 零流量无上报用户禁用限定注册第 8 天
+
+- 日期：2026-06-21
+- 变更摘要：调整 `user:ban-inactive-zero-usage` 注册时间筛选范围，不再处理所有早于阈值日期的用户；默认仅判断注册日期为运行当天往前第 8 天的 Free 套餐用户，最近 7 天上报窗口保持不变。
+- 影响范围：`app/Services/InactiveZeroUsageUserBanService.php`、`app/Console/Commands/BanInactiveZeroUsageUsers.php`、`tests/Feature/BanInactiveZeroUsageUsersCommandTest.php`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复服务中的注册时间筛选为阈值之前用户，并回退对应测试、文档与本条版本记录即可。
