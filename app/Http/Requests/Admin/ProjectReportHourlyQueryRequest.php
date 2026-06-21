@@ -25,6 +25,8 @@ class ProjectReportHourlyQueryRequest extends FormRequest
             'filters.projectCodes.*' => 'string|max:100',
             'filters.countries' => 'nullable|array',
             'filters.countries.*' => 'string|max:50',
+            'filters.adStatuses' => 'nullable|array',
+            'filters.adStatuses.*' => 'string|max:50',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
             'orderBy' => 'nullable|string|in:reportDate,hour,projectCode,country,installUsers,dauUsers,adRevenue,adSpendCost,ros,id,updatedAt',

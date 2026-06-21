@@ -18,6 +18,7 @@ class ProjectSaveRequest extends FormRequest
             'projectName' => 'required|string|max:100',
             'ownerName'   => 'nullable|string|max:100',
             'status'      => 'nullable|string|in:active,inactive,archived',
+            'adStatus'    => 'nullable|string|max:50',
             'remark'      => 'nullable|string|max:255',
         ];
     }
@@ -30,6 +31,7 @@ class ProjectSaveRequest extends FormRequest
             'projectName.required' => '项目名称不能为空',
             'projectName.max'      => '项目名称不能超过100个字符',
             'status.in'            => '状态格式有误，可选值：active, inactive, archived',
+            'adStatus.max'          => '投放状态不能超过50个字符',
             'remark.max'           => '备注不能超过255个字符',
         ];
     }

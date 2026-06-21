@@ -21,7 +21,8 @@
   "groupBy": ["reportDate", "projectCode"],
   "filters": {
     "projectCodes": ["A003"],
-    "countries": ["US"]
+    "countries": ["US"],
+    "adStatuses": ["running"]
   },
   "page": 1,
   "pageSize": 50,
@@ -39,6 +40,7 @@
 | groupBy | array | 否 | 聚合维度，支持 `reportDate`、`projectCode`、`country` |
 | filters.projectCodes | array | 否 | 项目编码过滤 |
 | filters.countries | array | 否 | 国家过滤，内部会转为大写 |
+| filters.adStatuses | array | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
 | page | integer | 否 | 页码，默认 `1` |
 | pageSize | integer | 否 | 每页条数，默认 `50`，最大 `200` |
 | orderBy | string | 否 | 排序字段 |
@@ -181,7 +183,8 @@
   "groupBy": ["projectCode"],
   "filters": {
     "projectCodes": ["A003"],
-    "countries": ["US"]
+    "countries": ["US"],
+    "adStatuses": ["running"]
   },
   "orderBy": "adRevenue",
   "orderDirection": "desc"

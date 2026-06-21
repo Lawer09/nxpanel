@@ -231,3 +231,11 @@
 - 影响范围：`app/Services/InactiveZeroUsageUserBanService.php`、`app/Console/Commands/BanInactiveZeroUsageUsers.php`、`tests/Feature/BanInactiveZeroUsageUsersCommandTest.php`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复服务中的注册时间筛选为阈值之前用户，并回退对应测试、文档与本条版本记录即可。
+
+## 2026-06-21 项目投放状态字段与报表筛选
+
+- 日期：2026-06-21
+- 变更摘要：`project_projects` 新增 `ad_status` 投放状态字段；项目管理接口支持 `adStatus` 读写和列表筛选；项目日报查询、项目日报 CSV 导出与项目小时报表支持通过 `filters.adStatuses` 按投放状态过滤，但报表返回字段不新增投放状态。
+- 影响范围：`database/migrations/2026_06_21_120000_add_ad_status_to_project_projects_table.php`、`app/Services/ProjectService.php`、`app/Services/ProjectReportService.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Requests/Admin/ProjectFetchRequest.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`docs/api/project_api.md`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_21_120000_add_ad_status_to_project_projects_table.php`。
+- 回滚说明：回滚新增迁移并移除 `adStatus` 读写、返回、筛选校验和报表过滤逻辑，同时回退对应文档说明即可。

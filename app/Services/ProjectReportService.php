@@ -159,6 +159,7 @@ class ProjectReportService
         if (!empty($countries)) {
             $query->whereIn('country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
+        $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
 
         if (empty($groupBy)) {
             $sortable = array_merge(array_keys($dimensionMap), array_keys($metricMap));
@@ -313,6 +314,7 @@ class ProjectReportService
         if (!empty($countries)) {
             $baseQuery->whereIn('project_daily_aggregates.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
+        $this->applyProjectAdStatusFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
 
         $spendMetricsQuery = $this->buildDailySpendMetricSubquery($dateFrom, $dateTo, $filters);
 
@@ -571,6 +573,39 @@ class ProjectReportService
             ->selectRaw('SUM(clicks) as ad_spend_clicks')
             ->selectRaw('SUM(impressions) as ad_spend_impressions')
             ->groupBy('report_date', 'project_code', DB::raw($countryExpression));
+    }
+
+    /**
+     * Filter report rows by the ad delivery status stored on project_projects.
+     */
+    private function applyProjectAdStatusFilter(Builder $query, string $projectCodeColumn, array $filters): void
+    {
+        $adStatuses = $this->normalizeStringList($filters['adStatuses'] ?? null);
+        if (empty($adStatuses)) {
+            return;
+        }
+
+        $query->whereExists(function (Builder $subQuery) use ($projectCodeColumn, $adStatuses) {
+            $subQuery->selectRaw('1')
+                ->from('project_projects')
+                ->whereColumn('project_projects.project_code', $projectCodeColumn)
+                ->whereIn('project_projects.ad_status', $adStatuses);
+        });
+    }
+
+    /**
+     * Normalize optional string-list filters and remove blank values.
+     */
+    private function normalizeStringList($value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($item) => trim((string) $item),
+            $value
+        ), static fn ($item) => $item !== '')));
     }
 
     /**

@@ -27,6 +27,9 @@ class ProjectService
         if (!empty($params['status'])) {
             $query->where('status', $params['status']);
         }
+        if (!empty($params['adStatus'])) {
+            $query->where('ad_status', $params['adStatus']);
+        }
 
         $page     = (int) ($params['page'] ?? 1);
         $pageSize = (int) ($params['pageSize'] ?? 20);
@@ -63,6 +66,7 @@ class ProjectService
             'project_name' => $params['projectName'],
             'owner_name'   => $params['ownerName'] ?? null,
             'status'       => $params['status'] ?? 'active',
+            'ad_status'    => $params['adStatus'] ?? null,
             'remark'       => $params['remark'] ?? null,
         ]);
     }
@@ -86,6 +90,9 @@ class ProjectService
         // }
         if (array_key_exists('status', $params)) {
             $project->status = $params['status'];
+        }
+        if (array_key_exists('adStatus', $params)) {
+            $project->ad_status = $params['adStatus'];
         }
         if (array_key_exists('remark', $params)) {
             $project->remark = $params['remark'];
