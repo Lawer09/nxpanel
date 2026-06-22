@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\BlockedUserIp;
 use App\Models\User;
+use App\Services\AuthService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
 class BlockedUserIpService
@@ -27,6 +29,75 @@ class BlockedUserIpService
      */
     public function blockIpsForUsers(Collection $users, ?int $operatorUserId = null, ?string $reason = null): array
     {
+        return $this->blockIpsForUsersWithMetadata($users, $operatorUserId, $reason, [
+            'source' => 'admin_batch_ban',
+        ]);
+    }
+
+    /**
+     * Ban users, clear their sessions, and block their registration IPs.
+     */
+    public function banUsersAndBlockIps(Collection $users, ?int $operatorUserId = null, ?string $reason = null, array $metadata = []): array
+    {
+        return DB::transaction(function () use ($users, $operatorUserId, $reason, $metadata): array {
+            $ids = $users->filter(fn($user) => $user instanceof User)
+                ->pluck('id')
+                ->filter()
+                ->values();
+
+            $lockedUsers = User::query()
+                ->whereIn('id', $ids->all())
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($lockedUsers as $user) {
+                $user->banned = 1;
+                $user->save();
+                (new AuthService($user))->removeAllSessions();
+            }
+
+            $ipResult = $this->blockIpsForUsersWithMetadata($lockedUsers, $operatorUserId, $reason, $metadata);
+
+            return [
+                'bannedUserCount' => $lockedUsers->count(),
+                'blockedIpCount' => count($ipResult['blocked_ips']),
+                'blockedIps' => $ipResult['blocked_ips'],
+                'skippedIpUserIds' => $ipResult['skipped_user_ids'],
+            ];
+        });
+    }
+
+    /**
+     * Ban users and clear sessions without writing IP block records.
+     */
+    public function banUsers(Collection $users): int
+    {
+        return DB::transaction(function () use ($users): int {
+            $ids = $users->filter(fn($user) => $user instanceof User)
+                ->pluck('id')
+                ->filter()
+                ->values();
+
+            $lockedUsers = User::query()
+                ->whereIn('id', $ids->all())
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($lockedUsers as $user) {
+                $user->banned = 1;
+                $user->save();
+                (new AuthService($user))->removeAllSessions();
+            }
+
+            return $lockedUsers->count();
+        });
+    }
+
+    /**
+     * Block registration IPs with a caller-provided metadata payload.
+     */
+    public function blockIpsForUsersWithMetadata(Collection $users, ?int $operatorUserId = null, ?string $reason = null, array $metadata = []): array
+    {
         $blockedIps = [];
         $skippedUsers = [];
 
@@ -47,10 +118,9 @@ class BlockedUserIpService
                     'banned_user_id' => $user->id,
                     'operator_user_id' => $operatorUserId,
                     'reason' => $reason,
-                    'metadata' => [
-                        'source' => 'admin_batch_ban',
+                    'metadata' => array_merge($metadata, [
                         'user_email' => $user->email,
-                    ],
+                    ]),
                 ]
             );
 

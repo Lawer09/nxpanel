@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BlockedUserIp;
+use App\Models\AidLoginBanRule;
 use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\User;
@@ -189,6 +190,202 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
+    public function test_login_by_aid_bans_new_user_when_custom_rule_matches(): void
+    {
+        $window = $this->currentHourWindow();
+        $rule = AidLoginBanRule::create([
+            'name' => 'US full day block',
+            'enabled' => true,
+            'cutoff_at' => now()->addDay()->timestamp,
+            'weekly_windows' => [
+                [
+                    'weekday' => (int) now()->isoWeekday(),
+                    'start' => $window['start'],
+                    'end' => $window['end'],
+                ],
+            ],
+            'package_names' => ['com.example.vpn'],
+            'countries' => ['US'],
+            'reason' => 'custom fraud rule',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-001',
+            'metadata' => [
+                'app_id' => 'fallback.app',
+                'packageName' => 'com.example.vpn',
+                'country' => 'us',
+                'ip' => '203.0.113.70',
+            ],
+        ])->assertStatus(400);
+
+        $user = User::query()->where('email', 'device-rule-001@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
+        $this->assertSame('US', $user->register_metadata['country'] ?? null);
+        $this->assertSame('com.example.vpn', $user->register_metadata['package_name'] ?? null);
+
+        $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.70')->firstOrFail();
+        $this->assertSame($user->id, $blockedIp->banned_user_id);
+        $this->assertSame('custom fraud rule', $blockedIp->reason);
+        $this->assertSame('aid_login_ban_rule', $blockedIp->metadata['source'] ?? null);
+        $this->assertSame($rule->id, $blockedIp->metadata['rule_id'] ?? null);
+    }
+
+    public function test_custom_rule_requires_package_and_country_to_be_contained(): void
+    {
+        $window = $this->currentHourWindow();
+        AidLoginBanRule::create([
+            'name' => 'Package and country required',
+            'enabled' => true,
+            'cutoff_at' => now()->addDay()->timestamp,
+            'weekly_windows' => [[
+                'weekday' => (int) now()->isoWeekday(),
+                'start' => $window['start'],
+                'end' => $window['end'],
+            ]],
+            'package_names' => ['com.example.vpn'],
+            'countries' => ['US'],
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-package-miss',
+            'metadata' => [
+                'app_id' => 'other.app',
+                'packageName' => 'other.app',
+                'country' => 'US',
+                'ip' => '203.0.113.73',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-country-miss',
+            'metadata' => [
+                'app_id' => 'com.example.vpn',
+                'country' => 'CA',
+                'ip' => '203.0.113.74',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.73',
+        ]);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.74',
+        ]);
+    }
+
+    public function test_login_by_aid_does_not_apply_custom_rule_to_existing_user(): void
+    {
+        AidLoginBanRule::create([
+            'name' => 'Existing user should not be affected',
+            'enabled' => true,
+            'cutoff_at' => now()->addDay()->timestamp,
+            'weekly_windows' => [[
+                'weekday' => (int) now()->isoWeekday(),
+                'start' => '00:00',
+                'end' => '23:59',
+            ]],
+            'package_names' => ['com.example.vpn'],
+            'countries' => ['US'],
+            'reason' => 'custom fraud rule',
+        ]);
+        $user = $this->createAidUser('existing-aid');
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-aid',
+            'metadata' => [
+                'app_id' => 'com.example.vpn',
+                'country' => 'US',
+                'ip' => '203.0.113.71',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertFalse((bool) $user->refresh()->banned);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.71',
+        ]);
+    }
+
+    public function test_custom_rule_does_not_match_after_cutoff(): void
+    {
+        AidLoginBanRule::create([
+            'name' => 'Expired rule',
+            'enabled' => true,
+            'cutoff_at' => now()->subMinute()->timestamp,
+            'weekly_windows' => [[
+                'weekday' => (int) now()->isoWeekday(),
+                'start' => '00:00',
+                'end' => '23:59',
+            ]],
+            'package_names' => ['com.example.vpn'],
+            'countries' => ['US'],
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-expired',
+            'metadata' => [
+                'app_id' => 'com.example.vpn',
+                'country' => 'US',
+                'ip' => '203.0.113.72',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $user = User::query()->where('email', 'device-rule-expired@apple.com')->firstOrFail();
+        $this->assertFalse((bool) $user->banned);
+    }
+
+    public function test_admin_can_manage_aid_login_ban_rules(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        $saveResponse = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
+            'name' => 'Admin managed rule',
+            'enabled' => true,
+            'cutoffAt' => now()->addDay()->format('Y-m-d H:i:s'),
+            'weeklyWindows' => [[
+                'weekday' => 1,
+                'start' => '00:00',
+                'end' => '06:00',
+            ]],
+            'packageNames' => ['com.example.vpn'],
+            'countries' => ['us'],
+            'reason' => 'admin rule',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.name', 'Admin managed rule')
+            ->assertJsonPath('data.countries.0', 'US');
+
+        $ruleId = (int) $saveResponse->json('data.id');
+
+        $this->postJson($this->adminUserUri('aidLoginBanRule/fetch'), [
+            'packageName' => 'com.example.vpn',
+            'country' => 'US',
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $ruleId);
+
+        $this->postJson($this->adminUserUri('aidLoginBanRule/update'), [
+            'id' => $ruleId,
+            'enabled' => false,
+            'reason' => 'disabled',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.reason', 'disabled');
+
+        $this->postJson($this->adminUserUri('aidLoginBanRule/delete'), [
+            'id' => $ruleId,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data', true);
+
+        $this->assertDatabaseMissing('aid_login_ban_rules', [
+            'id' => $ruleId,
+        ]);
+    }
+
     private function createPlan(array $overrides = []): Plan
     {
         return Plan::query()->forceCreate(array_replace([
@@ -218,6 +415,23 @@ class UserIpBanTest extends TestCase
             'd' => 0,
             'banned' => 0,
         ], $overrides));
+    }
+
+    private function createAidUser(string $aid, array $overrides = []): User
+    {
+        return $this->createUser($aid . '@apple.com', array_replace([
+            'password' => password_hash($aid, PASSWORD_DEFAULT),
+            'password_algo' => null,
+            'password_salt' => null,
+        ], $overrides));
+    }
+
+    private function currentHourWindow(): array
+    {
+        return [
+            'start' => now()->startOfHour()->format('H:i'),
+            'end' => now()->endOfHour()->format('H:i'),
+        ];
     }
 
     private function adminHeaders(User $admin): array

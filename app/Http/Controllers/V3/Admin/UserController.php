@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\V2\Admin\UserController as V2UserController;
+use App\Http\Requests\Admin\AidLoginBanRuleDeleteRequest;
+use App\Http\Requests\Admin\AidLoginBanRuleFetchRequest;
+use App\Http\Requests\Admin\AidLoginBanRuleSaveRequest;
+use App\Http\Requests\Admin\AidLoginBanRuleUpdateRequest;
 use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
+use App\Models\AidLoginBanRule;
 use App\Http\Requests\Admin\UserUpdate;
 use App\Models\BlockedUserIp;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\AidLoginBanRuleService;
 use App\Services\AuthService;
 use App\Services\BlockedUserIpService;
 use App\Services\NodeSyncService;
@@ -206,27 +212,10 @@ class UserController extends V2UserController
         $operatorUserId = Auth::guard('sanctum')->id();
 
         try {
-            $result = DB::transaction(function () use ($userIds, $reason, $operatorUserId, $blockedUserIpService) {
-                $users = User::query()
-                    ->whereIn('id', $userIds->all())
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($users as $user) {
-                    $user->banned = 1;
-                    $user->save();
-                    (new AuthService($user))->removeAllSessions();
-                }
-
-                $ipResult = $blockedUserIpService->blockIpsForUsers($users, $operatorUserId, $reason);
-
-                return [
-                    'bannedUserCount' => $users->count(),
-                    'blockedIpCount' => count($ipResult['blocked_ips']),
-                    'blockedIps' => $ipResult['blocked_ips'],
-                    'skippedIpUserIds' => $ipResult['skipped_user_ids'],
-                ];
-            });
+            $users = User::query()->whereIn('id', $userIds->all())->get();
+            $result = $blockedUserIpService->banUsersAndBlockIps($users, $operatorUserId, $reason, [
+                'source' => 'admin_batch_ban',
+            ]);
         } catch (\Exception $e) {
             Log::error('Batch ban users failed', ['error' => $e->getMessage()]);
             return $this->error([500, 'Batch ban failed']);
@@ -235,6 +224,72 @@ class UserController extends V2UserController
         NodeSyncService::notifyUsersUpdated();
 
         return $this->ok($result);
+    }
+
+    /**
+     * Query custom AID login ban rules.
+     */
+    public function fetchAidLoginBanRules(
+        AidLoginBanRuleFetchRequest $request,
+        AidLoginBanRuleService $aidLoginBanRuleService
+    ): JsonResponse {
+        $result = $aidLoginBanRuleService->paginate($request->validated());
+
+        return $this->ok([
+            'data' => collect($result->items())
+                ->map(fn(AidLoginBanRule $rule): array => $aidLoginBanRuleService->transform($rule))
+                ->values(),
+            'total' => $result->total(),
+            'page' => $result->currentPage(),
+            'pageSize' => $result->perPage(),
+        ]);
+    }
+
+    /**
+     * Create a custom AID login ban rule.
+     */
+    public function saveAidLoginBanRule(
+        AidLoginBanRuleSaveRequest $request,
+        AidLoginBanRuleService $aidLoginBanRuleService
+    ): JsonResponse {
+        $rule = $aidLoginBanRuleService->create(
+            $request->validated(),
+            Auth::guard('sanctum')->id()
+        );
+
+        return $this->ok($aidLoginBanRuleService->transform($rule));
+    }
+
+    /**
+     * Update a custom AID login ban rule.
+     */
+    public function updateAidLoginBanRule(
+        AidLoginBanRuleUpdateRequest $request,
+        AidLoginBanRuleService $aidLoginBanRuleService
+    ): JsonResponse {
+        $data = $request->validated();
+        $rule = $aidLoginBanRuleService->update(
+            (int) $data['id'],
+            $data,
+            Auth::guard('sanctum')->id()
+        );
+
+        return $this->ok($aidLoginBanRuleService->transform($rule));
+    }
+
+    /**
+     * Delete a custom AID login ban rule.
+     */
+    public function deleteAidLoginBanRule(
+        AidLoginBanRuleDeleteRequest $request,
+        AidLoginBanRuleService $aidLoginBanRuleService
+    ): JsonResponse {
+        $deleted = $aidLoginBanRuleService->delete((int) $request->validated('id'));
+        if (!$deleted) {
+            return $this->error([400202, 'AID login ban rule not found']);
+        }
+
+        return $this->ok(true);
     }
 
     /**

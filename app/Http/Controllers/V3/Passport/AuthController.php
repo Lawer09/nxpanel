@@ -63,6 +63,8 @@ class AuthController extends V1AuthController
             'aid' => 'required|string|min:1|max:255',
             'metadata' => 'required|array',
             'metadata.app_id' => 'required|string|max:255',
+            'metadata.package_name' => 'nullable|string|max:191',
+            'metadata.packageName' => 'nullable|string|max:191',
             'metadata.app_version' => 'nullable|string|max:50',
             'metadata.platform' => 'nullable|string|max:100',
             'metadata.brand' => 'nullable|string|max:100',

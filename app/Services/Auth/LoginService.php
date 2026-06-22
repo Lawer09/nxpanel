@@ -4,7 +4,9 @@ namespace App\Services\Auth;
 
 use App\Models\InviteCode;
 use App\Models\User;
+use App\Services\AidLoginBanRuleService;
 use App\Services\BlockedUserIpService;
+use App\Services\NodeSyncService;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
 use App\Utils\Helper;
@@ -114,6 +116,10 @@ class LoginService
                     return [false, [400, __('Your account has been suspended')]];
                 }
 
+                if ($this->banCreatedUserWhenAidRuleMatched($user, $aid, $normalizedMetadata)) {
+                    return [false, [400, __('Your account has been suspended')]];
+                }
+
                 $this->ensureAidReusableInviteCode((int) $user->id);
 
                 $created = true;
@@ -201,6 +207,8 @@ class LoginService
 
         $allowedScalarKeys = [
             'app_id',
+            'package_name',
+            'packageName',
             'app_version',
             'platform',
             'brand',
@@ -230,7 +238,17 @@ class LoginService
             if ($normalized === '') {
                 continue;
             }
+            if ($key === 'country') {
+                $normalized = strtoupper($normalized);
+            }
             $result[$key] = $normalized;
+        }
+
+        if (!isset($result['package_name'])) {
+            $packageName = $result['packageName'] ?? ($result['app_id'] ?? null);
+            if (is_string($packageName) && trim($packageName) !== '') {
+                $result['package_name'] = trim($packageName);
+            }
         }
 
         // 兼容 metadata.channel 对象
@@ -271,10 +289,20 @@ class LoginService
             return false;
         }
 
-        $user->banned = 1;
-        $user->save();
+        $blockedUserIpService->banUsers(collect([$user]));
+        NodeSyncService::notifyUsersUpdated();
 
         return true;
+    }
+
+    /**
+     * Ban a newly created AID user when any custom detection rule matches.
+     */
+    private function banCreatedUserWhenAidRuleMatched(User $user, string $aid, array $metadata): bool
+    {
+        $matchedRule = app(AidLoginBanRuleService::class)->banIfMatched($user, $aid, $metadata);
+
+        return $matchedRule !== null;
     }
 
     /**

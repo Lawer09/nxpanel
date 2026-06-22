@@ -224,6 +224,152 @@ POST /api/v3/passport/auth/loginByAid
 
 ---
 
+## AID 自定义封禁检测规则
+
+用于在 `loginByAid` 自动创建新用户后，根据后台配置的规则自动封禁用户，并记录该用户注册 IP，避免同类注册继续放量。
+
+### 触发范围
+
+- 仅影响 `POST /api/v1/passport/auth/loginByAid` 和 `POST /api/v3/passport/auth/loginByAid` 自动创建的新用户。
+- 已存在用户登录不会触发这套自定义规则。
+- 命中规则后，系统会将新用户设置为 `banned = 1`，清理登录会话，并从 `register_metadata.ip` 写入 `blocked_user_ips`。
+- 如果未传合法 IP，用户仍会被封禁，但不会新增 IP 封禁记录。
+- 接口返回现有封禁错误，不返回登录凭证。
+
+### 匹配规则
+
+- 包名字段优先级：`metadata.package_name` > `metadata.packageName` > `metadata.app_id`。
+- 国家字段取 `metadata.country`，保存和匹配时统一转为大写，例如 `us` 会转为 `US`。
+- 当前时间必须小于等于规则的 `cutoffAt`。
+- 当前星期和当前 `HH:mm` 必须落在任一 `weeklyWindows` 时间段内；每个 `weeklyWindows` 同时包含星期和小时段。
+- `weekday` 使用 ISO 定义：`1=周一`，`7=周日`，`start/end` 使用 `HH:mm` 小时段。
+- 时间段不支持跨天，跨天场景需要拆成两段，例如周一 `23:00-23:59` 和周二 `00:00-02:00`。
+- `packageNames` 为空表示不限制包名；非空时当前包名必须包含在 `packageNames` 数组中。
+- `countries` 为空表示不限制国家；非空时当前国家必须包含在 `countries` 数组中。
+- 当 `packageNames` 和 `countries` 都非空时，必须同时满足包名和国家包含条件。
+- 命中任一启用规则即封禁，不继续匹配后续规则。
+
+### 查询规则列表
+
+`POST /api/v3/{secure_path}/user/aidLoginBanRule/fetch`
+
+支持 GET/POST。
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `enabled` | `bool` | 否 | 按启用状态筛选 |
+| `packageName` | `string` | 否 | 按包名精确筛选 |
+| `country` | `string` | 否 | 按国家精确筛选，服务端会转大写 |
+| `current` | `int` | 否 | 页码，默认 `1` |
+| `pageSize` | `int` | 否 | 每页条数，默认 `10`，最大 `200` |
+
+#### 返回示例
+
+```json
+{
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+        "data": [
+            {
+                "id": 1,
+                "name": "US night fraud block",
+                "enabled": true,
+                "cutoffAt": "2026-06-30 23:59:59",
+                "weeklyWindows": [
+                    {"weekday": 1, "start": "00:00", "end": "06:00"}
+                ],
+                "packageNames": ["com.example.vpn"],
+                "countries": ["US"],
+                "reason": "aid login custom rule",
+                "createdBy": {"id": 1, "email": "admin@example.com"},
+                "updatedBy": {"id": 1, "email": "admin@example.com"},
+                "createdAt": 1782144000,
+                "updatedAt": 1782144000
+            }
+        ],
+        "total": 1,
+        "page": 1,
+        "pageSize": 10
+    }
+}
+```
+
+### 新增规则
+
+`POST /api/v3/{secure_path}/user/aidLoginBanRule/save`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | `string` | 是 | 规则名称，最大 191 字符 |
+| `enabled` | `bool` | 否 | 是否启用，默认启用 |
+| `cutoffAt` | `string` | 是 | 规则有效截止时间，例如 `2026-06-30 23:59:59` |
+| `weeklyWindows` | `array` | 是 | 一周内生效时间段 |
+| `weeklyWindows[].weekday` | `int` | 是 | 星期，`1=周一`，`7=周日` |
+| `weeklyWindows[].start` | `string` | 是 | 开始时间，格式 `HH:mm` |
+| `weeklyWindows[].end` | `string` | 是 | 结束时间，格式 `HH:mm`，必须大于 `start` |
+| `packageNames` | `string[]` | 否 | 包名白名单，空数组或不传表示不限制 |
+| `countries` | `string[]` | 否 | 国家白名单，空数组或不传表示不限制 |
+| `reason` | `string` | 否 | 封禁原因，最大 500 字符 |
+
+#### 请求示例
+
+```json
+{
+    "name": "US night fraud block",
+    "enabled": true,
+    "cutoffAt": "2026-06-30 23:59:59",
+    "weeklyWindows": [
+        {"weekday": 1, "start": "00:00", "end": "06:00"},
+        {"weekday": 2, "start": "00:00", "end": "06:00"}
+    ],
+    "packageNames": ["com.example.vpn"],
+    "countries": ["US"],
+    "reason": "aid login custom rule"
+}
+```
+
+### 更新规则
+
+`POST /api/v3/{secure_path}/user/aidLoginBanRule/update`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 规则 ID |
+| `name` | `string` | 否 | 规则名称 |
+| `enabled` | `bool` | 否 | 是否启用 |
+| `cutoffAt` | `string` | 否 | 规则有效截止时间 |
+| `weeklyWindows` | `array` | 否 | 一周内生效时间段，格式同新增接口 |
+| `packageNames` | `string[]` | 否 | 包名白名单 |
+| `countries` | `string[]` | 否 | 国家白名单 |
+| `reason` | `string` | 否 | 封禁原因 |
+
+### 删除规则
+
+`POST /api/v3/{secure_path}/user/aidLoginBanRule/delete`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 规则 ID |
+
+#### 返回示例
+
+```json
+{
+    "code": 0,
+    "msg": "操作成功",
+    "data": true
+}
+```
+
 ## 封禁用户 IP 列表查询
 
 `POST /api/v3/admin/user/blockedIp/fetch`
