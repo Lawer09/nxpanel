@@ -239,3 +239,11 @@
 - 影响范围：`database/migrations/2026_06_21_120000_add_ad_status_to_project_projects_table.php`、`app/Services/ProjectService.php`、`app/Services/ProjectReportService.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Requests/Admin/ProjectFetchRequest.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`docs/api/project_api.md`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_21_120000_add_ad_status_to_project_projects_table.php`。
 - 回滚说明：回滚新增迁移并移除 `adStatus` 读写、返回、筛选校验和报表过滤逻辑，同时回退对应文档说明即可。
+
+## 2026-06-22 项目表补充 Excel 元数据字段
+
+- 日期：2026-06-22
+- 变更摘要：按项目跟踪表字段为 `project_projects` 补充 Adspower 环境、开发者 Gmail、应用名称、包名、域名/协议链接、Facebook、Admob、Firebase、Yandex、商店页等项目元数据字段；项目创建/编辑接口支持对应 camelCase 输入，列表/详情返回新增字段，项目列表支持按 `packageName`、`developerGmail` 筛选。
+- 影响范围：`database/migrations/2026_06_22_120000_add_excel_metadata_fields_to_project_projects_table.php`、`app/Services/ProjectService.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Requests/Admin/ProjectFetchRequest.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_22_120000_add_excel_metadata_fields_to_project_projects_table.php`。
+- 回滚说明：回滚新增迁移并移除项目接口中的新增元数据字段校验、读写、返回和文档说明即可。

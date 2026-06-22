@@ -7,6 +7,33 @@ use App\Exceptions\BusinessException;
 
 class ProjectService
 {
+    private const PROJECT_METADATA_FIELD_MAP = [
+        'adStatus' => 'ad_status',
+        'adspowerEnv' => 'adspower_env',
+        'developerGmail' => 'developer_gmail',
+        'appName' => 'app_name',
+        'packageName' => 'package_name',
+        'domainInfoStatus' => 'domain_info_status',
+        'admobPubId' => 'admob_pub_id',
+        'domainUrl' => 'domain_url',
+        'privacyPolicyUrl' => 'privacy_policy_url',
+        'termsUrl' => 'terms_url',
+        'facebookInfoStatus' => 'facebook_info_status',
+        'facebookAppId' => 'facebook_app_id',
+        'facebookAppToken' => 'facebook_app_token',
+        'facebookKeyHash' => 'facebook_key_hash',
+        'facebookClassName' => 'facebook_class_name',
+        'admobAccountStatus' => 'admob_account_status',
+        'admobAppId' => 'admob_app_id',
+        'admobAdIds' => 'admob_ad_ids',
+        'admobAppAdsTxt' => 'admob_app_ads_txt',
+        'firebaseConfigNote' => 'firebase_config_note',
+        'yandexAccount' => 'yandex_account',
+        'yandexAdIds' => 'yandex_ad_ids',
+        'yandexAppAdsTxt' => 'yandex_app_ads_txt',
+        'storePageUrl' => 'store_page_url',
+    ];
+
     /**
      * @return array{page: int, pageSize: int, total: int, items: \Illuminate\Database\Eloquent\Collection}
      */
@@ -29,6 +56,12 @@ class ProjectService
         }
         if (!empty($params['adStatus'])) {
             $query->where('ad_status', $params['adStatus']);
+        }
+        if (!empty($params['packageName'])) {
+            $query->where('package_name', $params['packageName']);
+        }
+        if (!empty($params['developerGmail'])) {
+            $query->where('developer_gmail', $params['developerGmail']);
         }
 
         $page     = (int) ($params['page'] ?? 1);
@@ -61,14 +94,15 @@ class ProjectService
             throw new BusinessException([422, '项目代号已存在']);
         }
 
-        return Project::create([
+        $attributes = [
             'project_code' => $params['projectCode'],
             'project_name' => $params['projectName'],
             'owner_name'   => $params['ownerName'] ?? null,
             'status'       => $params['status'] ?? 'active',
-            'ad_status'    => $params['adStatus'] ?? null,
             'remark'       => $params['remark'] ?? null,
-        ]);
+        ];
+
+        return Project::create(array_merge($attributes, $this->extractMetadataAttributes($params)));
     }
 
     public function update(int $id, array $params): Project
@@ -91,11 +125,11 @@ class ProjectService
         if (array_key_exists('status', $params)) {
             $project->status = $params['status'];
         }
-        if (array_key_exists('adStatus', $params)) {
-            $project->ad_status = $params['adStatus'];
-        }
         if (array_key_exists('remark', $params)) {
             $project->remark = $params['remark'];
+        }
+        foreach ($this->extractMetadataAttributes($params) as $column => $value) {
+            $project->{$column} = $value;
         }
 
         if ($project->isDirty()) {
@@ -116,5 +150,20 @@ class ProjectService
         $project->update(['status' => $status]);
 
         return $project;
+    }
+
+    /**
+     * Convert project metadata request keys from camelCase to table columns.
+     */
+    private function extractMetadataAttributes(array $params): array
+    {
+        $attributes = [];
+        foreach (self::PROJECT_METADATA_FIELD_MAP as $requestKey => $column) {
+            if (array_key_exists($requestKey, $params)) {
+                $attributes[$column] = $params[$requestKey];
+            }
+        }
+
+        return $attributes;
     }
 }

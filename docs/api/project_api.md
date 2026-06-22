@@ -46,6 +46,8 @@
 | keyword | string | 否 | 模糊搜索（匹配 projectCode / projectName） |
 | status | string | 否 | 筛选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态筛选，自定义字符串 |
+| packageName | string | 否 | 项目包名精确筛选 |
+| developerGmail | string | 否 | 开发者 Gmail 精确筛选 |
 | ownerId | int | 否 | 按拥有者 ID 筛选 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 20，最大 200 |
@@ -63,6 +65,29 @@
       "department": "技术部",
       "status": "active",
       "adStatus": "running",
+      "adspowerEnv": "env-placeholder",
+      "developerGmail": "developer@example.com",
+      "appName": "Example VPN",
+      "packageName": "com.example.vpn",
+      "domainInfoStatus": "completed",
+      "admobPubId": "pub-placeholder",
+      "domainUrl": "https://example.com",
+      "privacyPolicyUrl": "https://example.com/privacy.html",
+      "termsUrl": "https://example.com/terms.html",
+      "facebookInfoStatus": "completed",
+      "facebookAppId": "facebook-app-id-placeholder",
+      "facebookAppToken": "facebook-token-placeholder",
+      "facebookKeyHash": "facebook-key-hash-placeholder",
+      "facebookClassName": "facebook-class-placeholder",
+      "admobAccountStatus": "completed",
+      "admobAppId": "admob-app-id-placeholder",
+      "admobAdIds": "admob-ad-ids-placeholder",
+      "admobAppAdsTxt": "app-ads-placeholder",
+      "firebaseConfigNote": "firebase-config-placeholder",
+      "yandexAccount": "yandex-account-placeholder",
+      "yandexAdIds": "yandex-ad-ids-placeholder",
+      "yandexAppAdsTxt": "yandex-app-ads-placeholder",
+      "storePageUrl": "https://play.google.com/store/apps/details?id=com.example.vpn",
       "remark": null,
       "createdAt": "2026-05-12T00:00:00.000Z",
       "updatedAt": "2026-05-12T00:00:00.000Z",
@@ -124,6 +149,29 @@
 | department | string/null | 所属部门 |
 | status | string | 状态：`active` / `inactive` / `archived` |
 | adStatus | string/null | 投放状态，自定义字符串 |
+| adspowerEnv | string/null | Adspower 环境 |
+| developerGmail | string/null | 开发者 Gmail |
+| appName | string/null | 应用名称 |
+| packageName | string/null | 项目包名 |
+| domainInfoStatus | string/null | 域名信息状态 |
+| admobPubId | string/null | Admob pub id |
+| domainUrl | string/null | 域名 URL |
+| privacyPolicyUrl | string/null | 隐私协议 URL |
+| termsUrl | string/null | 服务条款 URL |
+| facebookInfoStatus | string/null | FB 信息状态 |
+| facebookAppId | string/null | Facebook 应用 ID |
+| facebookAppToken | string/null | Facebook 应用 Token |
+| facebookKeyHash | string/null | Facebook 秘钥散列 |
+| facebookClassName | string/null | Facebook 类名 |
+| admobAccountStatus | string/null | Admob 账号状态 |
+| admobAppId | string/null | Admob 应用 ID |
+| admobAdIds | string/null | Admob 广告 ID 配置，支持多行文本 |
+| admobAppAdsTxt | string/null | Admob app-ads.txt 内容 |
+| firebaseConfigNote | string/null | Firebase 配置说明 |
+| yandexAccount | string/null | Yandex 账号 |
+| yandexAdIds | string/null | Yandex 广告 ID 配置，支持多行文本 |
+| yandexAppAdsTxt | string/null | Yandex app-ads.txt 内容 |
+| storePageUrl | string/null | 商店页链接 |
 | remark | string/null | 备注 |
 | createdAt | string | 创建时间 |
 | updatedAt | string | 更新时间 |
@@ -215,6 +263,29 @@
 | department | string | 否 | 所属部门 |
 | status | string | 否 | 默认 `active`，可选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符 |
+| adspowerEnv | string | 否 | Adspower 环境，最大 100 字符 |
+| developerGmail | string | 否 | 开发者 Gmail，最大 191 字符 |
+| appName | string | 否 | 应用名称，最大 191 字符 |
+| packageName | string | 否 | 项目包名，最大 191 字符 |
+| domainInfoStatus | string | 否 | 域名信息状态，最大 50 字符 |
+| admobPubId | string | 否 | Admob pub id，最大 100 字符 |
+| domainUrl | string | 否 | 域名 URL，最大 255 字符 |
+| privacyPolicyUrl | string | 否 | 隐私协议 URL，最大 255 字符 |
+| termsUrl | string | 否 | 服务条款 URL，最大 255 字符 |
+| facebookInfoStatus | string | 否 | FB 信息状态，最大 50 字符 |
+| facebookAppId | string | 否 | Facebook 应用 ID，最大 100 字符 |
+| facebookAppToken | string | 否 | Facebook 应用 Token，最大 255 字符 |
+| facebookKeyHash | string | 否 | Facebook 秘钥散列，最大 255 字符 |
+| facebookClassName | string | 否 | Facebook 类名，最大 191 字符 |
+| admobAccountStatus | string | 否 | Admob 账号状态，最大 50 字符 |
+| admobAppId | string | 否 | Admob 应用 ID，最大 100 字符 |
+| admobAdIds | string | 否 | Admob 广告 ID 配置，支持多行文本 |
+| admobAppAdsTxt | string | 否 | Admob app-ads.txt 内容 |
+| firebaseConfigNote | string | 否 | Firebase 配置说明 |
+| yandexAccount | string | 否 | Yandex 账号，最大 191 字符 |
+| yandexAdIds | string | 否 | Yandex 广告 ID 配置，支持多行文本 |
+| yandexAppAdsTxt | string | 否 | Yandex app-ads.txt 内容 |
+| storePageUrl | string | 否 | 商店页链接，最大 255 字符 |
 | remark | string | 否 | 备注 |
 
 ### 3.2 返回字段
@@ -245,6 +316,29 @@
 | department | string | 否 | 所属部门 |
 | status | string | 否 | `active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符；传 `null` 可清空 |
+| adspowerEnv | string | 否 | Adspower 环境，最大 100 字符；传 `null` 可清空 |
+| developerGmail | string | 否 | 开发者 Gmail，最大 191 字符；传 `null` 可清空 |
+| appName | string | 否 | 应用名称，最大 191 字符；传 `null` 可清空 |
+| packageName | string | 否 | 项目包名，最大 191 字符；传 `null` 可清空 |
+| domainInfoStatus | string | 否 | 域名信息状态，最大 50 字符；传 `null` 可清空 |
+| admobPubId | string | 否 | Admob pub id，最大 100 字符；传 `null` 可清空 |
+| domainUrl | string | 否 | 域名 URL，最大 255 字符；传 `null` 可清空 |
+| privacyPolicyUrl | string | 否 | 隐私协议 URL，最大 255 字符；传 `null` 可清空 |
+| termsUrl | string | 否 | 服务条款 URL，最大 255 字符；传 `null` 可清空 |
+| facebookInfoStatus | string | 否 | FB 信息状态，最大 50 字符；传 `null` 可清空 |
+| facebookAppId | string | 否 | Facebook 应用 ID，最大 100 字符；传 `null` 可清空 |
+| facebookAppToken | string | 否 | Facebook 应用 Token，最大 255 字符；传 `null` 可清空 |
+| facebookKeyHash | string | 否 | Facebook 秘钥散列，最大 255 字符；传 `null` 可清空 |
+| facebookClassName | string | 否 | Facebook 类名，最大 191 字符；传 `null` 可清空 |
+| admobAccountStatus | string | 否 | Admob 账号状态，最大 50 字符；传 `null` 可清空 |
+| admobAppId | string | 否 | Admob 应用 ID，最大 100 字符；传 `null` 可清空 |
+| admobAdIds | string | 否 | Admob 广告 ID 配置，支持多行文本；传 `null` 可清空 |
+| admobAppAdsTxt | string | 否 | Admob app-ads.txt 内容；传 `null` 可清空 |
+| firebaseConfigNote | string | 否 | Firebase 配置说明；传 `null` 可清空 |
+| yandexAccount | string | 否 | Yandex 账号，最大 191 字符；传 `null` 可清空 |
+| yandexAdIds | string | 否 | Yandex 广告 ID 配置，支持多行文本；传 `null` 可清空 |
+| yandexAppAdsTxt | string | 否 | Yandex app-ads.txt 内容；传 `null` 可清空 |
+| storePageUrl | string | 否 | 商店页链接，最大 255 字符；传 `null` 可清空 |
 | remark | string | 否 | 备注 |
 
 ### 4.2 返回字段
