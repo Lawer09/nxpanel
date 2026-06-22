@@ -255,3 +255,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，复用已有项目元数据字段。
 - 回滚说明：移除项目日报查询中的项目表关联、元数据字段格式化和文档说明即可。
+
+## 2026-06-22 修复项目报表项目元数据关联后的字段歧义
+
+- 日期：2026-06-22
+- 变更摘要：修复项目日报分组查询在关联 `project_projects` 后，`updated_at` 等聚合字段未限定主表导致 MySQL 报 `Column 'updated_at' in field list is ambiguous` 的问题；日报分组与汇总查询统一使用 `project_daily_aggregates` 前缀限定主表聚合字段。
+- 影响范围：`app/Services/ProjectReportService.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复项目日报分组与汇总查询中未限定表名前缀的聚合字段即可。
