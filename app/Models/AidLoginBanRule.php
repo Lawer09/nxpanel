@@ -15,6 +15,7 @@ class AidLoginBanRule extends Model
         'cutoff_at' => 'integer',
         'weekly_windows' => 'array',
         'package_names' => 'array',
+        'project_codes' => 'array',
         'countries' => 'array',
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',

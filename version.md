@@ -267,7 +267,15 @@
 ## 2026-06-22 AID 登录自定义封禁检测规则
 
 - 日期：2026-06-22
-- 变更摘要：新增 `aid_login_ban_rules` 规则表和管理端规则接口，支持按有效截止时间、周时间段、包名和国家匹配 `loginByAid` 新注册用户；命中后复用封禁逻辑封禁用户、清理 session 并记录注册 IP。`loginByAid` 元数据新增 `package_name/packageName` 兼容，并将 `country` 归一为大写。
+- 变更摘要：新增 `aid_login_ban_rules` 规则表和管理端规则接口，支持按有效截止时间、周时间段、包名和国家匹配 `loginByAid` 新注册用户，且各检测条件均可留空表示不限制；命中后复用封禁逻辑封禁用户、清理 session 并记录注册 IP。`loginByAid` 元数据新增 `package_name/packageName` 兼容，并将 `country` 归一为大写。
 - 影响范围：`database/migrations/2026_06_22_160000_create_aid_login_ban_rules_table.php`、`app/Models/AidLoginBanRule.php`、`app/Services/AidLoginBanRuleService.php`、`app/Services/BlockedUserIpService.php`、`app/Services/Auth/LoginService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_22_160000_create_aid_login_ban_rules_table.php`。
 - 回滚说明：回滚新增迁移并移除 AID 自定义规则 Service、模型、请求类、admin 规则接口、`loginByAid` 规则检测调用和文档说明即可。
+
+## 2026-06-22 AID 封禁规则支持项目代号扩展包名
+
+- 日期：2026-06-22
+- 变更摘要：AID 登录自定义封禁规则新增 `projectCodes` 项目代号数组字段；保存或更新规则时会按 `project_user_app_map.project_code` 查询启用映射，将对应 `app_id` 合并到最终 `packageNames`，用于 `loginByAid` 包名匹配封禁。
+- 影响范围：`database/migrations/2026_06_22_161000_add_project_codes_to_aid_login_ban_rules_table.php`、`app/Models/AidLoginBanRule.php`、`app/Services/AidLoginBanRuleService.php`、`app/Http/Requests/Admin/AidLoginBanRuleSaveRequest.php`、`app/Http/Requests/Admin/AidLoginBanRuleUpdateRequest.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_22_161000_add_project_codes_to_aid_login_ban_rules_table.php`。
+- 回滚说明：回滚新增迁移并移除规则保存/更新中的 `projectCodes` 校验、存储、返回和项目代号转包名逻辑，同时回退对应文档说明即可。

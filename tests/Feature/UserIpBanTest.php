@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BlockedUserIp;
 use App\Models\AidLoginBanRule;
 use App\Models\Plan;
+use App\Models\ProjectUserAppMap;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AuthService;
@@ -276,6 +277,35 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
+    public function test_custom_rule_matches_when_all_conditions_are_empty(): void
+    {
+        AidLoginBanRule::create([
+            'name' => 'No condition rule',
+            'enabled' => true,
+            'cutoff_at' => null,
+            'weekly_windows' => null,
+            'package_names' => null,
+            'countries' => null,
+            'reason' => 'no condition rule',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-no-condition',
+            'metadata' => [
+                'app_id' => 'any.app',
+                'country' => 'CA',
+                'ip' => '203.0.113.75',
+            ],
+        ])->assertStatus(400);
+
+        $user = User::query()->where('email', 'device-rule-no-condition@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
+
+        $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.75')->firstOrFail();
+        $this->assertSame('aid_login_ban_rule', $blockedIp->metadata['source'] ?? null);
+        $this->assertSame('no condition rule', $blockedIp->reason);
+    }
+
     public function test_login_by_aid_does_not_apply_custom_rule_to_existing_user(): void
     {
         AidLoginBanRule::create([
@@ -371,9 +401,13 @@ class UserIpBanTest extends TestCase
         $this->postJson($this->adminUserUri('aidLoginBanRule/update'), [
             'id' => $ruleId,
             'enabled' => false,
+            'cutoffAt' => null,
+            'weeklyWindows' => null,
             'reason' => 'disabled',
         ], $this->adminHeaders($admin))->assertOk()
             ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.cutoffAt', null)
+            ->assertJsonPath('data.weeklyWindows', [])
             ->assertJsonPath('data.reason', 'disabled');
 
         $this->postJson($this->adminUserUri('aidLoginBanRule/delete'), [
@@ -384,6 +418,110 @@ class UserIpBanTest extends TestCase
         $this->assertDatabaseMissing('aid_login_ban_rules', [
             'id' => $ruleId,
         ]);
+    }
+
+    public function test_admin_can_save_aid_login_ban_rule_without_conditions(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
+            'name' => 'No condition admin rule',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.name', 'No condition admin rule')
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.cutoffAt', null)
+            ->assertJsonPath('data.weeklyWindows', [])
+            ->assertJsonPath('data.packageNames', [])
+            ->assertJsonPath('data.projectCodes', [])
+            ->assertJsonPath('data.countries', []);
+    }
+
+    public function test_admin_save_aid_login_ban_rule_resolves_project_codes_to_package_names(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.vpn',
+            'enabled' => 1,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.disabled',
+            'enabled' => 0,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'other',
+            'app_id' => 'com.other.vpn',
+            'enabled' => 1,
+        ]);
+
+        $response = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
+            'name' => 'Project code rule',
+            'packageNames' => ['com.manual.vpn'],
+            'projectCodes' => ['rocket'],
+            'reason' => 'project code match',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.projectCodes.0', 'rocket')
+            ->assertJsonPath('data.packageNames.0', 'com.manual.vpn')
+            ->assertJsonPath('data.packageNames.1', 'com.rocket.vpn');
+
+        $this->assertDatabaseHas('aid_login_ban_rules', [
+            'id' => (int) $response->json('data.id'),
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-project-code',
+            'metadata' => [
+                'app_id' => 'com.rocket.vpn',
+                'ip' => '203.0.113.76',
+            ],
+        ])->assertStatus(400);
+
+        $user = User::query()->where('email', 'device-project-code@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
+
+        $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.76')->firstOrFail();
+        $this->assertSame('aid_login_ban_rule', $blockedIp->metadata['source'] ?? null);
+        $this->assertSame('com.rocket.vpn', $blockedIp->metadata['package_name'] ?? null);
+    }
+
+    public function test_admin_update_project_codes_rebuilds_resolved_package_names(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        ProjectUserAppMap::create([
+            'project_code' => 'old',
+            'app_id' => 'com.old.vpn',
+            'enabled' => 1,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'new',
+            'app_id' => 'com.new.vpn',
+            'enabled' => 1,
+        ]);
+
+        $saveResponse = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
+            'name' => 'Project code update rule',
+            'packageNames' => ['com.manual.vpn'],
+            'projectCodes' => ['old'],
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.packageNames.0', 'com.manual.vpn')
+            ->assertJsonPath('data.packageNames.1', 'com.old.vpn');
+
+        $ruleId = (int) $saveResponse->json('data.id');
+
+        $this->postJson($this->adminUserUri('aidLoginBanRule/update'), [
+            'id' => $ruleId,
+            'projectCodes' => ['new'],
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.projectCodes.0', 'new')
+            ->assertJsonPath('data.packageNames.0', 'com.manual.vpn')
+            ->assertJsonPath('data.packageNames.1', 'com.new.vpn');
+
+        $rule = AidLoginBanRule::query()->findOrFail($ruleId);
+        $this->assertSame(['new'], $rule->project_codes);
+        $this->assertSame(['com.manual.vpn', 'com.new.vpn'], $rule->package_names);
     }
 
     private function createPlan(array $overrides = []): Plan

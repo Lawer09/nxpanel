@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AidLoginBanRule;
+use App\Models\ProjectUserAppMap;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -68,6 +69,7 @@ class AidLoginBanRuleService
     public function create(array $data, ?int $operatorUserId = null): AidLoginBanRule
     {
         return AidLoginBanRule::query()->create(array_merge(
+            ['enabled' => true],
             $this->normalizePayload($data),
             [
                 'created_by' => $operatorUserId,
@@ -82,7 +84,7 @@ class AidLoginBanRuleService
     public function update(int $id, array $data, ?int $operatorUserId = null): AidLoginBanRule
     {
         $rule = AidLoginBanRule::query()->findOrFail($id);
-        $rule->fill(array_merge($this->normalizePayload($data), [
+        $rule->fill(array_merge($this->normalizePayload($data, $rule), [
             'updated_by' => $operatorUserId,
         ]));
         $rule->save();
@@ -114,7 +116,10 @@ class AidLoginBanRuleService
 
         $rules = AidLoginBanRule::query()
             ->where('enabled', true)
-            ->where('cutoff_at', '>=', $now->timestamp)
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('cutoff_at')
+                    ->orWhere('cutoff_at', '>=', $now->timestamp);
+            })
             ->orderBy('id')
             ->get();
 
@@ -161,6 +166,7 @@ class AidLoginBanRuleService
             'cutoffAt' => $this->formatTimestamp($rule->cutoff_at),
             'weeklyWindows' => $rule->weekly_windows ?? [],
             'packageNames' => $rule->package_names ?? [],
+            'projectCodes' => $rule->project_codes ?? [],
             'countries' => $rule->countries ?? [],
             'reason' => $rule->reason,
             'createdBy' => $rule->createdBy ? [
@@ -176,7 +182,7 @@ class AidLoginBanRuleService
         ];
     }
 
-    private function normalizePayload(array $data): array
+    private function normalizePayload(array $data, ?AidLoginBanRule $rule = null): array
     {
         $payload = [];
 
@@ -189,15 +195,38 @@ class AidLoginBanRuleService
         }
 
         if (array_key_exists('cutoffAt', $data)) {
-            $payload['cutoff_at'] = CarbonImmutable::parse((string) $data['cutoffAt'], config('app.timezone'))->timestamp;
+            $payload['cutoff_at'] = $data['cutoffAt'] === null
+                ? null
+                : CarbonImmutable::parse((string) $data['cutoffAt'], config('app.timezone'))->timestamp;
         }
 
         if (array_key_exists('weeklyWindows', $data)) {
-            $payload['weekly_windows'] = $this->normalizeWeeklyWindows($data['weeklyWindows']);
+            $payload['weekly_windows'] = is_array($data['weeklyWindows'])
+                ? $this->normalizeWeeklyWindows($data['weeklyWindows'])
+                : null;
         }
 
-        if (array_key_exists('packageNames', $data)) {
-            $payload['package_names'] = $this->normalizeStringList($data['packageNames'] ?? [], false);
+        if (array_key_exists('projectCodes', $data)) {
+            $payload['project_codes'] = $this->normalizeStringList($data['projectCodes'] ?? [], false);
+        }
+
+        if (array_key_exists('packageNames', $data) || array_key_exists('projectCodes', $data)) {
+            if (array_key_exists('packageNames', $data)) {
+                $packageNames = $this->normalizeStringList($data['packageNames'] ?? [], false);
+            } elseif (array_key_exists('projectCodes', $data)) {
+                $packageNames = $this->removeProjectResolvedPackageNames(
+                    (array) ($rule?->package_names ?? []),
+                    (array) ($rule?->project_codes ?? [])
+                );
+            } else {
+                $packageNames = (array) ($rule?->package_names ?? []);
+            }
+
+            $projectCodes = array_key_exists('projectCodes', $data)
+                ? ($payload['project_codes'] ?? [])
+                : (array) ($rule?->project_codes ?? []);
+
+            $payload['package_names'] = $this->mergePackageNamesWithProjectCodes($packageNames, $projectCodes);
         }
 
         if (array_key_exists('countries', $data)) {
@@ -236,8 +265,68 @@ class AidLoginBanRuleService
             ->all();
     }
 
+    /**
+     * Merge explicit matched package names with enabled app IDs resolved by project codes.
+     */
+    private function mergePackageNamesWithProjectCodes(array $packageNames, array $projectCodes): array
+    {
+        return $this->normalizeStringList(array_merge(
+            $packageNames,
+            $this->resolveAppIdsByProjectCodes($projectCodes)
+        ), false);
+    }
+
+    /**
+     * Keep manually configured package names when project code sources are replaced.
+     */
+    private function removeProjectResolvedPackageNames(array $packageNames, array $projectCodes): array
+    {
+        $resolvedPackageNames = $this->resolveAppIdsByProjectCodes($projectCodes, false);
+        if (empty($resolvedPackageNames)) {
+            return $this->normalizeStringList($packageNames, false);
+        }
+
+        return collect($this->normalizeStringList($packageNames, false))
+            ->reject(fn(string $packageName): bool => in_array($packageName, $resolvedPackageNames, true))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Resolve enabled project app mappings into app IDs used by login metadata matching.
+     */
+    private function resolveAppIdsByProjectCodes(array $projectCodes, bool $enabledOnly = true): array
+    {
+        $projectCodes = $this->normalizeStringList($projectCodes, false);
+        if (empty($projectCodes)) {
+            return [];
+        }
+
+        $query = ProjectUserAppMap::query()
+            ->whereIn('project_code', $projectCodes)
+            ->whereNotNull('app_id')
+            ->where('app_id', '<>', '');
+
+        if ($enabledOnly) {
+            $query->where('enabled', 1);
+        }
+
+        return $query
+            ->pluck('app_id')
+            ->filter(fn($appId) => is_string($appId) || is_numeric($appId))
+            ->map(fn($appId) => trim((string) $appId))
+            ->filter(fn(string $appId) => $appId !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function matchesWeeklyWindow(AidLoginBanRule $rule, CarbonImmutable $now): bool
     {
+        if (empty($rule->weekly_windows)) {
+            return true;
+        }
+
         $weekday = (int) $now->isoWeekday();
         $current = $now->format('H:i');
 
