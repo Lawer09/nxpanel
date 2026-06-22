@@ -247,3 +247,11 @@
 - 影响范围：`database/migrations/2026_06_22_120000_add_excel_metadata_fields_to_project_projects_table.php`、`app/Services/ProjectService.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Requests/Admin/ProjectFetchRequest.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_22_120000_add_excel_metadata_fields_to_project_projects_table.php`。
 - 回滚说明：回滚新增迁移并移除项目接口中的新增元数据字段校验、读写、返回和文档说明即可。
+
+## 2026-06-22 项目报表返回项目元数据
+
+- 日期：2026-06-22
+- 变更摘要：项目日报查询在返回行包含唯一 `projectCode` 时附带项目表元数据字段，包括 `adStatus` 及 Adspower、开发者 Gmail、应用、包名、域名、Facebook、Admob、Firebase、Yandex、商店页等字段；当 `groupBy` 不包含 `projectCode` 时不返回项目元数据，CSV 导出保持原固定列格式。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，复用已有项目元数据字段。
+- 回滚说明：移除项目日报查询中的项目表关联、元数据字段格式化和文档说明即可。

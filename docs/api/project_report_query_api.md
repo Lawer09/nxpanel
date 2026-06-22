@@ -89,6 +89,30 @@
       {
         "reportDate": "2026-06-01",
         "projectCode": "A003",
+        "adStatus": "running",
+        "adspowerEnv": "env-placeholder",
+        "developerGmail": "developer@example.com",
+        "appName": "Example VPN",
+        "packageName": "com.example.vpn",
+        "domainInfoStatus": "completed",
+        "admobPubId": "pub-placeholder",
+        "domainUrl": "https://example.com",
+        "privacyPolicyUrl": "https://example.com/privacy.html",
+        "termsUrl": "https://example.com/terms.html",
+        "facebookInfoStatus": "completed",
+        "facebookAppId": "facebook-app-id-placeholder",
+        "facebookAppToken": "facebook-token-placeholder",
+        "facebookKeyHash": "facebook-key-hash-placeholder",
+        "facebookClassName": "facebook-class-placeholder",
+        "admobAccountStatus": "completed",
+        "admobAppId": "admob-app-id-placeholder",
+        "admobAdIds": "admob-ad-ids-placeholder",
+        "admobAppAdsTxt": "app-ads-placeholder",
+        "firebaseConfigNote": "firebase-config-placeholder",
+        "yandexAccount": "yandex-account-placeholder",
+        "yandexAdIds": "yandex-ad-ids-placeholder",
+        "yandexAppAdsTxt": "yandex-app-ads-placeholder",
+        "storePageUrl": "https://play.google.com/store/apps/details?id=com.example.vpn",
         "country": "US",
         "newUsers": 120,
         "reportNewUsers": 80,
@@ -162,6 +186,9 @@
 
 - `summary` 为当前筛选条件下的整体汇总，不受分页影响
 - `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
+- 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainUrl`、`facebookAppId`、`admobAppId`、`firebaseConfigNote`、`storePageUrl` 等
+- 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回项目表元数据字段
+- CSV 导出保持固定列格式，不附加项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
 - `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
 - `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`

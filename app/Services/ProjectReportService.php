@@ -7,6 +7,33 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectReportService
 {
+    private const PROJECT_METADATA_COLUMNS = [
+        'ad_status' => 'adStatus',
+        'adspower_env' => 'adspowerEnv',
+        'developer_gmail' => 'developerGmail',
+        'app_name' => 'appName',
+        'package_name' => 'packageName',
+        'domain_info_status' => 'domainInfoStatus',
+        'admob_pub_id' => 'admobPubId',
+        'domain_url' => 'domainUrl',
+        'privacy_policy_url' => 'privacyPolicyUrl',
+        'terms_url' => 'termsUrl',
+        'facebook_info_status' => 'facebookInfoStatus',
+        'facebook_app_id' => 'facebookAppId',
+        'facebook_app_token' => 'facebookAppToken',
+        'facebook_key_hash' => 'facebookKeyHash',
+        'facebook_class_name' => 'facebookClassName',
+        'admob_account_status' => 'admobAccountStatus',
+        'admob_app_id' => 'admobAppId',
+        'admob_ad_ids' => 'admobAdIds',
+        'admob_app_ads_txt' => 'admobAppAdsTxt',
+        'firebase_config_note' => 'firebaseConfigNote',
+        'yandex_account' => 'yandexAccount',
+        'yandex_ad_ids' => 'yandexAdIds',
+        'yandex_app_ads_txt' => 'yandexAppAdsTxt',
+        'store_page_url' => 'storePageUrl',
+    ];
+
     /**
      * Query project daily aggregate report.
      */
@@ -323,6 +350,7 @@ class ProjectReportService
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'reportDate';
             $query = clone $baseQuery;
             $this->joinDailySpendMetrics($query, $spendMetricsQuery);
+            $this->joinProjectMetadata($query);
 
             $query->select([
                 'project_daily_aggregates.id',
@@ -347,6 +375,7 @@ class ProjectReportService
                 'project_daily_aggregates.traffic_cost',
                 'project_daily_aggregates.updated_at',
             ]);
+            $this->selectProjectMetadata($query);
             $query->selectRaw('COALESCE(spend_metrics.ad_spend_cost, 0) as ad_spend_cost')
                 ->selectRaw('spend_metrics.ad_spend_clicks as ad_spend_clicks')
                 ->selectRaw('spend_metrics.ad_spend_impressions as ad_spend_impressions')
@@ -378,6 +407,9 @@ class ProjectReportService
 
         $query = clone $baseQuery;
         $this->joinDailySpendMetrics($query, $spendMetricsQuery);
+        if (in_array('projectCode', $groupDimensions, true)) {
+            $this->joinProjectMetadata($query);
+        }
 
         foreach ($groupDimensions as $groupDimension) {
             $groupColumn = $dimensionMap[$groupDimension];
@@ -412,6 +444,10 @@ class ProjectReportService
             ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_clicks), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)/SUM(spend_metrics.ad_spend_clicks),6) END as ad_spend_cpc')
             ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_impressions), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)*1000/SUM(spend_metrics.ad_spend_impressions),6) END as ad_spend_cpm')
             ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(traffic_cost))=0 THEN NULL ELSE ROUND(SUM(ad_revenue)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(traffic_cost)),6) END as roi');
+
+        if (in_array('projectCode', $groupDimensions, true)) {
+            $this->selectGroupedProjectMetadata($query);
+        }
 
         $sortable = array_values(array_unique(array_merge($groupDimensions, [
             'newUsers', 'reportNewUsers', 'fbNewUsers', 'dauUsers', 'fbDauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
@@ -544,6 +580,34 @@ class ProjectReportService
     }
 
     /**
+     * Join project metadata by project code for row-level report output.
+     */
+    private function joinProjectMetadata(Builder $query): void
+    {
+        $query->leftJoin('project_projects as report_projects', 'report_projects.project_code', '=', 'project_daily_aggregates.project_code');
+    }
+
+    /**
+     * Select project metadata fields for non-grouped report rows.
+     */
+    private function selectProjectMetadata(Builder $query): void
+    {
+        foreach (self::PROJECT_METADATA_COLUMNS as $column => $alias) {
+            $query->addSelect("report_projects.{$column} as project_{$column}");
+        }
+    }
+
+    /**
+     * Select project metadata fields for grouped rows that include projectCode.
+     */
+    private function selectGroupedProjectMetadata(Builder $query): void
+    {
+        foreach (self::PROJECT_METADATA_COLUMNS as $column => $alias) {
+            $query->selectRaw("MAX(report_projects.{$column}) as project_{$column}");
+        }
+    }
+
+    /**
      * Aggregate spend metrics directly from the ad spend daily report table.
      */
     private function buildDailySpendMetricSubquery(string $dateFrom, string $dateTo, array $filters): Builder
@@ -631,7 +695,7 @@ class ProjectReportService
 
     private function formatDailyRow(object $row): array
     {
-        return [
+        $data = [
             'id' => isset($row->id) ? (int) $row->id : null,
             'reportDate' => isset($row->report_date) ? (string) $row->report_date : null,
             'projectCode' => $row->project_code ?? null,
@@ -664,6 +728,26 @@ class ProjectReportService
             'roi' => $this->formatDecimal($row->roi ?? null),
             'updatedAt' => $row->updated_at ?? null,
         ];
+
+        if (!empty($data['projectCode'])) {
+            $data = array_merge($data, $this->formatProjectMetadata($row));
+        }
+
+        return $data;
+    }
+
+    /**
+     * Format project metadata fields from report query aliases.
+     */
+    private function formatProjectMetadata(object $row): array
+    {
+        $metadata = [];
+        foreach (self::PROJECT_METADATA_COLUMNS as $column => $alias) {
+            $property = 'project_' . $column;
+            $metadata[$alias] = $row->{$property} ?? null;
+        }
+
+        return $metadata;
     }
 
     private function formatDailyCsvRow(array $row): array
