@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $created_at
  * @property int $updated_at
  * @property string $user_type User type
+ * @property array|null $menus Menus
  * @property bool $commission_auto_check 是否自动计算佣金
  * @property array|null $register_metadata 注册时客户端元数据
  *
@@ -78,6 +79,7 @@ class User extends Authenticatable
         'next_reset_at' => 'timestamp',
         'last_reset_at' => 'timestamp',
         'register_metadata' => 'json',
+        'menus' => 'array',
     ];
     protected $hidden = ['password'];
 

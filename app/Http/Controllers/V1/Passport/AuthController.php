@@ -30,6 +30,19 @@ class AuthController extends Controller
     }
 
     /**
+     * Build response data for ordinary password login.
+     */
+    protected function buildPasswordLoginData($user): array
+    {
+        $authService = new AuthService($user);
+        $data = $authService->generateAuthData();
+        $data['user_type'] = $user->user_type ?? 'global';
+        $data['menus'] = is_array($user->menus) ? array_values($user->menus) : [];
+
+        return $data;
+    }
+
+    /**
      * 通过邮件链接登录
      */
     public function loginWithMailLink(Request $request)
@@ -63,10 +76,7 @@ class AuthController extends Controller
         }
 
         $authService = new AuthService($result);
-        $data = $authService->generateAuthData();
-        $data['user_type'] = $result->user_type ?? 'global';
-
-        return $this->success($data);
+        return $this->success($authService->generateAuthData());
     }
 
     /**
@@ -83,8 +93,7 @@ class AuthController extends Controller
             return $this->fail($result);
         }
 
-        $authService = new AuthService($result);
-        return $this->success($authService->generateAuthData());
+        return $this->success($this->buildPasswordLoginData($result));
     }
 
     /**

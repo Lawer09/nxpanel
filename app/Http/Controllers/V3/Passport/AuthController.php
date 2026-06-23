@@ -24,10 +24,7 @@ class AuthController extends V1AuthController
         }
 
         $authService = new AuthService($result);
-        $data = $authService->generateAuthData();
-        $data['user_type'] = $result->user_type ?? 'global';
-
-        return $this->ok($data);
+        return $this->ok($authService->generateAuthData());
     }
 
     /**
@@ -44,8 +41,7 @@ class AuthController extends V1AuthController
             return $this->error($result);
         }
 
-        $authService = new AuthService($result);
-        return $this->ok($authService->generateAuthData());
+        return $this->ok($this->buildPasswordLoginData($result));
     }
 
 

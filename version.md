@@ -343,3 +343,27 @@
 - 影响范围：`database/migrations/2026_06_23_120000_add_user_type_to_v2_user_table.php`、`app/Models/User.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Http/Requests/Admin/UserUpdate.php`、`app/Http/Requests/Admin/UserFetch.php`、`app/Services/UserService.php`、`tests/Feature/UserTypeLoginTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_23_120000_add_user_type_to_v2_user_table.php`。
 - 回滚说明：回滚新增迁移并移除普通登录返回中的 `user_type` 字段、管理端校验/筛选支持、测试、文档和本条版本记录即可。
+
+## 2026-06-23 V3 客户端订阅 JSON 忽略封禁状态
+
+- 日期：2026-06-23
+- 变更摘要：调整 `GET /api/v3/client/sub/json` 可用性判断，订阅 JSON 接口不再因用户 `banned/is_ban` 状态拒绝返回；仍保留 token、`transfer_enable` 和 `expired_at` 等原有非封禁可用性校验。
+- 影响范围：`app/Services/UserService.php`、`app/Http/Controllers/V3/Client/ClientController.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/client_user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将 V3 `ClientController::subscribeJson()` 恢复为调用 `UserService::isAvailable()`，并移除新增 Service 方法、测试和文档说明即可。
+
+## 2026-06-23 用户菜单字段与普通登录返回
+
+- 日期：2026-06-23
+- 变更摘要：为 `v2_user` 新增 `menus` JSON 字段，V1/V2/V3 普通邮箱密码登录成功返回新增 `menus` 数组，未配置时返回空数组；注册、AID 登录、邮件链接/Token 登录保持不返回该字段；管理端用户更新支持写入 `menus` 数组。
+- 影响范围：`database/migrations/2026_06_23_121000_add_menus_to_v2_user_table.php`、`app/Models/User.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Http/Requests/Admin/UserUpdate.php`、`app/Services/UserService.php`、`tests/Feature/UserTypeLoginTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_23_121000_add_menus_to_v2_user_table.php`。
+- 回滚说明：回滚新增迁移并移除普通登录返回中的 `menus` 字段、管理端校验/写入支持、测试、文档和本条版本记录即可。
+
+## 2026-06-23 管理端添加和更新用户支持类型与菜单字段
+
+- 日期：2026-06-23
+- 变更摘要：管理端用户添加 `POST /api/v3/admin/user/generate` 与更新 `POST /api/v3/admin/user/update` 支持处理 `user_type` 和 `menus`；单个添加与批量生成均会透传保存这两个字段，更新接口可修改或清空菜单数组。
+- 影响范围：`app/Http/Controllers/V2/Admin/UserController.php`、`app/Http/Requests/Admin/UserGenerate.php`、`app/Http/Requests/Admin/UserUpdate.php`、`tests/Feature/UserTypeLoginTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，复用已新增的 `user_type` 与 `menus` 字段。
+- 回滚说明：移除用户生成接口中的字段校验和透传逻辑，并回退对应测试、文档与本条版本记录即可。

@@ -280,7 +280,7 @@ class ClientController extends V1ClientController
         $user = $request->user();
         $userService = new UserService();
     
-        if (!$userService->isAvailable($user)) {
+        if (!$userService->isAvailableIgnoringBan($user)) {
             HookManager::call('client.subscribe.unavailable');
             return $this->error([403, '用户不可用']);
         }

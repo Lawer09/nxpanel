@@ -115,6 +115,8 @@ POST /api/v3/admin/user/fetch
 | `speed_limit` | `int` | 否 | 限速 Mbps |
 | `device_limit` | `int` | 否 | 设备数量限制 |
 | `register_metadata` | `object` | 否 | 注册元数据，支持 `{"app_id": "..."}` 格式 |
+| `user_type` | `string` | 否 | 用户类型，最大 32 字符；未传时保持原值 |
+| `menus` | `array` | 否 | 用户菜单数组；传空数组可清空菜单 |
 | `invite_user_email` | `string` | 否 | 邀请人邮箱 |
 
 ### 示例
@@ -146,6 +148,33 @@ POST /api/v3/admin/user/update
 {
     "code": 400202,
     "message": "用户不存在"
+}
+```
+
+---
+
+## 添加用户
+
+`POST /api/v3/admin/user/generate`
+
+单个添加和批量生成用户均支持 `user_type` 与 `menus`。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `user_type` | `string` | 否 | 用户类型，最大 32 字符；未传时使用数据库默认值 `global` |
+| `menus` | `array` | 否 | 用户菜单数组；未传时为空 |
+
+示例：
+
+```json
+POST /api/v3/admin/user/generate
+{
+    "email_prefix": "demo",
+    "email_suffix": "example.com",
+    "password": "password123",
+    "plan_id": 1,
+    "user_type": "custom",
+    "menus": ["dashboard", "reports"]
 }
 ```
 
@@ -737,13 +766,14 @@ POST /api/v3/admin/user/blockedIp/delete
     }
 }
 ```
-## 普通登录返回 user_type
+## 普通登录返回 user_type 与 menus
 
-`POST /api/v1/passport/auth/login` 与 `POST /api/v3/passport/auth/login` 普通邮箱密码登录成功后，`data` 会返回 `user_type` 字段。
+`POST /api/v1/passport/auth/login`、`POST /api/v2/passport/auth/login` 与 `POST /api/v3/passport/auth/login` 普通邮箱密码登录成功后，`data` 会返回 `user_type` 与 `menus` 字段。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `user_type` | `string` | 用户类型，默认值为 `global`；仅普通登录返回，注册、AID 登录、邮件链接/Token 登录不额外返回该字段。 |
+| `menus` | `array` | 用户菜单数组，未配置时返回空数组 `[]`；仅普通登录返回。 |
 
 示例：
 
@@ -753,7 +783,8 @@ POST /api/v3/admin/user/blockedIp/delete
         "token": "subscribe-token",
         "auth_data": "Bearer xxxxxx",
         "is_admin": false,
-        "user_type": "global"
+        "user_type": "global",
+        "menus": []
     }
 }
 ```

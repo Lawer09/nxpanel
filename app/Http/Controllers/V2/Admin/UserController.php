@@ -353,12 +353,7 @@ class UserController extends Controller
             }
 
             $userService = app(UserService::class);
-            $user = $userService->createUser([
-                'email' => $email,
-                'password' => $request->input('password') ?? $email,
-                'plan_id' => $request->input('plan_id'),
-                'expired_at' => $request->input('expired_at'),
-            ]);
+            $user = $userService->createUser($this->buildGeneratedUserData($request, $email));
 
             if (!$user->save()) {
                 return $this->fail([500, '生成失败']);
@@ -378,12 +373,7 @@ class UserController extends Controller
 
         for ($i = 0; $i < $request->input('generate_count'); $i++) {
             $email = Helper::randomChar(6) . '@' . $request->input('email_suffix');
-            $usersData[] = [
-                'email' => $email,
-                'password' => $request->input('password') ?? $email,
-                'plan_id' => $request->input('plan_id'),
-                'expired_at' => $request->input('expired_at'),
-            ];
+            $usersData[] = $this->buildGeneratedUserData($request, $email);
         }
 
 
@@ -440,6 +430,27 @@ class UserController extends Controller
             'message' => '批量生成成功',
             'data' => $data,
         ]);
+    }
+
+    /**
+     * Build the data used by single and batch admin user generation.
+     */
+    private function buildGeneratedUserData(Request $request, string $email): array
+    {
+        $data = [
+            'email' => $email,
+            'password' => $request->input('password') ?? $email,
+            'plan_id' => $request->input('plan_id'),
+            'expired_at' => $request->input('expired_at'),
+        ];
+
+        foreach (['user_type', 'menus'] as $field) {
+            if ($request->has($field)) {
+                $data[$field] = $request->input($field);
+            }
+        }
+
+        return $data;
     }
 
     public function sendMail(UserSendMail $request)

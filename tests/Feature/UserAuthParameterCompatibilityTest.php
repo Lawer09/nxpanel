@@ -97,6 +97,15 @@ class UserAuthParameterCompatibilityTest extends TestCase
         }
     }
 
+    public function test_client_subscription_json_ignores_banned_status(): void
+    {
+        $user = $this->createUser('banned-subscription-user@example.com');
+        $user->forceFill(['banned' => 1])->save();
+
+        $this->getJson('/api/v3/client/sub/json?token=' . urlencode($user->token))
+            ->assertOk();
+    }
+
     private function createUser(string $email = 'user@example.com'): User
     {
         return User::create([

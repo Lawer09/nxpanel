@@ -141,6 +141,7 @@ GET /api/v3/user/getSubscribe?auth_data=xxxxxx
 - 请求方法：`GET`
 - 接口路径：`/api/v3/client/sub/json`
 - 接口用途：返回按国家缩写分组的客户端订阅节点 JSON。
+- 封禁说明：该接口不因用户 `banned/is_ban` 状态拒绝返回；但仍要求 `token` 有效，并继续校验用户套餐流量与到期状态。
 
 ### 请求参数
 

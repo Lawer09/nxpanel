@@ -55,6 +55,14 @@ class UserService
         return false;
     }
 
+    /**
+     * Check subscription availability while intentionally ignoring ban status.
+     */
+    public function isAvailableIgnoringBan(User $user): bool
+    {
+        return (bool) $user->transfer_enable && ($user->expired_at > time() || $user->expired_at === NULL);
+    }
+
     public function getAvailableUsers()
     {
         return User::whereRaw('u + d < transfer_enable')
@@ -248,6 +256,7 @@ class UserService
             'transfer_enable',
             'register_metadata',
             'user_type',
+            'menus',
         ];
 
         foreach ($optionalFields as $field) {

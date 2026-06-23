@@ -19,7 +19,9 @@ class UserGenerate extends FormRequest
             'plan_id' => 'nullable|integer',
             'email_prefix' => 'nullable',
             'email_suffix' => 'required',
-            'password' => 'nullable'
+            'password' => 'nullable',
+            'user_type' => 'nullable|string|max:32',
+            'menus' => 'nullable|array'
         ];
     }
 
