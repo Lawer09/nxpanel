@@ -45,7 +45,7 @@ class UserIpBanTest extends TestCase
         $this->assertFalse((bool) $user->banned);
     }
 
-    public function test_login_by_aid_bans_new_user_when_ip_is_blocked(): void
+    public function test_v3_login_by_aid_returns_login_data_when_ip_is_blocked(): void
     {
         BlockedUserIp::create([
             'ip' => '203.0.113.20',
@@ -58,12 +58,33 @@ class UserIpBanTest extends TestCase
                 'app_id' => 'com.example.app',
                 'ip' => '203.0.113.20',
             ],
-        ])->assertStatus(400);
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true)
+            ->assertJsonStructure(['data' => ['auth_data', 'token', 'is_ban']]);
 
         $user = User::query()->where('email', 'device-002@apple.com')->firstOrFail();
 
         $this->assertTrue((bool) $user->banned);
         $this->assertSame('203.0.113.20', $user->register_metadata['ip'] ?? null);
+    }
+
+    public function test_v1_login_by_aid_still_rejects_when_ip_is_blocked(): void
+    {
+        BlockedUserIp::create([
+            'ip' => '203.0.113.21',
+            'reason' => 'known abusive IP',
+        ]);
+
+        $this->postJson('/api/v1/passport/auth/loginByAid', [
+            'aid' => 'device-v1-blocked-ip',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+                'ip' => '203.0.113.21',
+            ],
+        ])->assertStatus(400);
+
+        $user = User::query()->where('email', 'device-v1-blocked-ip@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
     }
 
     public function test_admin_batch_ban_blocks_registration_ips(): void
@@ -219,7 +240,9 @@ class UserIpBanTest extends TestCase
                 'country' => 'us',
                 'ip' => '203.0.113.70',
             ],
-        ])->assertStatus(400);
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true)
+            ->assertJsonStructure(['data' => ['auth_data', 'token', 'is_ban']]);
 
         $user = User::query()->where('email', 'device-rule-001@apple.com')->firstOrFail();
         $this->assertTrue((bool) $user->banned);
@@ -303,7 +326,8 @@ class UserIpBanTest extends TestCase
                 'app_id' => 'com.example.date',
                 'ip' => '203.0.113.77',
             ],
-        ])->assertStatus(400);
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true);
 
         $user = User::query()->where('email', 'device-rule-date-window@apple.com')->firstOrFail();
         $this->assertTrue((bool) $user->banned);
@@ -557,7 +581,8 @@ class UserIpBanTest extends TestCase
                 'app_id' => 'com.rocket.vpn',
                 'ip' => '203.0.113.76',
             ],
-        ])->assertStatus(400);
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true);
 
         $user = User::query()->where('email', 'device-project-code@apple.com')->firstOrFail();
         $this->assertTrue((bool) $user->banned);
@@ -565,6 +590,51 @@ class UserIpBanTest extends TestCase
         $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.76')->firstOrFail();
         $this->assertSame('aid_login_ban_rule', $blockedIp->metadata['source'] ?? null);
         $this->assertSame('com.rocket.vpn', $blockedIp->metadata['package_name'] ?? null);
+    }
+
+    public function test_v3_login_by_aid_returns_login_data_for_existing_banned_aid_user(): void
+    {
+        $user = $this->createAidUser('existing-banned-aid', [
+            'banned' => 1,
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-banned-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true)
+            ->assertJsonStructure(['data' => ['auth_data', 'token', 'is_ban']]);
+
+        $this->assertTrue((bool) $user->refresh()->banned);
+    }
+
+    public function test_v1_login_by_aid_still_rejects_existing_banned_aid_user(): void
+    {
+        $this->createAidUser('existing-v1-banned-aid', [
+            'banned' => 1,
+        ]);
+
+        $this->postJson('/api/v1/passport/auth/loginByAid', [
+            'aid' => 'existing-v1-banned-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertStatus(400);
+    }
+
+    public function test_password_login_still_rejects_banned_user(): void
+    {
+        $this->createUser('password-banned@example.com', [
+            'password' => password_hash('password123', PASSWORD_DEFAULT),
+            'banned' => 1,
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/login', [
+            'email' => 'password-banned@example.com',
+            'password' => 'password123',
+        ])->assertStatus(400);
     }
 
     public function test_admin_update_project_codes_rebuilds_resolved_package_names(): void

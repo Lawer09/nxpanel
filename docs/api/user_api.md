@@ -201,7 +201,8 @@ POST /api/v3/admin/user/batchBan
 
 - `metadata.ip` 会保存到 `v2_user.register_metadata.ip`
 - 如果该 IP 已存在于 `blocked_user_ips.ip`，新用户会立即被标记为 `banned=1`
-- 被封禁的新用户不会返回登录凭证，接口返回账号已封禁错误
+- V1 `loginByAid` 被封禁的新用户不会返回登录凭证，接口返回账号已封禁错误
+- V3 `loginByAid` 被封禁的新用户仍返回登录凭证，并通过 `data.is_ban=true` 告知前端当前用户已封禁
 
 请求示例：
 
@@ -220,7 +221,7 @@ POST /api/v3/passport/auth/loginByAid
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `is_ban` | `bool` | 当前用户是否封禁；正常登录成功时通常为 `false` |
+| `is_ban` | `bool` | 当前用户是否封禁；V3 `loginByAid` 即使命中封禁也会成功返回，此时该字段为 `true` |
 
 ---
 
@@ -236,7 +237,8 @@ POST /api/v3/passport/auth/loginByAid
 - 已存在用户登录不会触发这套自定义规则。
 - 命中规则后，系统会将新用户设置为 `banned = 1`，清理登录会话，并从 `register_metadata.ip` 写入 `blocked_user_ips`。
 - 如果未传合法 IP，用户仍会被封禁，但不会新增 IP 封禁记录。
-- 接口返回现有封禁错误，不返回登录凭证。
+- V1 `loginByAid` 命中后返回现有封禁错误，不返回登录凭证。
+- V3 `loginByAid` 命中后仍返回登录凭证，并通过 `data.is_ban=true` 告知前端当前用户已封禁。
 
 ### 匹配规则
 
@@ -732,6 +734,26 @@ POST /api/v3/admin/user/blockedIp/delete
         "total": 1,
         "page": 1,
         "pageSize": 10
+    }
+}
+```
+## 普通登录返回 user_type
+
+`POST /api/v1/passport/auth/login` 与 `POST /api/v3/passport/auth/login` 普通邮箱密码登录成功后，`data` 会返回 `user_type` 字段。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `user_type` | `string` | 用户类型，默认值为 `global`；仅普通登录返回，注册、AID 登录、邮件链接/Token 登录不额外返回该字段。 |
+
+示例：
+
+```json
+{
+    "data": {
+        "token": "subscribe-token",
+        "auth_data": "Bearer xxxxxx",
+        "is_admin": false,
+        "user_type": "global"
     }
 }
 ```

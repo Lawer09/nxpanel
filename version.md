@@ -327,3 +327,19 @@
 - 影响范围：`app/Http/Requests/Admin/FirebaseAnalyticsCommonQueryRequest.php`、`app/Http/Requests/Admin/FirebaseReportUserSummaryQueryRequest.php`、`app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseReportController.php`、`docs/api/firebase_analytics.md`、`docs/api/firebase_report_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 Firebase 查询 Request 中的默认日期填充，并将聚合报表查询默认范围恢复为昨天到今天，同时回退对应文档说明即可。
+
+## 2026-06-23 V3 AID 登录封禁用户返回登录信息
+
+- 日期：2026-06-23
+- 变更摘要：仅调整 V3 `loginByAid`，新注册用户命中 IP 封禁或 AID 自定义封禁规则、以及已存在 AID 用户已封禁时，仍返回登录凭证并通过 `is_ban=true` 告知前端；V1/V2 `loginByAid` 与普通邮箱密码登录保持封禁错误。
+- 影响范围：`app/Services/Auth/LoginService.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 V3 调用中的允许封禁登录参数，并恢复对应测试和文档说明即可。
+
+## 2026-06-23 用户类型字段与普通登录返回
+
+- 日期：2026-06-23
+- 变更摘要：为 `v2_user` 新增 `user_type` 字符串字段，默认值为 `global`；普通邮箱密码登录成功返回新增 `user_type`，注册、AID 登录、邮件链接/Token 登录保持原返回结构；管理端用户更新与筛选白名单支持 `user_type`。
+- 影响范围：`database/migrations/2026_06_23_120000_add_user_type_to_v2_user_table.php`、`app/Models/User.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Http/Requests/Admin/UserUpdate.php`、`app/Http/Requests/Admin/UserFetch.php`、`app/Services/UserService.php`、`tests/Feature/UserTypeLoginTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_23_120000_add_user_type_to_v2_user_table.php`。
+- 回滚说明：回滚新增迁移并移除普通登录返回中的 `user_type` 字段、管理端校验/筛选支持、测试、文档和本条版本记录即可。

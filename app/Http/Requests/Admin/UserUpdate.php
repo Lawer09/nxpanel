@@ -33,7 +33,8 @@ class UserUpdate extends FormRequest
             'remarks' => 'nullable',
             'speed_limit' => 'nullable|integer',
             'device_limit' => 'nullable|integer',
-            'register_metadata' => 'nullable|array'
+            'register_metadata' => 'nullable|array',
+            'user_type' => 'nullable|string|max:32'
         ];
     }
 

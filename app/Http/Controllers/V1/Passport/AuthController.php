@@ -63,7 +63,10 @@ class AuthController extends Controller
         }
 
         $authService = new AuthService($result);
-        return $this->success($authService->generateAuthData());
+        $data = $authService->generateAuthData();
+        $data['user_type'] = $result->user_type ?? 'global';
+
+        return $this->success($data);
     }
 
     /**

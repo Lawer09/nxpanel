@@ -44,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $reset_count 流量重置次数
  * @property int $created_at
  * @property int $updated_at
+ * @property string $user_type User type
  * @property bool $commission_auto_check 是否自动计算佣金
  * @property array|null $register_metadata 注册时客户端元数据
  *

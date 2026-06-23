@@ -87,7 +87,7 @@ class LoginService
      * @param string $aid
      * @return array [成功状态, 用户对象或错误信息]
      */
-    public function loginByAid(string $aid, ?array $metadata = null): array
+    public function loginByAid(string $aid, ?array $metadata = null, bool $allowBannedLogin = false): array
     {
         $email = $aid . '@apple.com';
         $password = $aid;
@@ -112,12 +112,22 @@ class LoginService
                     return [false, [500, 'User creation failed']];
                 }
 
-                if ($this->banCreatedUserWhenIpBlocked($user, $normalizedMetadata)) {
+                $bannedByIp = $this->banCreatedUserWhenIpBlocked($user, $normalizedMetadata);
+                if ($bannedByIp && !$allowBannedLogin) {
                     return [false, [400, __('Your account has been suspended')]];
                 }
 
-                if ($this->banCreatedUserWhenAidRuleMatched($user, $aid, $normalizedMetadata)) {
+                if ($bannedByIp) {
+                    $user->refresh();
+                }
+
+                $bannedByAidRule = !$bannedByIp && $this->banCreatedUserWhenAidRuleMatched($user, $aid, $normalizedMetadata);
+                if ($bannedByAidRule && !$allowBannedLogin) {
                     return [false, [400, __('Your account has been suspended')]];
+                }
+
+                if ($bannedByAidRule) {
+                    $user->refresh();
                 }
 
                 $this->ensureAidReusableInviteCode((int) $user->id);
@@ -161,7 +171,7 @@ class LoginService
             }
 
             // 检查账户状态
-            if ($user->banned) {
+            if ($user->banned && !$allowBannedLogin) {
                 return [false, [400, __('Your account has been suspended')]];
             }
 

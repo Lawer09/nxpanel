@@ -247,6 +247,7 @@ class UserService
             'expired_at',
             'transfer_enable',
             'register_metadata',
+            'user_type',
         ];
 
         foreach ($optionalFields as $field) {
