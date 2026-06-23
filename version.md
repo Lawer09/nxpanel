@@ -295,3 +295,11 @@
 - 影响范围：`app/Services/AidLoginBanRuleService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将空 `packageNames` 规则恢复为不限制包名并可继续参与检测，同时回退对应测试和文档说明即可。
+
+## 2026-06-23 修正 AID 封禁规则可选字段数据库约束
+
+- 日期：2026-06-23
+- 变更摘要：新增兼容迁移，将已存在的 `aid_login_ban_rules.cutoff_at` 和 `weekly_windows` 字段修正为可空，解决早期迁移已执行环境中创建无截止时间规则时报 `Field 'cutoff_at' doesn't have a default value` 的问题。
+- 影响范围：`database/migrations/2026_06_23_100000_make_aid_login_ban_rule_optional_fields_nullable.php`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_23_100000_make_aid_login_ban_rule_optional_fields_nullable.php`。
+- 回滚说明：回滚该迁移会将空值填充为 `0` / `[]` 后恢复非空约束；应用层仍建议保持可空约束以匹配当前接口语义。
