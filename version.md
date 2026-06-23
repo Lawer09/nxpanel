@@ -367,3 +367,11 @@
 - 影响范围：`app/Http/Controllers/V2/Admin/UserController.php`、`app/Http/Requests/Admin/UserGenerate.php`、`app/Http/Requests/Admin/UserUpdate.php`、`tests/Feature/UserTypeLoginTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，复用已新增的 `user_type` 与 `menus` 字段。
 - 回滚说明：移除用户生成接口中的字段校验和透传逻辑，并回退对应测试、文档与本条版本记录即可。
+
+## 2026-06-23 封禁 IP 支持批量删除
+
+- 日期：2026-06-23
+- 变更摘要：新增管理端接口 `POST /api/v3/{secure_path}/user/blockedIp/batchDelete`，支持按 `blocked_user_ips.id` 批量删除封禁 IP 记录；保留原单条删除接口不变，并返回删除数量、请求数量和不存在的记录 ID。
+- 影响范围：`app/Http/Requests/Admin/BlockedUserIpBatchDeleteRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除批量删除 Request、Service 方法、Controller 方法、路由、测试和文档说明即可；原单条删除接口无需回滚。

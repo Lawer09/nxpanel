@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\AidLoginBanRuleDeleteRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleFetchRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleSaveRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleUpdateRequest;
+use App\Http\Requests\Admin\BlockedUserIpBatchDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
@@ -340,6 +341,18 @@ class UserController extends V2UserController
         }
 
         return $this->ok(true);
+    }
+
+    /**
+     * Batch delete blocked registration IP records by ids.
+     */
+    public function batchDeleteBlockedIps(
+        BlockedUserIpBatchDeleteRequest $request,
+        BlockedUserIpService $blockedUserIpService
+    ): JsonResponse {
+        return $this->ok(
+            $blockedUserIpService->batchDeleteByIds($request->validated('ids'))
+        );
     }
 
     /**

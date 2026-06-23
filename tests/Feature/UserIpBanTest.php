@@ -212,6 +212,57 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_batch_delete_blocked_ip_records(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+        $first = BlockedUserIp::create([
+            'ip' => '203.0.113.61',
+            'reason' => 'temporary block',
+        ]);
+        $second = BlockedUserIp::create([
+            'ip' => '203.0.113.62',
+            'reason' => 'temporary block',
+        ]);
+        $kept = BlockedUserIp::create([
+            'ip' => '203.0.113.63',
+            'reason' => 'temporary block',
+        ]);
+        $missingId = $kept->id + 1000;
+
+        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
+            'ids' => [$first->id, $second->id, $second->id, $missingId],
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.deletedCount', 2)
+            ->assertJsonPath('data.requestedCount', 3)
+            ->assertJsonPath('data.missingIds.0', $missingId);
+
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'id' => $first->id,
+            'ip' => '203.0.113.61',
+        ]);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'id' => $second->id,
+            'ip' => '203.0.113.62',
+        ]);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'id' => $kept->id,
+            'ip' => '203.0.113.63',
+        ]);
+    }
+
+    public function test_admin_batch_delete_blocked_ip_validates_ids(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
+            'ids' => [],
+        ], $this->adminHeaders($admin))->assertStatus(422);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
+            'ids' => [0, -1, 'invalid'],
+        ], $this->adminHeaders($admin))->assertStatus(422);
+    }
+
     public function test_login_by_aid_bans_new_user_when_custom_rule_matches(): void
     {
         $window = $this->currentHourWindow();

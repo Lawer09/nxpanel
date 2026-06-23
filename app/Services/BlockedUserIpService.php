@@ -176,6 +176,48 @@ class BlockedUserIpService
         return (bool) $record->delete();
     }
 
+    /**
+     * Batch delete blocked registration IP records by ids.
+     */
+    public function batchDeleteByIds(array $ids): array
+    {
+        $ids = collect($ids)
+            ->map(fn($id) => (int) $id)
+            ->filter(fn(int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [
+                'deletedCount' => 0,
+                'requestedCount' => 0,
+                'missingIds' => [],
+            ];
+        }
+
+        return DB::transaction(function () use ($ids): array {
+            $existingIds = BlockedUserIp::query()
+                ->whereIn('id', $ids->all())
+                ->lockForUpdate()
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->values();
+
+            $deletedCount = 0;
+            if ($existingIds->isNotEmpty()) {
+                $deletedCount = BlockedUserIp::query()
+                    ->whereIn('id', $existingIds->all())
+                    ->delete();
+            }
+
+            return [
+                'deletedCount' => (int) $deletedCount,
+                'requestedCount' => $ids->count(),
+                'missingIds' => $ids->diff($existingIds)->values()->all(),
+            ];
+        });
+    }
+
     public function extractRegisterIp(User $user): ?string
     {
         $metadata = is_array($user->register_metadata) ? $user->register_metadata : [];

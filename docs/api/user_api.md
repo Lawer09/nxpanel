@@ -523,6 +523,44 @@ POST /api/v3/admin/user/blockedIp/delete
 
 ---
 
+
+## 批量删除封禁用户 IP 记录
+
+`POST /api/v3/admin/user/blockedIp/batchDelete`
+
+该接口只删除 `blocked_user_ips` 中的 IP 封禁记录，用于停止后续 AID 注册时按该 IP 自动封禁；不会自动解除已有用户的 `banned` 状态。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ids` | `int[]` | 是 | 需要删除的封禁 IP 记录 ID 列表；服务端会去重，空数组会返回校验错误 |
+
+### 请求示例
+
+```json
+POST /api/v3/admin/user/blockedIp/batchDelete
+{
+    "ids": [1, 2, 3]
+}
+```
+
+### 返回示例
+
+```json
+{
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+        "deletedCount": 2,
+        "requestedCount": 3,
+        "missingIds": [3]
+    }
+}
+```
+
+---
+
 ## 邀请相关接口（V1）
 
 > 兼容说明：以下 V1 邀请接口仍可用，但建议迁移到下方 V3 接口。
