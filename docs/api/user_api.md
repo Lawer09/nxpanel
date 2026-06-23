@@ -228,7 +228,7 @@ POST /api/v3/passport/auth/loginByAid
 
 用于在 `loginByAid` 自动创建新用户后，根据后台配置的规则自动封禁用户，并记录该用户注册 IP，避免同类注册继续放量。
 
-规则名称 `name` 用于后台识别规则；检测条件 `cutoffAt`、`weeklyWindows`、`packageNames`、`projectCodes`、`countries` 都不是必填项。未配置的检测条件视为不限制。
+规则名称 `name` 用于后台识别规则；检测条件 `cutoffAt`、`weeklyWindows`、`packageNames`、`projectCodes`、`countries` 都不是必填项。未配置的检测条件视为不限制，但最终 `packageNames` 为空的规则不会参与封禁检测。
 
 ### 触发范围
 
@@ -247,7 +247,7 @@ POST /api/v3/passport/auth/loginByAid
 - 每个 `weeklyWindows` 同时包含星期和小时段。
 - `weekday` 使用 ISO 定义：`1=周一`，`7=周日`，`start/end` 使用 `HH:mm` 小时段。
 - 时间段不支持跨天，跨天场景需要拆成两段，例如周一 `23:00-23:59` 和周二 `00:00-02:00`。
-- `packageNames` 为空表示不限制包名；非空时当前包名必须包含在 `packageNames` 数组中。
+- `packageNames` 为空且没有通过 `projectCodes` 扩展出包名时，该规则不会参与封禁检测；非空时当前包名必须包含在 `packageNames` 数组中。
 - `projectCodes` 为空表示不通过项目代号扩展包名；非空时保存规则会按 `project_user_app_map.project_code` 查询启用映射，并将对应 `app_id` 合并到最终 `packageNames`。
 - `countries` 为空表示不限制国家；非空时当前国家必须包含在 `countries` 数组中。
 - 当 `packageNames` 和 `countries` 都非空时，必须同时满足包名和国家包含条件。
@@ -318,7 +318,7 @@ POST /api/v3/passport/auth/loginByAid
 | `weeklyWindows[].weekday` | `int` | 是 | 传 `weeklyWindows` 时必填；星期，`1=周一`，`7=周日` |
 | `weeklyWindows[].start` | `string` | 是 | 传 `weeklyWindows` 时必填；开始时间，格式 `HH:mm` |
 | `weeklyWindows[].end` | `string` | 是 | 传 `weeklyWindows` 时必填；结束时间，格式 `HH:mm`，必须大于 `start` |
-| `packageNames` | `string[]` | 否 | 封禁匹配包名列表，空数组或不传表示不限制 |
+| `packageNames` | `string[]` | 否 | 封禁匹配包名列表；最终列表为空时规则不会参与封禁检测 |
 | `projectCodes` | `string[]` | 否 | 项目代号列表；保存时会查询 `project_user_app_map` 中 `enabled=1` 的相同 `project_code`，并将对应 `app_id` 合并到最终 `packageNames` |
 | `countries` | `string[]` | 否 | 封禁匹配国家列表，空数组或不传表示不限制 |
 | `reason` | `string` | 否 | 封禁原因，最大 500 字符 |
@@ -354,7 +354,7 @@ POST /api/v3/passport/auth/loginByAid
 | `enabled` | `bool` | 否 | 是否启用 |
 | `cutoffAt` | `string|null` | 否 | 规则有效截止时间；传 `null` 可清空限制 |
 | `weeklyWindows` | `array|null` | 否 | 一周内生效时间段，格式同新增接口；传 `null` 或空数组可清空限制 |
-| `packageNames` | `string[]` | 否 | 封禁匹配包名列表 |
+| `packageNames` | `string[]` | 否 | 封禁匹配包名列表；最终列表为空时规则不会参与封禁检测 |
 | `projectCodes` | `string[]` | 否 | 项目代号列表；传入后会重新保存项目代号，并把启用映射中的 `app_id` 合并到最终 `packageNames` |
 | `countries` | `string[]` | 否 | 封禁匹配国家列表 |
 | `reason` | `string` | 否 | 封禁原因 |

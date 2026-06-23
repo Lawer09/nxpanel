@@ -279,3 +279,19 @@
 - 影响范围：`database/migrations/2026_06_22_161000_add_project_codes_to_aid_login_ban_rules_table.php`、`app/Models/AidLoginBanRule.php`、`app/Services/AidLoginBanRuleService.php`、`app/Http/Requests/Admin/AidLoginBanRuleSaveRequest.php`、`app/Http/Requests/Admin/AidLoginBanRuleUpdateRequest.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_22_161000_add_project_codes_to_aid_login_ban_rules_table.php`。
 - 回滚说明：回滚新增迁移并移除规则保存/更新中的 `projectCodes` 校验、存储、返回和项目代号转包名逻辑，同时回退对应文档说明即可。
+
+## 2026-06-22 项目代号与包名映射查询接口
+
+- 日期：2026-06-22
+- 变更摘要：新增管理端只读接口 `GET /api/v3/{secure_path}/projects/user-apps/mappings`，按 `project_user_app_map.project_code` 分组返回项目代号与包名（`app_id`）映射，供 AID 封禁规则配置页查看 `projectCodes` 会扩展出的 `packageNames`。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectUserAppMapController.php`、`app/Http/Requests/Admin/ProjectUserAppMapMappingRequest.php`、`app/Services/ProjectUserAppMapService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，复用已有 `project_user_app_map` 表。
+- 回滚说明：移除新增路由、控制器方法、Request、Service 查询方法、测试和项目 API 文档说明即可。
+
+## 2026-06-23 AID 封禁规则包名必需检测
+
+- 日期：2026-06-23
+- 变更摘要：调整 `loginByAid` 自定义封禁规则命中逻辑，规则最终 `packageNames` 为空时不再参与封禁检测；即每条规则必须配置包名，或通过 `projectCodes` 成功扩展出包名后才会继续判断时间、国家等条件。
+- 影响范围：`app/Services/AidLoginBanRuleService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将空 `packageNames` 规则恢复为不限制包名并可继续参与检测，同时回退对应测试和文档说明即可。

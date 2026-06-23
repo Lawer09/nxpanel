@@ -9,6 +9,58 @@ use App\Models\ProjectUserAppMap;
 class ProjectUserAppMapService
 {
     /**
+     * Return project code to package name mappings grouped by project code.
+     */
+    public function mappings(array $filters = []): array
+    {
+        $query = ProjectUserAppMap::query()
+            ->whereNotNull('project_code')
+            ->where('project_code', '<>', '')
+            ->whereNotNull('app_id')
+            ->where('app_id', '<>', '');
+
+        if (!($filters['includeDisabled'] ?? false)) {
+            $query->where('enabled', array_key_exists('enabled', $filters) ? (int) $filters['enabled'] : 1);
+        } elseif (array_key_exists('enabled', $filters) && $filters['enabled'] !== null && $filters['enabled'] !== '') {
+            $query->where('enabled', (int) $filters['enabled']);
+        }
+
+        if (!empty($filters['projectCode'])) {
+            $query->where('project_code', trim((string) $filters['projectCode']));
+        }
+
+        if (!empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($query) use ($keyword): void {
+                $query->where('project_code', 'like', "%{$keyword}%")
+                    ->orWhere('app_id', 'like', "%{$keyword}%");
+            });
+        }
+
+        return $query
+            ->orderBy('project_code')
+            ->orderBy('app_id')
+            ->get(['id', 'project_code', 'app_id', 'enabled'])
+            ->groupBy('project_code')
+            ->map(function ($items, string $projectCode): array {
+                $packageNames = $items
+                    ->pluck('app_id')
+                    ->map(fn($appId) => trim((string) $appId))
+                    ->filter(fn(string $appId) => $appId !== '')
+                    ->unique()
+                    ->values();
+
+                return [
+                    'projectCode' => $projectCode,
+                    'packageNames' => $packageNames->all(),
+                    'appCount' => $packageNames->count(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * Query user app bindings for the specified project.
      */
     public function index(int $projectId, array $filters): array

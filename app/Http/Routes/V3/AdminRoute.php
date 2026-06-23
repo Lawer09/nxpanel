@@ -379,6 +379,7 @@ class AdminRoute
                 $router->post('/ad-accounts/update',                 [ProjectAdAccountController::class, 'update']);
                 $router->post('/ad-accounts/delete',                 [ProjectAdAccountController::class, 'destroy']);
 
+                $router->get('/user-apps/mappings',                  [ProjectUserAppMapController::class, 'mappings']);
                 $router->get('/user-apps',                           [ProjectUserAppMapController::class, 'index']);
                 $router->post('/user-apps/create',                   [ProjectUserAppMapController::class, 'store']);
                 $router->post('/user-apps/update',                   [ProjectUserAppMapController::class, 'update']);

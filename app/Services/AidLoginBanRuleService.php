@@ -354,7 +354,7 @@ class AidLoginBanRuleService
     {
         $packageNames = (array) ($rule->package_names ?? []);
         if (empty($packageNames)) {
-            return true;
+            return false;
         }
 
         return $packageName !== null && in_array($packageName, $packageNames, true);

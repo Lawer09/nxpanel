@@ -277,33 +277,34 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
-    public function test_custom_rule_matches_when_all_conditions_are_empty(): void
+    public function test_custom_rule_does_not_match_without_package_names(): void
     {
         AidLoginBanRule::create([
-            'name' => 'No condition rule',
+            'name' => 'No package rule',
             'enabled' => true,
             'cutoff_at' => null,
             'weekly_windows' => null,
             'package_names' => null,
             'countries' => null,
-            'reason' => 'no condition rule',
+            'reason' => 'no package rule',
         ]);
 
         $this->postJson('/api/v3/passport/auth/loginByAid', [
-            'aid' => 'device-rule-no-condition',
+            'aid' => 'device-rule-no-package',
             'metadata' => [
                 'app_id' => 'any.app',
                 'country' => 'CA',
                 'ip' => '203.0.113.75',
             ],
-        ])->assertStatus(400);
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
 
-        $user = User::query()->where('email', 'device-rule-no-condition@apple.com')->firstOrFail();
-        $this->assertTrue((bool) $user->banned);
+        $user = User::query()->where('email', 'device-rule-no-package@apple.com')->firstOrFail();
+        $this->assertFalse((bool) $user->banned);
 
-        $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.75')->firstOrFail();
-        $this->assertSame('aid_login_ban_rule', $blockedIp->metadata['source'] ?? null);
-        $this->assertSame('no condition rule', $blockedIp->reason);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.75',
+        ]);
     }
 
     public function test_login_by_aid_does_not_apply_custom_rule_to_existing_user(): void
@@ -524,6 +525,46 @@ class UserIpBanTest extends TestCase
         $this->assertSame(['com.manual.vpn', 'com.new.vpn'], $rule->package_names);
     }
 
+    public function test_admin_can_fetch_project_code_package_name_mappings(): void
+    {
+        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
+
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.a',
+            'enabled' => 1,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.b',
+            'enabled' => 1,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.disabled',
+            'enabled' => 0,
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'space',
+            'app_id' => 'com.space.app',
+            'enabled' => 1,
+        ]);
+
+        $this->getJson($this->adminProjectUri('user-apps/mappings'), $this->adminHeaders($admin))
+            ->assertOk()
+            ->assertJsonPath('data.0.projectCode', 'rocket')
+            ->assertJsonPath('data.0.packageNames.0', 'com.rocket.a')
+            ->assertJsonPath('data.0.packageNames.1', 'com.rocket.b')
+            ->assertJsonPath('data.0.appCount', 2)
+            ->assertJsonPath('data.1.projectCode', 'space');
+
+        $this->getJson($this->adminProjectUri('user-apps/mappings') . '?includeDisabled=1&projectCode=rocket', $this->adminHeaders($admin))
+            ->assertOk()
+            ->assertJsonPath('data.0.projectCode', 'rocket')
+            ->assertJsonPath('data.0.appCount', 3)
+            ->assertJsonPath('data.0.packageNames.2', 'com.rocket.disabled');
+    }
+
     private function createPlan(array $overrides = []): Plan
     {
         return Plan::query()->forceCreate(array_replace([
@@ -582,6 +623,19 @@ class UserIpBanTest extends TestCase
     private function adminUserUri(string $action): string
     {
         $suffix = 'user/' . trim($action, '/');
+
+        foreach (Route::getRoutes() as $route) {
+            if (str_starts_with($route->uri(), 'api/v3/') && str_ends_with($route->uri(), $suffix)) {
+                return '/' . $route->uri();
+            }
+        }
+
+        return '/api/v3/admin/' . $suffix;
+    }
+
+    private function adminProjectUri(string $action): string
+    {
+        $suffix = 'projects/' . trim($action, '/');
 
         foreach (Route::getRoutes() as $route) {
             if (str_starts_with($route->uri(), 'api/v3/') && str_ends_with($route->uri(), $suffix)) {

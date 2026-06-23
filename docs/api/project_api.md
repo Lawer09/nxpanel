@@ -24,6 +24,7 @@
 | POST | `/projects/ad-accounts/update` | 修改广告账号关联 | `ProjectAdAccountController::update` |
 | POST | `/projects/ad-accounts/delete` | 删除广告账号关联 | `ProjectAdAccountController::destroy` |
 | GET | `/projects/user-apps` | 用户App绑定列表 | `ProjectUserAppMapController::index` |
+| GET | `/projects/user-apps/mappings` | 项目代号与包名映射 | `ProjectUserAppMapController::mappings` |
 | POST | `/projects/user-apps/create` | 新增用户App绑定 | `ProjectUserAppMapController::store` |
 | POST | `/projects/user-apps/update` | 修改用户App绑定 | `ProjectUserAppMapController::update` |
 | POST | `/projects/user-apps/delete` | 删除用户App绑定 | `ProjectUserAppMapController::destroy` |
@@ -578,7 +579,41 @@
 }
 ```
 
-### 8.2 新增用户 App 绑定
+### 8.2 项目代号与包名映射
+
+- **方法/路径**：`GET /api/v3/admin/{securePath}/projects/user-apps/mappings`
+- **控制器**：`ProjectUserAppMapController::mappings`
+- **Request**：`ProjectUserAppMapMappingRequest`
+- **数据来源**：`project_user_app_map`
+- **说明**：按 `project_code` 分组返回对应的 `app_id` 列表，字段名为 `packageNames`。默认只返回 `enabled = 1` 的映射，和 AID 封禁规则 `projectCodes` 扩展包名的口径一致。
+
+#### 请求参数（query）
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCode | string | 否 | 按项目代号精确筛选 |
+| keyword | string | 否 | 按项目代号或包名模糊筛选 |
+| enabled | int | 否 | 启用状态，`0` 或 `1`；未传时默认 `1` |
+| includeDisabled | bool | 否 | 是否包含禁用映射；传 `1/true` 时不再默认过滤 `enabled = 1`，若同时传 `enabled` 则仍按 `enabled` 筛选 |
+
+#### 返回示例
+
+```json
+{
+  "data": [
+    {
+      "projectCode": "rocket",
+      "packageNames": [
+        "com.rocket.vpn",
+        "com.rocket.secure"
+      ],
+      "appCount": 2
+    }
+  ]
+}
+```
+
+### 8.3 新增用户 App 绑定
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/user-apps/create`
 - **控制器**：`ProjectUserAppMapController::store`
@@ -594,7 +629,7 @@
 | enabled | int | 否 | 默认 1 |
 | remark | string | 否 | 备注 |
 
-### 8.3 修改用户 App 绑定
+### 8.4 修改用户 App 绑定
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/user-apps/update`
 - **控制器**：`ProjectUserAppMapController::update`
@@ -611,7 +646,7 @@
 | enabled | int | 否 | 是否启用 |
 | remark | string | 否 | 备注 |
 
-### 8.4 删除用户 App 绑定
+### 8.5 删除用户 App 绑定
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/user-apps/delete`
 - **控制器**：`ProjectUserAppMapController::destroy`

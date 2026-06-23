@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin\Project;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProjectResourceIdRequest;
+use App\Http\Requests\Admin\ProjectUserAppMapMappingRequest;
 use App\Http\Requests\Admin\ProjectUserAppMapStoreRequest;
 use App\Http\Requests\Admin\ProjectUserAppMapUpdateRequest;
 use App\Http\Resources\CamelizeResource;
@@ -18,6 +19,19 @@ class ProjectUserAppMapController extends Controller
     public function __construct(
         protected ProjectUserAppMapService $service
     ) {}
+
+    /**
+     * Query project code to package name mappings.
+     */
+    public function mappings(ProjectUserAppMapMappingRequest $request): JsonResponse
+    {
+        try {
+            return $this->ok($this->service->mappings($request->validated()));
+        } catch (\Exception $e) {
+            Log::error('ProjectUserAppMap mappings error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
 
     /**
      * 查询项目用户App绑定
