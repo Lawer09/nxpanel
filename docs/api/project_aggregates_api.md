@@ -102,13 +102,15 @@
 | --- | --- | --- | --- |
 | startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
 | endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
+| projectId | int | 否 | 项目 ID；传入后仅重算该项目，不影响同日期其他项目聚合结果 |
 
 ### 示例请求
 
 ```json
 {
   "startDate": "2026-04-01",
-  "endDate": "2026-04-28"
+  "endDate": "2026-04-28",
+  "projectId": 12
 }
 ```
 
@@ -119,12 +121,13 @@
   "success": true,
   "startDate": "2026-04-01",
   "endDate": "2026-04-28",
+  "projectId": 12,
   "exitCode": 0,
   "output": "Start aggregating project daily data..."
 }
 ```
 
-说明：该接口会同步调用 `project:aggregate-daily --start-date --end-date`。
+说明：该接口会同步调用 `project:aggregate-daily --start-date --end-date`；传入 `projectId` 时会追加 `--project-id`，并且只删除/重建该项目的日报与小时报聚合结果。
 
 ---
 
@@ -138,13 +141,15 @@
 | --- | --- | --- | --- |
 | startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
 | endDate | string | 是 | 结束日期，`YYYY-MM-DD` |
+| projectId | int | 否 | 项目 ID；传入后仅异步重算该项目，不影响同日期其他项目聚合结果 |
 
 ### 示例请求
 
 ```json
 {
   "startDate": "2026-04-01",
-  "endDate": "2026-04-28"
+  "endDate": "2026-04-28",
+  "projectId": 12
 }
 ```
 
@@ -156,12 +161,14 @@
   "triggerId": "7f517a8a-7f56-4d4f-a0cf-1649bc1f4af9",
   "startDate": "2026-04-01",
   "endDate": "2026-04-28",
+  "projectId": 12,
   "status": "queued"
 }
 ```
 
 说明：
 - 该接口仅投递队列任务并立即返回
+- 传入 `projectId` 时，队列任务会透传到 `project:aggregate-daily --project-id`
 - 需确保队列消费者已启动（如 `php artisan queue:work`）
 - 任务执行日志可通过 `triggerId` 在日志中检索
 

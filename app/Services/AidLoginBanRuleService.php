@@ -42,8 +42,7 @@ class AidLoginBanRuleService
 
         if ($packageName !== null) {
             $rules = $rules->filter(
-                fn(AidLoginBanRule $rule): bool => empty($rule->package_names)
-                    || in_array($packageName, (array) ($rule->package_names ?? []), true)
+                fn(AidLoginBanRule $rule): bool => in_array($packageName, (array) ($rule->package_names ?? []), true)
             )->values();
         }
 
@@ -110,21 +109,27 @@ class AidLoginBanRuleService
      */
     public function banIfMatched(User $user, string $aid, array $metadata): ?AidLoginBanRule
     {
-        $now = CarbonImmutable::now(config('app.timezone'));
+        $nowTimestamp = CarbonImmutable::now('UTC')->timestamp;
         $packageName = $this->resolvePackageName($metadata);
         $country = $this->normalizeCountry($metadata['country'] ?? null);
 
         $rules = AidLoginBanRule::query()
             ->where('enabled', true)
-            ->where(function ($query) use ($now): void {
+            ->where(function ($query) use ($nowTimestamp): void {
                 $query->whereNull('cutoff_at')
-                    ->orWhere('cutoff_at', '>=', $now->timestamp);
+                    ->orWhere('cutoff_at', '>=', $nowTimestamp);
             })
             ->orderBy('id')
             ->get();
 
         foreach ($rules as $rule) {
-            if (!$this->matchesWeeklyWindow($rule, $now)) {
+            $ruleNow = CarbonImmutable::now($this->normalizeTimezone($rule->timezone ?? null));
+
+            if (!$this->matchesWeeklyWindow($rule, $ruleNow)) {
+                continue;
+            }
+
+            if (!$this->matchesDateWindow($rule, $ruleNow)) {
                 continue;
             }
 
@@ -163,8 +168,10 @@ class AidLoginBanRuleService
             'id' => (int) $rule->id,
             'name' => $rule->name,
             'enabled' => (bool) $rule->enabled,
-            'cutoffAt' => $this->formatTimestamp($rule->cutoff_at),
+            'timezone' => $this->normalizeTimezone($rule->timezone ?? null),
+            'cutoffAt' => $this->formatTimestamp($rule->cutoff_at, $rule->timezone ?? null),
             'weeklyWindows' => $rule->weekly_windows ?? [],
+            'dateWindows' => $rule->date_windows ?? [],
             'packageNames' => $rule->package_names ?? [],
             'projectCodes' => $rule->project_codes ?? [],
             'countries' => $rule->countries ?? [],
@@ -194,15 +201,26 @@ class AidLoginBanRuleService
             $payload['enabled'] = (bool) $data['enabled'];
         }
 
+        if (array_key_exists('timezone', $data)) {
+            $payload['timezone'] = $this->normalizeTimezone($data['timezone'] ?? null);
+        }
+
         if (array_key_exists('cutoffAt', $data)) {
+            $timezone = $payload['timezone'] ?? $this->normalizeTimezone($rule?->timezone ?? null);
             $payload['cutoff_at'] = $data['cutoffAt'] === null
                 ? null
-                : CarbonImmutable::parse((string) $data['cutoffAt'], config('app.timezone'))->timestamp;
+                : CarbonImmutable::parse((string) $data['cutoffAt'], $timezone)->timestamp;
         }
 
         if (array_key_exists('weeklyWindows', $data)) {
             $payload['weekly_windows'] = is_array($data['weeklyWindows'])
                 ? $this->normalizeWeeklyWindows($data['weeklyWindows'])
+                : null;
+        }
+
+        if (array_key_exists('dateWindows', $data)) {
+            $payload['date_windows'] = is_array($data['dateWindows'])
+                ? $this->normalizeDateWindows($data['dateWindows'])
                 : null;
         }
 
@@ -246,6 +264,19 @@ class AidLoginBanRuleService
             ->filter(fn($window) => is_array($window))
             ->map(fn(array $window): array => [
                 'weekday' => (int) $window['weekday'],
+                'start' => (string) $window['start'],
+                'end' => (string) $window['end'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function normalizeDateWindows(array $windows): array
+    {
+        return collect($windows)
+            ->filter(fn($window) => is_array($window))
+            ->map(fn(array $window): array => [
+                'date' => (string) $window['date'],
                 'start' => (string) $window['start'],
                 'end' => (string) $window['end'],
             ])
@@ -350,6 +381,35 @@ class AidLoginBanRuleService
         return false;
     }
 
+    private function matchesDateWindow(AidLoginBanRule $rule, CarbonImmutable $now): bool
+    {
+        if (empty($rule->date_windows)) {
+            return true;
+        }
+
+        $currentDate = $now->format('Y-m-d');
+        $currentTime = $now->format('H:i');
+
+        foreach ((array) $rule->date_windows as $window) {
+            if (!is_array($window)) {
+                continue;
+            }
+
+            if ((string) ($window['date'] ?? '') !== $currentDate) {
+                continue;
+            }
+
+            $start = (string) ($window['start'] ?? '');
+            $end = (string) ($window['end'] ?? '');
+
+            if ($start <= $currentTime && $currentTime <= $end) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function matchesPackageName(AidLoginBanRule $rule, ?string $packageName): bool
     {
         $packageNames = (array) ($rule->package_names ?? []);
@@ -402,17 +462,33 @@ class AidLoginBanRuleService
         return $normalized === '' ? null : $normalized;
     }
 
-    private function formatTimestamp(mixed $value): ?string
+    private function normalizeTimezone(mixed $value): string
+    {
+        if ($value === null || is_array($value) || is_object($value)) {
+            return (string) config('app.timezone', 'Asia/Shanghai');
+        }
+
+        $timezone = trim((string) $value);
+        if ($timezone === '' || !in_array($timezone, timezone_identifiers_list(), true)) {
+            return (string) config('app.timezone', 'Asia/Shanghai');
+        }
+
+        return $timezone;
+    }
+
+    private function formatTimestamp(mixed $value, mixed $timezone = null): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
 
+        $timezone = $this->normalizeTimezone($timezone);
+
         if ($value instanceof CarbonInterface) {
-            return $value->timezone(config('app.timezone'))->format('Y-m-d H:i:s');
+            return $value->timezone($timezone)->format('Y-m-d H:i:s');
         }
 
-        return CarbonImmutable::createFromTimestamp((int) $value, config('app.timezone'))
+        return CarbonImmutable::createFromTimestamp((int) $value, $timezone)
             ->format('Y-m-d H:i:s');
     }
 }

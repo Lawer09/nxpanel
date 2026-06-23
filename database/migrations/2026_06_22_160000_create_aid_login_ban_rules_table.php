@@ -14,8 +14,10 @@ return new class extends Migration {
             $table->id();
             $table->string('name', 191)->comment('Rule name');
             $table->boolean('enabled')->default(true)->comment('Whether this rule is enabled');
+            $table->string('timezone', 64)->default('Asia/Shanghai')->comment('Timezone used to evaluate rule time conditions');
             $table->bigInteger('cutoff_at')->nullable()->comment('Rule effective cutoff timestamp');
             $table->json('weekly_windows')->nullable()->comment('Active weekly windows');
+            $table->json('date_windows')->nullable()->comment('Specific date active windows');
             $table->json('package_names')->nullable()->comment('Matched package names');
             $table->json('countries')->nullable()->comment('Matched country codes');
             $table->string('reason', 500)->nullable()->comment('Ban reason');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V3\Admin\Project;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProjectFetchRequest;
+use App\Http\Requests\Admin\ProjectAggregateRequest;
 use App\Http\Requests\Admin\ProjectSaveRequest;
 use App\Http\Requests\Admin\ProjectUpdateRequest;
 use App\Http\Requests\Admin\ProjectUpdateStatusRequest;
@@ -15,7 +16,6 @@ use App\Exceptions\BusinessException;
 use App\Http\Requests\Admin\IdRequest;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 
 class ProjectController extends Controller
@@ -82,26 +82,29 @@ class ProjectController extends Controller
         }
     }
 
-    public function aggregate(Request $request): JsonResponse
+    public function aggregate(ProjectAggregateRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'startDate' => 'required|date',
-                'endDate' => 'required|date|after_or_equal:startDate',
-            ]);
+            $params = $request->validated();
+            $startDate = (string) $params['startDate'];
+            $endDate = (string) $params['endDate'];
+            $projectId = isset($params['projectId']) ? (int) $params['projectId'] : null;
 
-            $startDate = (string) $request->input('startDate');
-            $endDate = (string) $request->input('endDate');
-
-            $exitCode = Artisan::call('project:aggregate-daily', [
+            $arguments = [
                 '--start-date' => $startDate,
                 '--end-date' => $endDate,
-            ]);
+            ];
+            if ($projectId !== null) {
+                $arguments['--project-id'] = $projectId;
+            }
+
+            $exitCode = Artisan::call('project:aggregate-daily', $arguments);
 
             return $this->ok([
                 'success' => $exitCode === 0,
                 'startDate' => $startDate,
                 'endDate' => $endDate,
+                'projectId' => $projectId,
                 'exitCode' => $exitCode,
                 'output' => trim(Artisan::output()),
             ]);
@@ -113,25 +116,23 @@ class ProjectController extends Controller
         }
     }
 
-    public function aggregateAsync(Request $request): JsonResponse
+    public function aggregateAsync(ProjectAggregateRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'startDate' => 'required|date',
-                'endDate' => 'required|date|after_or_equal:startDate',
-            ]);
-
-            $startDate = (string) $request->input('startDate');
-            $endDate = (string) $request->input('endDate');
+            $params = $request->validated();
+            $startDate = (string) $params['startDate'];
+            $endDate = (string) $params['endDate'];
+            $projectId = isset($params['projectId']) ? (int) $params['projectId'] : null;
             $triggerId = (string) Str::uuid();
 
-            AggregateProjectDailyJob::dispatch($startDate, $endDate, $triggerId)->onQueue('default');
+            AggregateProjectDailyJob::dispatch($startDate, $endDate, $triggerId, $projectId)->onQueue('default');
 
             return $this->ok([
                 'accepted' => true,
                 'triggerId' => $triggerId,
                 'startDate' => $startDate,
                 'endDate' => $endDate,
+                'projectId' => $projectId,
                 'status' => 'queued',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {

@@ -303,3 +303,19 @@
 - 影响范围：`database/migrations/2026_06_23_100000_make_aid_login_ban_rule_optional_fields_nullable.php`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_06_23_100000_make_aid_login_ban_rule_optional_fields_nullable.php`。
 - 回滚说明：回滚该迁移会将空值填充为 `0` / `[]` 后恢复非空约束；应用层仍建议保持可空约束以匹配当前接口语义。
+
+## 2026-06-23 AID 封禁规则支持时区和特定日期时间段
+
+- 日期：2026-06-23
+- 变更摘要：AID 登录自定义封禁规则新增必填 `timezone` 字段，并新增 `dateWindows` 特定日期时间段检测；`cutoffAt`、`weeklyWindows`、`dateWindows` 均按规则时区解释和判断，命中逻辑继续要求所有已配置条件同时满足。
+- 影响范围：`database/migrations/2026_06_22_160000_create_aid_login_ban_rules_table.php`、`database/migrations/2026_06_23_110000_add_timezone_and_date_windows_to_aid_login_ban_rules_table.php`、`app/Models/AidLoginBanRule.php`、`app/Services/AidLoginBanRuleService.php`、`app/Http/Requests/Admin/AidLoginBanRuleSaveRequest.php`、`app/Http/Requests/Admin/AidLoginBanRuleUpdateRequest.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_23_110000_add_timezone_and_date_windows_to_aid_login_ban_rules_table.php`。
+- 回滚说明：回滚新增迁移并移除规则保存/更新中的 `timezone`、`dateWindows` 校验、存储、返回和检测逻辑，同时回退对应测试与文档说明即可。
+
+## 2026-06-23 项目聚合接口支持指定项目
+
+- 日期：2026-06-23
+- 变更摘要：`projects/aggregate` 与 `projects/aggregate-async` 新增可选 `projectId` 参数；聚合命令新增 `--project-id`，传入后仅按该项目代号过滤数据源并删除/重建该项目的 `project_daily_aggregates` 与 `project_report_hourly` 结果，避免重算单项目时影响同日期其他项目数据。
+- 影响范围：`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectAggregateRequest.php`、`app/Jobs/AggregateProjectDailyJob.php`、`app/Console/Commands/AggregateProjectDailyData.php`、`docs/api/project_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `projectId` 请求校验、Controller/Job 参数透传、命令 `--project-id` 及按项目过滤/删除逻辑，并回退对应文档说明即可。

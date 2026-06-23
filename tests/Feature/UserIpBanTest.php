@@ -197,6 +197,7 @@ class UserIpBanTest extends TestCase
         $rule = AidLoginBanRule::create([
             'name' => 'US full day block',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoff_at' => now()->addDay()->timestamp,
             'weekly_windows' => [
                 [
@@ -238,6 +239,7 @@ class UserIpBanTest extends TestCase
         AidLoginBanRule::create([
             'name' => 'Package and country required',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoff_at' => now()->addDay()->timestamp,
             'weekly_windows' => [[
                 'weekday' => (int) now()->isoWeekday(),
@@ -277,11 +279,80 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
+    public function test_custom_rule_matches_specific_date_window(): void
+    {
+        $window = $this->currentHourWindow();
+        AidLoginBanRule::create([
+            'name' => 'Specific date rule',
+            'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
+            'cutoff_at' => now()->addDay()->timestamp,
+            'date_windows' => [[
+                'date' => now('Asia/Shanghai')->format('Y-m-d'),
+                'start' => $window['start'],
+                'end' => $window['end'],
+            ]],
+            'package_names' => ['com.example.date'],
+            'countries' => null,
+            'reason' => 'date window rule',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-date-window',
+            'metadata' => [
+                'app_id' => 'com.example.date',
+                'ip' => '203.0.113.77',
+            ],
+        ])->assertStatus(400);
+
+        $user = User::query()->where('email', 'device-rule-date-window@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.77',
+            'banned_user_id' => $user->id,
+        ]);
+    }
+
+    public function test_custom_rule_does_not_match_outside_specific_date_window(): void
+    {
+        $window = $this->currentHourWindow();
+        AidLoginBanRule::create([
+            'name' => 'Future date rule',
+            'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
+            'cutoff_at' => now()->addDay()->timestamp,
+            'date_windows' => [[
+                'date' => now('Asia/Shanghai')->addDay()->format('Y-m-d'),
+                'start' => $window['start'],
+                'end' => $window['end'],
+            ]],
+            'package_names' => ['com.example.future-date'],
+            'countries' => null,
+            'reason' => 'future date rule',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-rule-future-date',
+            'metadata' => [
+                'app_id' => 'com.example.future-date',
+                'ip' => '203.0.113.78',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $user = User::query()->where('email', 'device-rule-future-date@apple.com')->firstOrFail();
+        $this->assertFalse((bool) $user->banned);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.78',
+        ]);
+    }
+
     public function test_custom_rule_does_not_match_without_package_names(): void
     {
         AidLoginBanRule::create([
             'name' => 'No package rule',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoff_at' => null,
             'weekly_windows' => null,
             'package_names' => null,
@@ -312,6 +383,7 @@ class UserIpBanTest extends TestCase
         AidLoginBanRule::create([
             'name' => 'Existing user should not be affected',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoff_at' => now()->addDay()->timestamp,
             'weekly_windows' => [[
                 'weekday' => (int) now()->isoWeekday(),
@@ -345,6 +417,7 @@ class UserIpBanTest extends TestCase
         AidLoginBanRule::create([
             'name' => 'Expired rule',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoff_at' => now()->subMinute()->timestamp,
             'weekly_windows' => [[
                 'weekday' => (int) now()->isoWeekday(),
@@ -376,6 +449,7 @@ class UserIpBanTest extends TestCase
         $saveResponse = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
             'name' => 'Admin managed rule',
             'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
             'cutoffAt' => now()->addDay()->format('Y-m-d H:i:s'),
             'weeklyWindows' => [[
                 'weekday' => 1,
@@ -387,6 +461,8 @@ class UserIpBanTest extends TestCase
             'reason' => 'admin rule',
         ], $this->adminHeaders($admin))->assertOk()
             ->assertJsonPath('data.name', 'Admin managed rule')
+            ->assertJsonPath('data.timezone', 'Asia/Shanghai')
+            ->assertJsonPath('data.dateWindows', [])
             ->assertJsonPath('data.countries.0', 'US');
 
         $ruleId = (int) $saveResponse->json('data.id');
@@ -427,11 +503,14 @@ class UserIpBanTest extends TestCase
 
         $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
             'name' => 'No condition admin rule',
+            'timezone' => 'Asia/Shanghai',
         ], $this->adminHeaders($admin))->assertOk()
             ->assertJsonPath('data.name', 'No condition admin rule')
             ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.timezone', 'Asia/Shanghai')
             ->assertJsonPath('data.cutoffAt', null)
             ->assertJsonPath('data.weeklyWindows', [])
+            ->assertJsonPath('data.dateWindows', [])
             ->assertJsonPath('data.packageNames', [])
             ->assertJsonPath('data.projectCodes', [])
             ->assertJsonPath('data.countries', []);
@@ -459,6 +538,7 @@ class UserIpBanTest extends TestCase
 
         $response = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
             'name' => 'Project code rule',
+            'timezone' => 'Asia/Shanghai',
             'packageNames' => ['com.manual.vpn'],
             'projectCodes' => ['rocket'],
             'reason' => 'project code match',
@@ -504,6 +584,7 @@ class UserIpBanTest extends TestCase
 
         $saveResponse = $this->postJson($this->adminUserUri('aidLoginBanRule/save'), [
             'name' => 'Project code update rule',
+            'timezone' => 'Asia/Shanghai',
             'packageNames' => ['com.manual.vpn'],
             'projectCodes' => ['old'],
         ], $this->adminHeaders($admin))->assertOk()

@@ -11,7 +11,8 @@ class AggregateProjectDailyData extends Command
 {
     protected $signature = 'project:aggregate-daily
         {--start-date= : 开始日期(Y-m-d)}
-        {--end-date= : 结束日期(Y-m-d)}';
+        {--end-date= : 结束日期(Y-m-d)}
+        {--project-id= : 项目 ID，仅聚合指定项目}';
 
     protected $description = '聚合项目日报数据（默认更新昨天+当天，支持指定日期范围回补）';
 
@@ -19,16 +20,18 @@ class AggregateProjectDailyData extends Command
     {
         try {
             [$startDate, $endDate] = $this->resolveDateRange();
+            $targetProjectCode = $this->resolveTargetProjectCode();
 
-            $this->info("Start aggregating project daily data: {$startDate} ~ {$endDate}");
+            $projectScope = $targetProjectCode === null ? 'all projects' : "project {$targetProjectCode}";
+            $this->info("Start aggregating project daily data: {$startDate} ~ {$endDate}, {$projectScope}");
 
             $cursor = Carbon::parse($startDate);
             $end = Carbon::parse($endDate);
 
             while ($cursor->lte($end)) {
                 $date = $cursor->toDateString();
-                $this->aggregateOneDate($date);
-                $this->aggregateHourlyReportOneDate($date);
+                $this->aggregateOneDate($date, $targetProjectCode);
+                $this->aggregateHourlyReportOneDate($date, $targetProjectCode);
                 $cursor->addDay();
             }
 
@@ -36,6 +39,7 @@ class AggregateProjectDailyData extends Command
             return self::SUCCESS;
         } catch (\Throwable $e) {
             Log::error('project:aggregate-daily failed', [
+                'project_id' => $this->option('project-id'),
                 'error' => $e->getMessage(),
             ]);
             $this->error('Failed: ' . $e->getMessage());
@@ -68,20 +72,55 @@ class AggregateProjectDailyData extends Command
         return [$startDate, $endDate];
     }
 
-    private function aggregateOneDate(string $date): void
+    /**
+     * 将可选项目 ID 解析为项目代号，用于限定聚合范围。
+     */
+    private function resolveTargetProjectCode(): ?string
+    {
+        $projectId = $this->option('project-id');
+        if ($projectId === null || $projectId === '') {
+            return null;
+        }
+
+        $projectCode = DB::table('project_projects')
+            ->where('id', '=', (int) $projectId)
+            ->value('project_code');
+
+        $projectCode = trim((string) ($projectCode ?? ''));
+        if ($projectCode === '') {
+            throw new \InvalidArgumentException('project-id 不存在或项目代号为空');
+        }
+
+        return $projectCode;
+    }
+
+
+    /**
+     * 聚合单日项目日报，可按项目代号限定范围。
+     */
+    private function aggregateOneDate(string $date, ?string $targetProjectCode = null): void
     {
         $this->info("Aggregating {$date}...");
 
-        $adRevenueMap = $this->queryAdRevenueMetrics($date);
-        $adSpendMap = $this->queryAdSpendMetrics($date);
-        $userMap = $this->queryUserMetrics($date);
-        $reportNewUsersMap = $this->queryReportNewUsersMetrics($date);
-        $firebaseUsersMap = $this->queryFirebaseUserMetrics($date);
+        $adRevenueMap = $this->filterDimensionMapByProjectCode($this->queryAdRevenueMetrics($date), $targetProjectCode);
+        $adSpendMap = $this->filterDimensionMapByProjectCode($this->queryAdSpendMetrics($date), $targetProjectCode);
+        $userMap = $this->filterDimensionMapByProjectCode($this->queryUserMetrics($date), $targetProjectCode);
+        $reportNewUsersMap = $this->filterDimensionMapByProjectCode($this->queryReportNewUsersMetrics($date), $targetProjectCode);
+        $firebaseUsersMap = $this->filterDimensionMapByProjectCode($this->queryFirebaseUserMetrics($date), $targetProjectCode);
 
         $projectCodes = $this->buildProjectCodeSetFromDimensionMaps([$adRevenueMap, $adSpendMap, $userMap, $reportNewUsersMap, $firebaseUsersMap]);
 
-        $trafficProjectCodes = DB::table('project_traffic_platform_accounts')
+        $trafficProjectCodeQuery = DB::table('project_traffic_platform_accounts')
             ->where('enabled', '=', 1)
+            ->whereNotNull('project_code')
+            ->where('project_code', '!=', '');
+
+        if ($targetProjectCode !== null) {
+            $trafficProjectCodeQuery->where('project_code', '=', $targetProjectCode);
+            $projectCodes[$targetProjectCode] = true;
+        }
+
+        $trafficProjectCodes = $trafficProjectCodeQuery
             ->pluck('project_code')
             ->map(fn ($v) => trim((string) $v))
             ->filter(fn ($v) => $v !== '')
@@ -111,9 +150,7 @@ class AggregateProjectDailyData extends Command
             }
         }
 
-        DB::table('project_daily_aggregates')
-            ->where('report_date', '=', $date)
-            ->delete();
+        $this->deleteDailyAggregates($date, $targetProjectCode);
 
         if (empty($allKeys)) {
             $this->info("No aggregate rows for {$date}");
@@ -622,11 +659,11 @@ class AggregateProjectDailyData extends Command
     /**
      * 聚合项目小时报表（project_report_hourly）。
      */
-    private function aggregateHourlyReportOneDate(string $date): void
+    private function aggregateHourlyReportOneDate(string $date, ?string $targetProjectCode = null): void
     {
-        $projectCodesByAppId = $this->getProjectCodesByAppId();
+        $projectCodesByAppId = $this->filterProjectCodesByAppId($this->getProjectCodesByAppId(), $targetProjectCode);
         if ($projectCodesByAppId->isEmpty()) {
-            DB::table('project_report_hourly')->where('date', '=', $date)->delete();
+            $this->deleteHourlyReports($date, $targetProjectCode);
             return;
         }
 
@@ -638,6 +675,7 @@ class AggregateProjectDailyData extends Command
         $dailySpendMap = [];
         $dailyRows = DB::table('project_daily_aggregates')
             ->where('report_date', '=', $date)
+            ->when($targetProjectCode !== null, fn ($query) => $query->where('project_code', '=', $targetProjectCode))
             ->select('project_code', 'country', 'ad_revenue', 'ad_spend_cost')
             ->get();
 
@@ -659,7 +697,7 @@ class AggregateProjectDailyData extends Command
             }
         }
 
-        DB::table('project_report_hourly')->where('date', '=', $date)->delete();
+        $this->deleteHourlyReports($date, $targetProjectCode);
 
         if (empty($allHourlyKeys)) {
             return;
@@ -867,6 +905,67 @@ class AggregateProjectDailyData extends Command
         }
 
         return $set;
+    }
+
+    /**
+     * 指定项目聚合时，仅保留该项目的维度数据。
+     */
+    private function filterDimensionMapByProjectCode(array $map, ?string $targetProjectCode): array
+    {
+        if ($targetProjectCode === null) {
+            return $map;
+        }
+
+        $filtered = [];
+        foreach ($map as $key => $value) {
+            [, $projectCode] = $this->parseDimensionKey((string) $key);
+            if ($projectCode === $targetProjectCode) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * 指定项目聚合时，仅保留映射到该项目的 app_id。
+     */
+    private function filterProjectCodesByAppId($projectCodesByAppId, ?string $targetProjectCode)
+    {
+        if ($targetProjectCode === null) {
+            return $projectCodesByAppId;
+        }
+
+        return $projectCodesByAppId
+            ->map(function ($codes) use ($targetProjectCode) {
+                return collect($codes)
+                    ->filter(fn ($code) => trim((string) $code) === $targetProjectCode)
+                    ->values()
+                    ->all();
+            })
+            ->filter(fn ($codes, $appId) => $appId !== '' && !empty($codes));
+    }
+
+    /**
+     * 删除日报聚合结果；指定项目时不能删除同日期其他项目。
+     */
+    private function deleteDailyAggregates(string $date, ?string $targetProjectCode): void
+    {
+        DB::table('project_daily_aggregates')
+            ->where('report_date', '=', $date)
+            ->when($targetProjectCode !== null, fn ($query) => $query->where('project_code', '=', $targetProjectCode))
+            ->delete();
+    }
+
+    /**
+     * 删除小时聚合结果；指定项目时不能删除同日期其他项目。
+     */
+    private function deleteHourlyReports(string $date, ?string $targetProjectCode): void
+    {
+        DB::table('project_report_hourly')
+            ->where('date', '=', $date)
+            ->when($targetProjectCode !== null, fn ($query) => $query->where('project_code', '=', $targetProjectCode))
+            ->delete();
     }
 
     private function makeDimensionKey(string $date, string $projectCode, string $country): string

@@ -675,6 +675,7 @@
 | --- | --- | --- | --- |
 | startDate | string | 是 | 开始日期（Y-m-d） |
 | endDate | string | 是 | 结束日期（Y-m-d），须 >= startDate |
+| projectId | int | 否 | 项目 ID；传入后仅重算该项目，不影响同日期其他项目聚合结果 |
 
 ### 9.2 异步聚合
 
@@ -688,6 +689,7 @@
 | --- | --- | --- | --- |
 | startDate | string | 是 | 开始日期（Y-m-d） |
 | endDate | string | 是 | 结束日期（Y-m-d），须 >= startDate |
+| projectId | int | 否 | 项目 ID；传入后仅异步重算该项目，不影响同日期其他项目聚合结果 |
 
 #### 返回结构
 
@@ -697,6 +699,7 @@
   "triggerId": "uuid-string",
   "startDate": "2026-05-01",
   "endDate": "2026-05-15",
+  "projectId": 12,
   "status": "queued"
 }
 ```

@@ -228,7 +228,7 @@ POST /api/v3/passport/auth/loginByAid
 
 用于在 `loginByAid` 自动创建新用户后，根据后台配置的规则自动封禁用户，并记录该用户注册 IP，避免同类注册继续放量。
 
-规则名称 `name` 用于后台识别规则；检测条件 `cutoffAt`、`weeklyWindows`、`packageNames`、`projectCodes`、`countries` 都不是必填项。未配置的检测条件视为不限制，但最终 `packageNames` 为空的规则不会参与封禁检测。
+规则名称 `name` 用于后台识别规则；`timezone` 为必填项，用于判断所有时间条件；检测条件 `cutoffAt`、`weeklyWindows`、`dateWindows`、`packageNames`、`projectCodes`、`countries` 都不是必填项。未配置的检测条件视为不限制，但最终 `packageNames` 为空的规则不会参与封禁检测。
 
 ### 触发范围
 
@@ -242,10 +242,13 @@ POST /api/v3/passport/auth/loginByAid
 
 - 包名字段优先级：`metadata.package_name` > `metadata.packageName` > `metadata.app_id`。
 - 国家字段取 `metadata.country`，保存和匹配时统一转为大写，例如 `us` 会转为 `US`。
+- `timezone` 为必填时区，例如 `Asia/Shanghai`、`America/New_York`；`cutoffAt`、`weeklyWindows`、`dateWindows` 均按该时区解释和判断。
 - `cutoffAt` 为空表示不限制截止时间；非空时当前时间必须小于等于规则的 `cutoffAt`。
 - `weeklyWindows` 为空表示不限制星期和小时段；非空时当前星期和当前 `HH:mm` 必须落在任一 `weeklyWindows` 时间段内。
 - 每个 `weeklyWindows` 同时包含星期和小时段。
 - `weekday` 使用 ISO 定义：`1=周一`，`7=周日`，`start/end` 使用 `HH:mm` 小时段。
+- `dateWindows` 为空表示不限制特定日期时间段；非空时当前日期和当前 `HH:mm` 必须落在任一 `dateWindows` 时间段内。
+- 每个 `dateWindows` 同时包含日期和小时段，格式为 `{"date":"2026-06-23","start":"09:00","end":"18:00"}`。
 - 时间段不支持跨天，跨天场景需要拆成两段，例如周一 `23:00-23:59` 和周二 `00:00-02:00`。
 - `packageNames` 为空且没有通过 `projectCodes` 扩展出包名时，该规则不会参与封禁检测；非空时当前包名必须包含在 `packageNames` 数组中。
 - `projectCodes` 为空表示不通过项目代号扩展包名；非空时保存规则会按 `project_user_app_map.project_code` 查询启用映射，并将对应 `app_id` 合并到最终 `packageNames`。
@@ -282,9 +285,13 @@ POST /api/v3/passport/auth/loginByAid
                 "id": 1,
                 "name": "US night fraud block",
                 "enabled": true,
+                "timezone": "Asia/Shanghai",
                 "cutoffAt": "2026-06-30 23:59:59",
                 "weeklyWindows": [
                     {"weekday": 1, "start": "00:00", "end": "06:00"}
+                ],
+                "dateWindows": [
+                    {"date": "2026-06-23", "start": "09:00", "end": "18:00"}
                 ],
                 "packageNames": ["com.example.vpn"],
                 "projectCodes": ["rocket"],
@@ -313,11 +320,16 @@ POST /api/v3/passport/auth/loginByAid
 |------|------|------|------|
 | `name` | `string` | 是 | 规则名称，最大 191 字符 |
 | `enabled` | `bool` | 否 | 是否启用，默认启用 |
+| `timezone` | `string` | 是 | 规则时区，例如 `Asia/Shanghai`；所有时间条件均按该时区解释 |
 | `cutoffAt` | `string|null` | 否 | 规则有效截止时间，例如 `2026-06-30 23:59:59`；空表示不限制 |
 | `weeklyWindows` | `array` | 否 | 一周内生效时间段，空数组或不传表示不限制 |
 | `weeklyWindows[].weekday` | `int` | 是 | 传 `weeklyWindows` 时必填；星期，`1=周一`，`7=周日` |
 | `weeklyWindows[].start` | `string` | 是 | 传 `weeklyWindows` 时必填；开始时间，格式 `HH:mm` |
 | `weeklyWindows[].end` | `string` | 是 | 传 `weeklyWindows` 时必填；结束时间，格式 `HH:mm`，必须大于 `start` |
+| `dateWindows` | `array` | 否 | 特定日期生效时间段，空数组或不传表示不限制 |
+| `dateWindows[].date` | `string` | 是 | 传 `dateWindows` 时必填；日期，格式 `Y-m-d` |
+| `dateWindows[].start` | `string` | 是 | 传 `dateWindows` 时必填；开始时间，格式 `HH:mm` |
+| `dateWindows[].end` | `string` | 是 | 传 `dateWindows` 时必填；结束时间，格式 `HH:mm`，必须大于 `start` |
 | `packageNames` | `string[]` | 否 | 封禁匹配包名列表；最终列表为空时规则不会参与封禁检测 |
 | `projectCodes` | `string[]` | 否 | 项目代号列表；保存时会查询 `project_user_app_map` 中 `enabled=1` 的相同 `project_code`，并将对应 `app_id` 合并到最终 `packageNames` |
 | `countries` | `string[]` | 否 | 封禁匹配国家列表，空数组或不传表示不限制 |
@@ -329,10 +341,14 @@ POST /api/v3/passport/auth/loginByAid
 {
     "name": "US night fraud block",
     "enabled": true,
+    "timezone": "Asia/Shanghai",
     "cutoffAt": "2026-06-30 23:59:59",
     "weeklyWindows": [
         {"weekday": 1, "start": "00:00", "end": "06:00"},
         {"weekday": 2, "start": "00:00", "end": "06:00"}
+    ],
+    "dateWindows": [
+        {"date": "2026-06-23", "start": "09:00", "end": "18:00"}
     ],
     "packageNames": ["com.example.vpn"],
     "projectCodes": ["rocket"],
@@ -352,8 +368,10 @@ POST /api/v3/passport/auth/loginByAid
 | `id` | `int` | 是 | 规则 ID |
 | `name` | `string` | 否 | 规则名称 |
 | `enabled` | `bool` | 否 | 是否启用 |
+| `timezone` | `string` | 否 | 规则时区，例如 `Asia/Shanghai` |
 | `cutoffAt` | `string|null` | 否 | 规则有效截止时间；传 `null` 可清空限制 |
 | `weeklyWindows` | `array|null` | 否 | 一周内生效时间段，格式同新增接口；传 `null` 或空数组可清空限制 |
+| `dateWindows` | `array|null` | 否 | 特定日期生效时间段，格式同新增接口；传 `null` 或空数组可清空限制 |
 | `packageNames` | `string[]` | 否 | 封禁匹配包名列表；最终列表为空时规则不会参与封禁检测 |
 | `projectCodes` | `string[]` | 否 | 项目代号列表；传入后会重新保存项目代号，并把启用映射中的 `app_id` 合并到最终 `packageNames` |
 | `countries` | `string[]` | 否 | 封禁匹配国家列表 |

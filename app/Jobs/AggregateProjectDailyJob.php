@@ -20,26 +20,37 @@ class AggregateProjectDailyJob implements ShouldQueue
     public function __construct(
         public string $startDate,
         public string $endDate,
-        public string $triggerId
+        public string $triggerId,
+        public ?int $projectId = null
     ) {}
 
+    /**
+     * Execute the project daily aggregate command from the queued async entrypoint.
+     */
     public function handle(): void
     {
         Log::info('project aggregate async start', [
             'triggerId' => $this->triggerId,
             'startDate' => $this->startDate,
             'endDate' => $this->endDate,
+            'projectId' => $this->projectId,
         ]);
 
-        $exitCode = Artisan::call('project:aggregate-daily', [
+        $arguments = [
             '--start-date' => $this->startDate,
             '--end-date' => $this->endDate,
-        ]);
+        ];
+        if ($this->projectId !== null) {
+            $arguments['--project-id'] = $this->projectId;
+        }
+
+        $exitCode = Artisan::call('project:aggregate-daily', $arguments);
 
         Log::info('project aggregate async finish', [
             'triggerId' => $this->triggerId,
             'startDate' => $this->startDate,
             'endDate' => $this->endDate,
+            'projectId' => $this->projectId,
             'exitCode' => $exitCode,
             'output' => trim(Artisan::output()),
         ]);
