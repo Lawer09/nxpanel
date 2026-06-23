@@ -52,7 +52,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| dateFrom | string | 否 | 开始日期，默认昨天 |
+| dateFrom | string | 否 | 开始日期，默认今天 |
 | dateTo | string | 否 | 结束日期，默认今天 |
 | hourFrom | int | 否 | 起始小时，0-23 |
 | hourTo | int | 否 | 结束小时，0-23 |
@@ -99,7 +99,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| dateFrom | string | 否 | 开始日期，默认昨天 |
+| dateFrom | string | 否 | 开始日期，默认今天 |
 | dateTo | string | 否 | 结束日期，默认今天 |
 | hourFrom | int | 否 | 起始小时，0-23 |
 | hourTo | int | 否 | 结束小时，0-23 |

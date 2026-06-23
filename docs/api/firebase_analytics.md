@@ -14,8 +14,8 @@
 
 | 参数名 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---|---|---|
-| start_time | string | 否 | - | 开始时间，格式 `YYYY-MM-DD HH:mm:ss` |
-| end_time | string | 否 | - | 结束时间，格式 `YYYY-MM-DD HH:mm:ss` |
+| start_time | string | 否 | 今日 00:00:00 | 开始时间，格式 `YYYY-MM-DD HH:mm:ss` |
+| end_time | string | 否 | 今日 23:59:59 | 结束时间，格式 `YYYY-MM-DD HH:mm:ss` |
 | time_field | string | 否 | received_at | `event_time` 或 `received_at` |
 | app_id | string | 否 | - | App ID |
 | platform | string | 否 | - | `android` / `ios` |
@@ -1348,8 +1348,8 @@
 |---|---|---|---|---|
 | page | int | 否 | 1 | 当前页 |
 | page_size | int | 否 | 20 | 每页数量 |
-| start_time | string | 否 | - | 开始时间 |
-| end_time | string | 否 | - | 结束时间 |
+| start_time | string | 否 | 今日 00:00:00 | 开始时间 |
+| end_time | string | 否 | 今日 23:59:59 | 结束时间 |
 | time_field | string | 否 | received_at | `event_time` / `received_at` |
 | event_id | string | 否 | - | 事件 ID |
 | device_id | string | 否 | - | 设备 ID |

@@ -43,7 +43,7 @@ class FirebaseReportController extends Controller
     {
         $validated = $request->validated();
 
-        $dateFrom = $validated['dateFrom'] ?? now()->subDays(1)->toDateString();
+        $dateFrom = $validated['dateFrom'] ?? now()->toDateString();
         $dateTo = $validated['dateTo'] ?? now()->toDateString();
         $hourFrom = $validated['hourFrom'] ?? null;
         $hourTo = $validated['hourTo'] ?? null;
@@ -112,7 +112,7 @@ class FirebaseReportController extends Controller
     {
         $validated = $request->validated();
 
-        $dateFrom = $validated['dateFrom'] ?? now()->subDays(1)->toDateString();
+        $dateFrom = $validated['dateFrom'] ?? now()->toDateString();
         $dateTo = $validated['dateTo'] ?? now()->toDateString();
         $hourFrom = $validated['hourFrom'] ?? null;
         $hourTo = $validated['hourTo'] ?? null;

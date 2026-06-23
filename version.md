@@ -319,3 +319,11 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectAggregateRequest.php`、`app/Jobs/AggregateProjectDailyJob.php`、`app/Console/Commands/AggregateProjectDailyData.php`、`docs/api/project_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `projectId` 请求校验、Controller/Job 参数透传、命令 `--project-id` 及按项目过滤/删除逻辑，并回退对应文档说明即可。
+
+## 2026-06-23 Firebase 管理端接口默认今日
+
+- 日期：2026-06-23
+- 变更摘要：Firebase Analytics 查询接口未传 `start_time/end_time` 时默认使用今日 `00:00:00` 至 `23:59:59`；Firebase 聚合报表用户汇总与节点汇总查询未传 `dateFrom/dateTo` 时默认使用今日。
+- 影响范围：`app/Http/Requests/Admin/FirebaseAnalyticsCommonQueryRequest.php`、`app/Http/Requests/Admin/FirebaseReportUserSummaryQueryRequest.php`、`app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseReportController.php`、`docs/api/firebase_analytics.md`、`docs/api/firebase_report_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 Firebase 查询 Request 中的默认日期填充，并将聚合报表查询默认范围恢复为昨天到今天，同时回退对应文档说明即可。

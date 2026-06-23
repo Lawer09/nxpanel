@@ -3,12 +3,30 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
 
 class FirebaseReportUserSummaryQueryRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Default Firebase user summary queries to today's date when no date range is provided.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('dateFrom') || $this->filled('dateTo')) {
+            return;
+        }
+
+        $today = Carbon::today()->toDateString();
+
+        $this->merge([
+            'dateFrom' => $today,
+            'dateTo' => $today,
+        ]);
     }
 
     public function rules(): array

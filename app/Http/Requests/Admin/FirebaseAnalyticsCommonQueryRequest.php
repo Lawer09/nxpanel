@@ -3,12 +3,30 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
 
 class FirebaseAnalyticsCommonQueryRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Fill Firebase analytics queries with today's full-day time range when no range is provided.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('start_time') || $this->filled('end_time')) {
+            return;
+        }
+
+        $today = Carbon::today();
+
+        $this->merge([
+            'start_time' => $today->copy()->startOfDay()->format('Y-m-d H:i:s'),
+            'end_time' => $today->copy()->endOfDay()->format('Y-m-d H:i:s'),
+        ]);
     }
 
     public function rules(): array
