@@ -399,3 +399,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将限流子查询的 `report_hour` 条件恢复为当前小时，并回退对应文档说明即可。
+
+## 2026-06-24 项目报表限流标记改用项目广告账号映射
+
+- 日期：2026-06-24
+- 变更摘要：修正项目日报 `isLimited` 字段的项目归属口径，不再依赖 `ad_revenue_hourly.project_id`，改为通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code` 后聚合判断上一完整小时匹配率。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将限流子查询恢复为按 `ad_revenue_hourly.project_id` 关联项目，并回退对应文档说明即可。

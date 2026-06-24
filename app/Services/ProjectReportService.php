@@ -606,12 +606,20 @@ class ProjectReportService
     {
         $previousHour = now('Asia/Shanghai')->startOfHour()->subHour()->toDateTimeString();
 
-        return DB::table('ad_revenue_hourly as arh')
-            ->join('project_projects as p', 'p.id', '=', 'arh.project_id')
-            ->whereNotNull('arh.project_id')
-            ->where('arh.report_hour', '=', $previousHour)
+        return DB::table('project_ad_platform_accounts as papa')
+            ->join('project_projects as p', 'p.project_code', '=', 'papa.project_code')
+            ->leftJoin('ad_revenue_hourly as arh', function ($join) use ($previousHour) {
+                $join->on('arh.account_id', '=', 'papa.ad_platform_account_id')
+                    ->where('arh.source_platform', '=', 'admob')
+                    ->where('arh.report_type', '=', 'network')
+                    ->where('arh.report_hour', '=', $previousHour);
+            })
+            ->where('papa.platform_code', '=', 'admob')
+            ->where('papa.enabled', '=', 1)
+            ->whereNotNull('papa.project_code')
+            ->where('papa.project_code', '!=', '')
             ->selectRaw('p.project_code as project_code')
-            ->selectRaw('CASE WHEN SUM(arh.ad_requests)=0 THEN NULL WHEN SUM(arh.matched_requests)/SUM(arh.ad_requests) < 0.8 THEN 1 ELSE 0 END as is_limited')
+            ->selectRaw('CASE WHEN COALESCE(SUM(arh.ad_requests), 0)=0 THEN NULL WHEN SUM(arh.matched_requests)/SUM(arh.ad_requests) < 0.8 THEN 1 ELSE 0 END as is_limited')
             ->groupBy('p.project_code');
     }
 
