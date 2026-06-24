@@ -409,6 +409,7 @@ class ProjectReportService
         $this->joinDailySpendMetrics($query, $spendMetricsQuery);
         if (in_array('projectCode', $groupDimensions, true)) {
             $this->joinProjectMetadata($query);
+            $this->joinCurrentHourLimitMetrics($query);
         }
 
         foreach ($groupDimensions as $groupDimension) {
@@ -447,6 +448,7 @@ class ProjectReportService
 
         if (in_array('projectCode', $groupDimensions, true)) {
             $this->selectGroupedProjectMetadata($query);
+            $query->selectRaw('MAX(limit_metrics.is_limited) as is_limited');
         }
 
         $sortable = array_values(array_unique(array_merge($groupDimensions, [
@@ -585,6 +587,32 @@ class ProjectReportService
     private function joinProjectMetadata(Builder $query): void
     {
         $query->leftJoin('project_projects as report_projects', 'report_projects.project_code', '=', 'project_daily_aggregates.project_code');
+    }
+
+    /**
+     * Join current-hour ad limit state by project code.
+     */
+    private function joinCurrentHourLimitMetrics(Builder $query): void
+    {
+        $query->leftJoinSub($this->buildCurrentHourLimitSubquery(), 'limit_metrics', function ($join) {
+            $join->on('limit_metrics.project_code', '=', 'project_daily_aggregates.project_code');
+        });
+    }
+
+    /**
+     * Build current-hour project limit metrics from ad revenue hourly rows.
+     */
+    private function buildCurrentHourLimitSubquery(): Builder
+    {
+        $currentHour = now('Asia/Shanghai')->startOfHour()->toDateTimeString();
+
+        return DB::table('ad_revenue_hourly as arh')
+            ->join('project_projects as p', 'p.id', '=', 'arh.project_id')
+            ->whereNotNull('arh.project_id')
+            ->where('arh.report_hour', '=', $currentHour)
+            ->selectRaw('p.project_code as project_code')
+            ->selectRaw('CASE WHEN SUM(arh.ad_requests)=0 THEN NULL WHEN SUM(arh.matched_requests)/SUM(arh.ad_requests) < 0.8 THEN 1 ELSE 0 END as is_limited')
+            ->groupBy('p.project_code');
     }
 
     /**
@@ -731,6 +759,10 @@ class ProjectReportService
 
         if (!empty($data['projectCode'])) {
             $data = array_merge($data, $this->formatProjectMetadata($row));
+        }
+
+        if (property_exists($row, 'is_limited')) {
+            $data['isLimited'] = $row->is_limited === null ? null : (bool) (int) $row->is_limited;
         }
 
         return $data;

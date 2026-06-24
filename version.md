@@ -383,3 +383,11 @@
 - 影响范围：`app/Services/SyncServerRemoteSyncService.php`、`app/Http/Controllers/V3/Admin/SyncServerController.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/sync_servers_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Service、Controller 方法、路由和文档说明，并将收益报表同步恢复为旧的远程 `Authorization` 请求头方式即可。
+
+## 2026-06-24 项目报表当前小时限流标记
+
+- 日期：2026-06-24
+- 变更摘要：项目日报查询在 `groupBy` 包含 `projectCode` 时返回 `isLimited` 字段，按当前 Asia/Shanghai 小时 `ad_revenue_hourly` 中项目聚合 `SUM(matched_requests)/SUM(ad_requests)` 是否低于 `0.8` 判断；无当前小时数据或请求数为 0 时返回 `null`，CSV 导出不新增列。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除项目日报分组查询中的当前小时限流子查询、`isLimited` 格式化输出和对应文档说明即可。

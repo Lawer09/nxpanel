@@ -89,6 +89,7 @@
       {
         "reportDate": "2026-06-01",
         "projectCode": "A003",
+        "isLimited": false,
         "adStatus": "running",
         "adspowerEnv": "env-placeholder",
         "developerGmail": "developer@example.com",
@@ -186,9 +187,11 @@
 
 - `summary` 为当前筛选条件下的整体汇总，不受分页影响
 - `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
+- 当 `groupBy` 包含 `projectCode` 时，返回行会附带 `isLimited` 字段，表示当前 Asia/Shanghai 小时项目广告匹配率是否低于 `0.8`
+- `isLimited` 来源于 `ad_revenue_hourly` 当前小时数据，按 `project_id -> project_projects.id -> project_code` 归属项目，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.8` 为 `true`，大于等于 `0.8` 为 `false`，当前小时无数据或请求数为 0 时为 `null`
 - 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainUrl`、`facebookAppId`、`admobAppId`、`firebaseConfigNote`、`storePageUrl` 等
-- 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回项目表元数据字段
-- CSV 导出保持固定列格式，不附加项目表元数据字段
+- 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
+- CSV 导出保持固定列格式，不附加 `isLimited` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
 - `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
 - `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`
