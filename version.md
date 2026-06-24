@@ -375,3 +375,11 @@
 - 影响范围：`app/Http/Requests/Admin/BlockedUserIpBatchDeleteRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除批量删除 Request、Service 方法、Controller 方法、路由、测试和文档说明即可；原单条删除接口无需回滚。
+
+## 2026-06-24 广告收益账号与应用远程同步
+
+- 日期：2026-06-24
+- 变更摘要：同步服务器管理新增 `POST /api/v3/admin/{securePath}/sync-servers/{server_id}/sync-account-meta` 与 `POST /api/v3/admin/{securePath}/sync-servers/{server_id}/sync-apps`，并将收益同步远程请求统一改为 `key` query 鉴权；新增远程同步 Service 统一校验服务器配置、发起 POST 请求、解析远程 `code/msg/data` 返回并在返回 URL 中脱敏密钥。
+- 影响范围：`app/Services/SyncServerRemoteSyncService.php`、`app/Http/Controllers/V3/Admin/SyncServerController.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/sync_servers_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 Service、Controller 方法、路由和文档说明，并将收益报表同步恢复为旧的远程 `Authorization` 请求头方式即可。

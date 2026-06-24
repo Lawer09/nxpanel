@@ -439,6 +439,8 @@ class AdminRoute
                 $router->patch('/{server_id}/status', [SyncServerController::class, 'updateStatus']);
                 $router->post('/{server_id}/test-sync', [SyncServerController::class, 'testSync']);
                 $router->post('/{server_id}/sync-revenue', [SyncServerController::class, 'syncRevenueByDate']);
+                $router->post('/{server_id}/sync-account-meta', [SyncServerController::class, 'syncAccountMeta']);
+                $router->post('/{server_id}/sync-apps', [SyncServerController::class, 'syncApps']);
             });
 
             // Ad Revenue Report

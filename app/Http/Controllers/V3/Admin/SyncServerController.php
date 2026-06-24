@@ -8,10 +8,12 @@ use App\Http\Requests\Admin\SyncServerSave;
 use App\Http\Requests\Admin\SyncServerUpdate;
 use App\Http\Resources\SyncServerResource;
 use App\Models\SyncServer;
+use App\Services\SyncServerRemoteSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
 
 class SyncServerController extends Controller
 {
@@ -179,67 +181,121 @@ class SyncServerController extends Controller
      * POST /admin/sync-servers/{server_id}/sync-revenue
      * Query(可选): start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
      */
-    public function syncRevenueByDate(Request $request, string $serverId)
+    public function syncRevenueByDate(
+        Request $request,
+        string $serverId,
+        SyncServerRemoteSyncService $remoteSyncService
+    )
     {
         try {
             $startDate = trim((string) $request->input('start_date', ''));
             $endDate = trim((string) $request->input('end_date', ''));
 
-            if (($startDate === '') xor ($endDate === '')) {
-                return $this->error([422, 'start_date 和 end_date 需同时传入']);
+            if ($startDate === '' || $endDate === '') {
+                return $this->error([422, 'start_date and end_date are required']);
             }
 
-            if ($startDate !== '' && $endDate !== '') {
-                $validator = Validator::make([
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                ], [
-                    'start_date' => 'required|date_format:Y-m-d',
-                    'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
-                ]);
+            $validator = Validator::make([
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ], [
+                'start_date' => 'required|date_format:Y-m-d',
+                'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+            ]);
 
-                if ($validator->fails()) {
-                    return $this->error([422, '日期格式有误']);
-                }
+            if ($validator->fails()) {
+                return $this->error([422, 'invalid date range']);
             }
 
             $server = SyncServer::where('server_id', $serverId)->first();
             if (!$server) {
-                return $this->error([404, '服务器不存在']);
+                return $this->error([404, 'sync server not found']);
             }
 
-            if (empty($server->host_ip)) {
-                return $this->error([422, '服务器未配置 host_ip']);
-            }
-            if (empty($server->secret_key)) {
-                return $this->error([422, '服务器未配置 secret_key']);
-            }
-
-            $port = $server->port ?: 8080;
-            $baseUrl  = "http://{$server->host_ip}:{$port}/api/sync/revenue";
-            $query = [];
-            if ($startDate !== '' && $endDate !== '') {
-                $query = [
+            return $this->formatRemoteSyncResponse($remoteSyncService->trigger(
+                $server,
+                SyncServerRemoteSyncService::ENDPOINT_REVENUE,
+                [
                     'start_date' => $startDate,
                     'end_date' => $endDate,
-                ];
-            }
-            $url = empty($query) ? $baseUrl : ($baseUrl . '?' . http_build_query($query));
-
-            $response = Http::timeout(30)
-                ->withHeaders(['Authorization' => $server->secret_key])
-                ->post($url);
-
-            return $this->ok([
-                'url'        => $url,
-                'httpStatus' => $response->status(),
-                'body'       => $response->json() ?? $response->body(),
-            ]);
+                ]
+            ));
+        } catch (InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            return $this->error([504, '连接超时: ' . $e->getMessage()]);
+            return $this->error([504, 'connection timeout: ' . $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('SyncServer syncRevenueByDate error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
+    }
+
+    /**
+     * Trigger remote ad account metadata sync.
+     * POST /admin/sync-servers/{server_id}/sync-account-meta
+     */
+    public function syncAccountMeta(string $serverId, SyncServerRemoteSyncService $remoteSyncService)
+    {
+        return $this->triggerRemoteSyncEndpoint(
+            $serverId,
+            SyncServerRemoteSyncService::ENDPOINT_ACCOUNT_META,
+            $remoteSyncService,
+            'SyncServer syncAccountMeta error: '
+        );
+    }
+
+    /**
+     * Trigger remote ad app metadata sync.
+     * POST /admin/sync-servers/{server_id}/sync-apps
+     */
+    public function syncApps(string $serverId, SyncServerRemoteSyncService $remoteSyncService)
+    {
+        return $this->triggerRemoteSyncEndpoint(
+            $serverId,
+            SyncServerRemoteSyncService::ENDPOINT_APPS,
+            $remoteSyncService,
+            'SyncServer syncApps error: '
+        );
+    }
+
+    /**
+     * Resolve the sync server and forward a metadata sync request to the remote node.
+     */
+    private function triggerRemoteSyncEndpoint(
+        string $serverId,
+        string $endpoint,
+        SyncServerRemoteSyncService $remoteSyncService,
+        string $logPrefix
+    ) {
+        try {
+            $server = SyncServer::where('server_id', $serverId)->first();
+            if (!$server) {
+                return $this->error([404, 'sync server not found']);
+            }
+
+            return $this->formatRemoteSyncResponse($remoteSyncService->trigger($server, $endpoint));
+        } catch (InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return $this->error([504, 'connection timeout: ' . $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error($logPrefix . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Convert the remote node response into the local API response format.
+     */
+    private function formatRemoteSyncResponse(array $result)
+    {
+        $remoteCode = is_numeric($result['code'] ?? null) ? (int) $result['code'] : 0;
+        $remoteMsg = is_string($result['msg'] ?? null) ? $result['msg'] : 'ok';
+
+        if ($remoteCode !== 0) {
+            return $this->error([$remoteCode, $remoteMsg], $result);
+        }
+
+        return $this->ok($result, [0, $remoteMsg]);
     }
 }

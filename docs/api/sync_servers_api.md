@@ -10,7 +10,7 @@
 
 - **方法/路径**：`POST /sync-servers/{server_id}/test-sync`
 - **控制器**：`SyncServerController::testSync`
-- **说明**：向节点服务发起 `POST /api/sync/trigger` 请求，使用 `Authorization` 请求头传递密钥。
+- **说明**：向节点服务发起 `POST /api/sync/trigger` 请求，使用 `Authorization` 请求头传递密钥。该测试接口保持原有行为不变。
 
 ### 1.1 请求参数
 
@@ -37,29 +37,36 @@
 
 - **方法/路径**：`POST /sync-servers/{server_id}/sync-revenue`
 - **控制器**：`SyncServerController::syncRevenueByDate`
-- **说明**：向节点服务发起 `POST /api/sync/revenue`，日期参数为可选 query 参数。
+- **说明**：向节点服务发起 `POST /api/sync/revenue?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&key=<API_KEY>`，日期参数为必填 query 参数，密钥通过 `key` query 参数传递。
 
 ### 2.1 请求参数
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- | --- |
 | server_id | path | string | 是 | 同步服务器唯一 ID |
-| start_date | query | string | 否 | 开始日期，格式 `Y-m-d` |
-| end_date | query | string | 否 | 结束日期，格式 `Y-m-d`，且 `>= start_date` |
+| start_date | query | string | 是 | 开始日期，格式 `Y-m-d` |
+| end_date | query | string | 是 | 结束日期，格式 `Y-m-d`，且 `>= start_date` |
 
 ### 2.2 参数规则
 
-- `start_date` 和 `end_date` 必须同时传，不能只传一个。
-- 两个参数都不传时，转发为全量/默认区间同步（由节点服务自身逻辑决定）。
+- `start_date` 和 `end_date` 必须同时传，不能省略。
+- 管理端请求远程节点时统一附加 `key=<API_KEY>`，接口响应中的 `url` 会脱敏为 `key=***`。
 
 ### 2.3 返回结构
 
+以下为统一响应外层 `data` 中的内容；外层 `msg` 会透传远程返回的 `msg`，远程 `code != 0` 时本地接口按失败返回。
+
 ```json
 {
-  "url": "http://127.0.0.1:8080/api/sync/revenue?start_date=2026-05-01&end_date=2026-05-15",
+  "url": "http://127.0.0.1:8080/api/sync/revenue?start_date=2026-05-01&end_date=2026-05-15&key=***",
   "httpStatus": 200,
-  "body": {
-    "message": "ok"
+  "code": 0,
+  "msg": "revenue sync completed",
+  "data": {
+    "job": "revenue_daily",
+    "start_date": "2026-05-01",
+    "end_date": "2026-05-15",
+    "elapsed": "8.91s"
   }
 }
 ```
@@ -69,5 +76,79 @@
 | HTTP 状态码 | 说明 |
 | --- | --- |
 | 404 | 服务器不存在 |
-| 422 | host_ip/secret_key 未配置，或日期格式错误，或仅传了一个日期参数 |
+| 422 | host_ip/secret_key 未配置，或日期缺失/格式错误 |
 | 504 | 节点连接超时 |
+
+---
+
+## 3. 同步广告账号元信息
+
+- **方法/路径**：`POST /sync-servers/{server_id}/sync-account-meta`
+- **控制器**：`SyncServerController::syncAccountMeta`
+- **说明**：向同步节点发起 `POST /api/sync/account-meta?key=<API_KEY>`，用于触发远程广告账号元信息同步。
+
+### 3.1 请求参数
+
+| 参数 | 位置 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| server_id | path | string | 是 | 同步服务器唯一 ID |
+
+请求体无必填参数。远程调用使用 `sync_server.secret_key` 作为 `key` query 参数，接口响应中的 `url` 会脱敏为 `key=***`。
+
+### 3.2 返回结构
+
+以下为统一响应外层 `data` 中的内容；外层 `msg` 会透传远程返回的 `msg`，远程 `code != 0` 时本地接口按失败返回。
+
+```json
+{
+  "url": "http://127.0.0.1:8080/api/sync/account-meta?key=***",
+  "httpStatus": 200,
+  "code": 0,
+  "msg": "account metadata sync completed",
+  "data": {
+    "job": "account_meta",
+    "elapsed": "1.23s"
+  }
+}
+```
+
+---
+
+## 4. 同步广告应用信息
+
+- **方法/路径**：`POST /sync-servers/{server_id}/sync-apps`
+- **控制器**：`SyncServerController::syncApps`
+- **说明**：向同步节点发起 `POST /api/sync/apps?key=<API_KEY>`，用于触发远程广告应用信息同步。
+
+### 4.1 请求参数
+
+| 参数 | 位置 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| server_id | path | string | 是 | 同步服务器唯一 ID |
+
+请求体无必填参数。远程调用使用 `sync_server.secret_key` 作为 `key` query 参数，接口响应中的 `url` 会脱敏为 `key=***`。
+
+### 4.2 返回结构
+
+以下为统一响应外层 `data` 中的内容；外层 `msg` 会透传远程返回的 `msg`，远程 `code != 0` 时本地接口按失败返回。
+
+```json
+{
+  "url": "http://127.0.0.1:8080/api/sync/apps?key=***",
+  "httpStatus": 200,
+  "code": 0,
+  "msg": "apps sync completed",
+  "data": {
+    "job": "apps",
+    "elapsed": "2.45s"
+  }
+}
+```
+
+### 4.3 错误码
+
+| HTTP 状态码 | 说明 |
+| --- | --- |
+| 404 | 同步服务器不存在 |
+| 422 | `host_ip` 或 `secret_key` 未配置 |
+| 504 | 同步节点连接超时 |
