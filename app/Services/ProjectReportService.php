@@ -590,7 +590,7 @@ class ProjectReportService
     }
 
     /**
-     * Join current-hour ad limit state by project code.
+     * Join previous-hour ad limit state by project code.
      */
     private function joinCurrentHourLimitMetrics(Builder $query): void
     {
@@ -600,16 +600,16 @@ class ProjectReportService
     }
 
     /**
-     * Build current-hour project limit metrics from ad revenue hourly rows.
+     * Build previous-hour project limit metrics from ad revenue hourly rows.
      */
     private function buildCurrentHourLimitSubquery(): Builder
     {
-        $currentHour = now('Asia/Shanghai')->startOfHour()->toDateTimeString();
+        $previousHour = now('Asia/Shanghai')->startOfHour()->subHour()->toDateTimeString();
 
         return DB::table('ad_revenue_hourly as arh')
             ->join('project_projects as p', 'p.id', '=', 'arh.project_id')
             ->whereNotNull('arh.project_id')
-            ->where('arh.report_hour', '=', $currentHour)
+            ->where('arh.report_hour', '=', $previousHour)
             ->selectRaw('p.project_code as project_code')
             ->selectRaw('CASE WHEN SUM(arh.ad_requests)=0 THEN NULL WHEN SUM(arh.matched_requests)/SUM(arh.ad_requests) < 0.8 THEN 1 ELSE 0 END as is_limited')
             ->groupBy('p.project_code');

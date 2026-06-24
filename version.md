@@ -391,3 +391,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除项目日报分组查询中的当前小时限流子查询、`isLimited` 格式化输出和对应文档说明即可。
+
+## 2026-06-24 项目报表限流标记改为上一完整小时
+
+- 日期：2026-06-24
+- 变更摘要：将项目日报 `isLimited` 字段的判断时间桶从当前 Asia/Shanghai 小时调整为上一完整小时，仍按 `ad_revenue_hourly` 项目聚合 `SUM(matched_requests)/SUM(ad_requests) < 0.8` 判断。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将限流子查询的 `report_hour` 条件恢复为当前小时，并回退对应文档说明即可。
