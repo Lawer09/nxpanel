@@ -407,3 +407,27 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将限流子查询恢复为按 `ad_revenue_hourly.project_id` 关联项目，并回退对应文档说明即可。
+
+## 2026-06-24 项目报表限流标记移除平台类型限制
+
+- 日期：2026-06-24
+- 变更摘要：项目日报 `isLimited` 字段的上一完整小时限流子查询移除 `papa.platform_code = admob`、`arh.source_platform = admob` 和 `arh.report_type = network` 限制，仅按启用的项目广告账号映射、账号 ID 与上一完整小时聚合判断。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：在限流子查询中恢复上述平台和报表类型条件，并回退对应文档说明即可。
+
+## 2026-06-24 项目报表限流标记增加零请求新增用户判断
+
+- 日期：2026-06-24
+- 变更摘要：项目日报 `isLimited` 字段新增判断：上一完整小时项目聚合 `SUM(ad_requests)=0` 且当前报表行聚合 `newUsers > 0` 时返回 `true`；`ad_requests=0` 且无新增用户时仍返回 `null`。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ad_requests=0 && newUsers>0` 的优先判断，并恢复文档说明即可。
+
+## 2026-06-24 项目报表限流聚合增加缓存
+
+- 日期：2026-06-24
+- 变更摘要：项目日报 `isLimited` 字段的上一完整小时广告请求聚合结果改为服务层缓存，缓存键按小时桶区分，TTL 为 1 分钟；分页报表行再结合各自聚合 `newUsers` 计算最终限流状态。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `isLimited` 聚合结果缓存，恢复每次查询实时读取上一完整小时广告请求聚合数据即可。

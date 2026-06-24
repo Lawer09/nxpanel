@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ProjectReportService
@@ -57,6 +58,9 @@ class ProjectReportService
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->get();
+        if (($definition['includeLimitState'] ?? false) === true) {
+            $this->applyDailyLimitState($rows);
+        }
 
         $data = $rows->map(fn ($row) => $this->formatDailyRow($row));
 
@@ -409,7 +413,6 @@ class ProjectReportService
         $this->joinDailySpendMetrics($query, $spendMetricsQuery);
         if (in_array('projectCode', $groupDimensions, true)) {
             $this->joinProjectMetadata($query);
-            $this->joinCurrentHourLimitMetrics($query);
         }
 
         foreach ($groupDimensions as $groupDimension) {
@@ -448,7 +451,6 @@ class ProjectReportService
 
         if (in_array('projectCode', $groupDimensions, true)) {
             $this->selectGroupedProjectMetadata($query);
-            $query->selectRaw('MAX(limit_metrics.is_limited) as is_limited');
         }
 
         $sortable = array_values(array_unique(array_merge($groupDimensions, [
@@ -469,6 +471,7 @@ class ProjectReportService
             'dateTo' => $dateTo,
             'filters' => $filters,
             'requestedGroupBy' => $requestedGroupBy,
+            'includeLimitState' => in_array('projectCode', $groupDimensions, true),
         ];
     }
 
@@ -590,37 +593,72 @@ class ProjectReportService
     }
 
     /**
-     * Join previous-hour ad limit state by project code.
+     * Apply cached previous-hour limit state to grouped project rows.
      */
-    private function joinCurrentHourLimitMetrics(Builder $query): void
+    private function applyDailyLimitState($rows): void
     {
-        $query->leftJoinSub($this->buildCurrentHourLimitSubquery(), 'limit_metrics', function ($join) {
-            $join->on('limit_metrics.project_code', '=', 'project_daily_aggregates.project_code');
-        });
+        $limitMetrics = $this->loadPreviousHourLimitMetrics();
+
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode === '') {
+                continue;
+            }
+
+            $metrics = $limitMetrics[$projectCode] ?? ['ad_requests' => 0, 'matched_requests' => 0];
+            $adRequests = (int) ($metrics['ad_requests'] ?? 0);
+            $matchedRequests = (int) ($metrics['matched_requests'] ?? 0);
+            $newUsers = (int) ($row->new_users ?? 0);
+
+            if ($adRequests === 0 && $newUsers > 0) {
+                $row->is_limited = 1;
+            } elseif ($adRequests === 0) {
+                $row->is_limited = null;
+            } else {
+                $row->is_limited = ($matchedRequests / $adRequests) < 0.8 ? 1 : 0;
+            }
+        }
     }
 
     /**
-     * Build previous-hour project limit metrics from ad revenue hourly rows.
+     * Load previous-hour project ad request metrics with a short cache TTL.
      */
-    private function buildCurrentHourLimitSubquery(): Builder
+    private function loadPreviousHourLimitMetrics(): array
     {
         $previousHour = now('Asia/Shanghai')->startOfHour()->subHour()->toDateTimeString();
+        $cacheKey = 'project_report:is_limited_metrics:' . $previousHour;
 
-        return DB::table('project_ad_platform_accounts as papa')
-            ->join('project_projects as p', 'p.project_code', '=', 'papa.project_code')
-            ->leftJoin('ad_revenue_hourly as arh', function ($join) use ($previousHour) {
-                $join->on('arh.account_id', '=', 'papa.ad_platform_account_id')
-                    ->where('arh.source_platform', '=', 'admob')
-                    ->where('arh.report_type', '=', 'network')
-                    ->where('arh.report_hour', '=', $previousHour);
-            })
-            ->where('papa.platform_code', '=', 'admob')
-            ->where('papa.enabled', '=', 1)
-            ->whereNotNull('papa.project_code')
-            ->where('papa.project_code', '!=', '')
-            ->selectRaw('p.project_code as project_code')
-            ->selectRaw('CASE WHEN COALESCE(SUM(arh.ad_requests), 0)=0 THEN NULL WHEN SUM(arh.matched_requests)/SUM(arh.ad_requests) < 0.8 THEN 1 ELSE 0 END as is_limited')
-            ->groupBy('p.project_code');
+        return Cache::remember($cacheKey, 60, function () use ($previousHour) {
+            $rows = DB::table('project_ad_platform_accounts as papa')
+                ->join('project_projects as p', 'p.project_code', '=', 'papa.project_code')
+                ->leftJoin('ad_revenue_hourly as arh', function ($join) use ($previousHour) {
+                    $join->on('arh.account_id', '=', 'papa.ad_platform_account_id')
+                        ->where('arh.report_hour', '=', $previousHour);
+                })
+                ->where('papa.enabled', '=', 1)
+                ->whereNotNull('papa.project_code')
+                ->where('papa.project_code', '!=', '')
+                ->selectRaw('p.project_code as project_code')
+                ->selectRaw('COALESCE(SUM(arh.ad_requests), 0) as ad_requests')
+                ->selectRaw('COALESCE(SUM(arh.matched_requests), 0) as matched_requests')
+                ->groupBy('p.project_code')
+                ->get();
+
+            $result = [];
+            foreach ($rows as $row) {
+                $projectCode = trim((string) ($row->project_code ?? ''));
+                if ($projectCode === '') {
+                    continue;
+                }
+
+                $result[$projectCode] = [
+                    'ad_requests' => (int) ($row->ad_requests ?? 0),
+                    'matched_requests' => (int) ($row->matched_requests ?? 0),
+                ];
+            }
+
+            return $result;
+        });
     }
 
     /**

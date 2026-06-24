@@ -188,7 +188,9 @@
 - `summary` 为当前筛选条件下的整体汇总，不受分页影响
 - `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
 - 当 `groupBy` 包含 `projectCode` 时，返回行会附带 `isLimited` 字段，表示上一完整 Asia/Shanghai 小时项目广告匹配率是否低于 `0.8`
-- `isLimited` 来源于 `ad_revenue_hourly` 上一完整小时数据，通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code`，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.8` 为 `true`，大于等于 `0.8` 为 `false`，上一完整小时无数据或请求数为 0 时为 `null`
+- `isLimited` 来源于 `ad_revenue_hourly` 上一完整小时数据，通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code`，不额外限定 `platform_code`、`source_platform` 或 `report_type`，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.8` 为 `true`，大于等于 `0.8` 为 `false`
+- 当上一完整小时 `SUM(ad_requests)=0` 时，如果当前报表行聚合后的 `newUsers > 0`，`isLimited` 返回 `true`；否则返回 `null`
+- `isLimited` 使用上一完整小时项目广告请求聚合结果计算，该聚合结果缓存 1 分钟
 - 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainUrl`、`facebookAppId`、`admobAppId`、`firebaseConfigNote`、`storePageUrl` 等
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
 - CSV 导出保持固定列格式，不附加 `isLimited` 或项目表元数据字段
