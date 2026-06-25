@@ -292,3 +292,190 @@
 - 分页接口统一返回 `data` / `total` / `page` / `pageSize`
 - 汇总概览接口返回 null 时表示无数据
 - 趋势接口的 `compare` 字段仅在传入对比日期参数时出现
+
+---
+
+## 7. 当前收益与日报收益差值查询
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/ad-revenue/now-diff`
+- **控制器**：`AdRevenueController::nowDiff`
+- **Request**：`AdRevenueNowDiffRequest`
+- **数据来源**：以 `ad_revenue_daily_now` 为主表，left join `ad_revenue_daily`
+
+### 7.1 用途
+
+按 `account_id + report_date + provider_app_id + device_platform + source_platform + report_type` 对齐当前收益快照表与正式日报表，返回两边收益和 `estimatedEarningsDiff`，用于检查近 30 天当前表回填/同步后与日报表之间的收益差异。
+
+只返回 `ad_revenue_daily_now` 中存在的维度行；如果 `ad_revenue_daily` 缺失对应行，`dailyEstimatedEarnings` 按 `0.000000` 参与差值计算。
+
+### 7.2 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| dateFrom | string | 否 | 开始日期，格式 `YYYY-MM-DD` |
+| dateTo | string | 否 | 结束日期，格式 `YYYY-MM-DD`，不能早于 `dateFrom` |
+| sourcePlatform | string | 否 | 广告平台来源 |
+| reportType | string | 否 | 报表类型 |
+| accountId | int | 否 | 广告平台账号 ID |
+| providerAppId | string | 否 | 广告平台应用 ID |
+| devicePlatform | string | 否 | 设备平台 |
+| projectCode | string | 否 | 项目代号；传入后仅返回可映射到该项目代号的数据 |
+| page | int | 否 | 默认 `1` |
+| pageSize | int | 否 | 默认 `20`，最大 `200` |
+| orderBy | string | 否 | 默认 `reportDate`；支持 `reportDate` / `accountId` / `providerAppId` / `devicePlatform` / `projectCode` / `nowEstimatedEarnings` / `dailyEstimatedEarnings` / `estimatedEarningsDiff` / `nowUpdatedAt` / `dailyUpdatedAt` |
+| orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
+
+请求示例：
+
+```json
+{
+  "dateFrom": "2026-06-01",
+  "dateTo": "2026-06-25",
+  "accountId": 1,
+  "providerAppId": "ca-app-pub-xxx~yyy",
+  "devicePlatform": "ANDROID",
+  "projectCode": "A003",
+  "page": 1,
+  "pageSize": 20,
+  "orderBy": "estimatedEarningsDiff",
+  "orderDir": "desc"
+}
+```
+
+### 7.3 项目代号映射
+
+项目代号来自 `project_ad_platform_accounts`：
+
+- `platform_code = source_platform`
+- `ad_platform_account_id = account_id`
+- `enabled = 1`
+- APP 级映射优先：`bind_type != account` 且 `external_app_id = provider_app_id`
+- 无 APP 级映射时使用账号级映射：`bind_type = account`
+- 未映射时 `projectCode = null`
+- 传入 `projectCode` 过滤时，未映射数据不会返回
+
+### 7.4 返回字段
+
+分页结构为 `data` / `total` / `page` / `pageSize`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| projectCode | string/null | 映射到的项目代号 |
+| accountId | int | 广告平台账号 ID |
+| reportDate | string | 报表日期 |
+| providerAppId | string | 广告平台应用 ID |
+| devicePlatform | string | 设备平台 |
+| sourcePlatform | string | 广告平台来源 |
+| reportType | string | 报表类型 |
+| nowEstimatedEarnings | string | 当前表收益，6 位小数 |
+| dailyEstimatedEarnings | string | 日报表收益，6 位小数 |
+| estimatedEarningsDiff | string | `nowEstimatedEarnings - dailyEstimatedEarnings`，仅返回收益差值 |
+| nowUpdatedAt | string/null | 当前表最新更新时间 |
+| dailyUpdatedAt | string/null | 日报表最新更新时间 |
+
+返回示例：
+
+```json
+{
+  "data": [
+    {
+      "projectCode": "A003",
+      "accountId": 1,
+      "reportDate": "2026-06-20",
+      "providerAppId": "ca-app-pub-xxx~yyy",
+      "devicePlatform": "ANDROID",
+      "sourcePlatform": "admob",
+      "reportType": "network",
+      "nowEstimatedEarnings": "123.456000",
+      "dailyEstimatedEarnings": "120.000000",
+      "estimatedEarningsDiff": "3.456000",
+      "nowUpdatedAt": "2026-06-25 10:00:00",
+      "dailyUpdatedAt": "2026-06-24 03:00:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+---
+
+## 8. 当前收益查询
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/ad-revenue/now`
+- **控制器**：`AdRevenueController::now`
+- **Request**：`AdRevenueNowRequest`
+- **数据来源**：仅查询 `ad_revenue_daily_now`，不查询 `ad_revenue_daily`
+
+### 8.1 用途
+
+按 `account_id + report_date + provider_app_id + device_platform + source_platform + report_type` 聚合当前收益表，返回当前收益和当前表更新时间。该接口不计算日报差值，不返回 `dailyEstimatedEarnings`、`estimatedEarningsDiff` 或 `dailyUpdatedAt`。
+
+### 8.2 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| dateFrom | string | 否 | 开始日期，格式 `YYYY-MM-DD` |
+| dateTo | string | 否 | 结束日期，格式 `YYYY-MM-DD`，不能早于 `dateFrom` |
+| sourcePlatform | string | 否 | 广告平台来源 |
+| reportType | string | 否 | 报表类型 |
+| accountId | int | 否 | 广告平台账号 ID |
+| providerAppId | string | 否 | 广告平台应用 ID |
+| devicePlatform | string | 否 | 设备平台 |
+| projectCode | string | 否 | 项目代号；传入后仅返回可映射到该项目代号的数据 |
+| page | int | 否 | 默认 `1` |
+| pageSize | int | 否 | 默认 `20`，最大 `200` |
+| orderBy | string | 否 | 默认 `reportDate`；支持 `reportDate` / `accountId` / `providerAppId` / `devicePlatform` / `projectCode` / `nowEstimatedEarnings` / `nowUpdatedAt` |
+| orderDir | string | 否 | `asc` / `desc`，默认 `desc` |
+
+### 8.3 项目代号映射
+
+项目代号来自 `project_ad_platform_accounts`，口径与 `now-diff` 一致：
+
+- `platform_code = source_platform`
+- `ad_platform_account_id = account_id`
+- `enabled = 1`
+- APP 级映射优先：`bind_type != account` 且 `external_app_id = provider_app_id`
+- 无 APP 级映射时使用账号级映射：`bind_type = account`
+- 未映射时 `projectCode = null`
+- 传入 `projectCode` 过滤时，未映射数据不会返回
+
+### 8.4 返回字段
+
+分页结构为 `data` / `total` / `page` / `pageSize`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| projectCode | string/null | 映射到的项目代号 |
+| accountId | int | 广告平台账号 ID |
+| reportDate | string | 报表日期 |
+| providerAppId | string | 广告平台应用 ID |
+| devicePlatform | string | 设备平台 |
+| sourcePlatform | string | 广告平台来源 |
+| reportType | string | 报表类型 |
+| nowEstimatedEarnings | string | 当前表收益，6 位小数 |
+| nowUpdatedAt | string/null | 当前表最新更新时间 |
+
+返回示例：
+
+```json
+{
+  "data": [
+    {
+      "projectCode": "A003",
+      "accountId": 1,
+      "reportDate": "2026-06-20",
+      "providerAppId": "ca-app-pub-xxx~yyy",
+      "devicePlatform": "ANDROID",
+      "sourcePlatform": "admob",
+      "reportType": "network",
+      "nowEstimatedEarnings": "123.456000",
+      "nowUpdatedAt": "2026-06-25 10:00:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```

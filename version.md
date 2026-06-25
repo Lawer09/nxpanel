@@ -479,3 +479,43 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除上一小时新增与当日请求参与限流判断的逻辑，并将缓存键恢复为旧前缀即可。
+
+## 2026-06-25 当前收益与日报收益差值查询接口
+
+- 日期：2026-06-25
+- 变更摘要：管理端广告收益模块新增 `POST /api/v3/admin/{securePath}/ad-revenue/now-diff` 接口，以 `ad_revenue_daily_now` 为主表，对齐 `ad_revenue_daily` 返回当前收益、日报收益和 `estimatedEarningsDiff`；支持按账号、日期、APP、设备平台、来源平台、报表类型和项目代号筛选，项目代号按 `project_ad_platform_accounts` 的 APP 级优先、账号级兜底口径映射。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/AdRevenuePlatform/AdRevenueController.php`、`app/Http/Requests/Admin/AdRevenueNowDiffRequest.php`、`docs/api/ad_revenue_api.md`、`version.md`
+- 是否需要迁移：否，依赖已存在的 `ad_revenue_daily_now`、`ad_revenue_daily` 和 `project_ad_platform_accounts` 表结构。
+- 回滚说明：移除新增路由、Controller 方法、Request 类和接口文档说明即可。
+
+## 2026-06-25 广告收益管理查询逻辑迁移到 Service
+
+- 日期：2026-06-25
+- 变更摘要：将广告收益管理 Controller 中的明细、聚合、趋势、汇总、APP 列表、Top 排行和当前收益差值查询实现迁移到 `AdRevenueService`，Controller 仅负责接收 Form Request、调用 Service 和返回统一响应。
+- 影响范围：`app/Http/Controllers/V3/Admin/AdRevenuePlatform/AdRevenueController.php`、`app/Services/AdRevenueService.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将查询实现从 `AdRevenueService` 移回 Controller，并移除新增 Service 即可。
+
+## 2026-06-25 当前收益表查询接口
+
+- 日期：2026-06-25
+- 变更摘要：管理端广告收益模块新增 `POST /api/v3/admin/{securePath}/ad-revenue/now` 接口，仅查询 `ad_revenue_daily_now` 当前收益表并返回当前收益、项目代号映射和更新时间，不访问 `ad_revenue_daily`，也不计算日报收益或收益差值。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/AdRevenuePlatform/AdRevenueController.php`、`app/Http/Requests/Admin/AdRevenueNowRequest.php`、`app/Services/AdRevenueService.php`、`docs/api/ad_revenue_api.md`、`version.md`
+- 是否需要迁移：否，依赖已存在的 `ad_revenue_daily_now` 和 `project_ad_platform_accounts` 表结构。
+- 回滚说明：移除新增 Request、Controller 方法、Service 查询方法、路由和文档说明即可。
+
+## 2026-06-25 项目日报返回当前收益与收益差值
+
+- 日期：2026-06-25
+- 变更摘要：项目日报查询返回行在包含唯一 `projectCode` 时新增 `adRevenueNow` 与 `adRevenueDiff` 字段；当前收益复用 `AdRevenueService::now()` 的 `ad_revenue_daily_now` 与项目映射口径，按 `reportDate + projectCode` 或请求日期范围内的 `projectCode` 聚合，收益差值按 `adRevenueNow - adRevenue` 计算。
+- 影响范围：`app/Services/AdRevenueService.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除项目日报行的当前收益附加逻辑、`AdRevenueService` 聚合复用方法和对应文档说明即可。
+
+## 2026-06-25 项目报表移除第三方元数据返回字段
+
+- 日期：2026-06-25
+- 变更摘要：项目日报在返回项目元数据时，不再输出 `facebook*`、`admob*`、`yandex*` 开头字段，以及 `privacyPolicyUrl`、`termsUrl`、`storePageUrl`、`firebaseConfigNote`；项目管理接口和项目表字段保持不变。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将上述字段重新加入项目报表元数据映射，并恢复项目报表文档说明即可。

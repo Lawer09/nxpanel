@@ -6,341 +6,88 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdPlatformAppFetch;
 use App\Http\Requests\Admin\AdRevenueAggregate;
 use App\Http\Requests\Admin\AdRevenueFetch;
+use App\Http\Requests\Admin\AdRevenueNowDiffRequest;
+use App\Http\Requests\Admin\AdRevenueNowRequest;
 use App\Http\Requests\Admin\AdRevenueSummary;
 use App\Http\Requests\Admin\AdRevenueTopRank;
 use App\Http\Requests\Admin\AdRevenueTrend;
-use App\Http\Resources\AdRevenueDailyResource;
-use App\Http\Resources\CamelizeResource;
-use App\Models\AdPlatformApp;
-use App\Models\AdRevenueDaily;
+use App\Services\AdRevenueService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AdRevenueController extends Controller
 {
-    // 允许的排序字段白名单
-    private const ALLOWED_ORDER_FIELDS = [
-        'report_date', 'impressions', 'clicks', 'estimated_earnings',
-        'ecpm', 'ad_requests', 'matched_requests', 'ctr',
-    ];
+    public function __construct(private readonly AdRevenueService $adRevenueService)
+    {
+    }
 
     /**
-     * 明细查询（分页）
+     * Query paginated ad revenue detail rows.
      */
     public function fetch(AdRevenueFetch $request): JsonResponse
     {
-        $params = $request->validated();
-
-        $query = AdRevenueDaily::query();
-        $this->applyFilters($params, $query);
-
-        $orderBy  = in_array($params['orderBy'] ?? null, self::ALLOWED_ORDER_FIELDS)
-            ? $params['orderBy'] : 'report_date';
-        $orderDir = $params['orderDir'] ?? 'desc';
-
-        $pageSize = $params['pageSize'] ?? 20;
-        $data = $query->orderBy($orderBy, $orderDir)->paginate($pageSize);
-
-        return $this->ok([
-            'data'     => AdRevenueDailyResource::collection($data->items()),
-            'total'    => $data->total(),
-            'page'     => $data->currentPage(),
-            'pageSize' => $data->perPage(),
-        ]);
+        return $this->ok($this->adRevenueService->fetch($request->validated()));
     }
 
     /**
-     * 多维度聚合查询
+     * Query aggregated ad revenue by requested dimensions.
      */
     public function aggregate(AdRevenueAggregate $request): JsonResponse
     {
-        $params  = $request->validated();
-        $groupBy = $params['groupBy'];
-        $groupByColumns = $this->mapGroupByColumns($groupBy);
-        $pageSize = $params['pageSize'] ?? 20;
-
-        $selectParts = array_merge($groupByColumns, [
-            'SUM(ad_requests)        as ad_requests',
-            'SUM(matched_requests)   as matched_requests',
-            'SUM(impressions)        as impressions',
-            'SUM(clicks)             as clicks',
-            'SUM(estimated_earnings) as estimated_earnings',
-            'ROUND(SUM(estimated_earnings) / NULLIF(SUM(impressions), 0) * 1000, 6) as ecpm',
-            'ROUND(SUM(clicks) / NULLIF(SUM(impressions), 0), 6) as ctr',
-            'ROUND(SUM(matched_requests) / NULLIF(SUM(ad_requests), 0), 6) as match_rate',
-            'ROUND(SUM(impressions) / NULLIF(SUM(matched_requests), 0), 6) as show_rate',
-        ]);
-
-        $query = AdRevenueDaily::query()
-            ->selectRaw(implode(', ', $selectParts))
-            ->groupBy($groupByColumns);
-
-        $this->applyFilters($params, $query);
-
-        $orderBy = in_array($params['orderBy'] ?? null, array_merge(self::ALLOWED_ORDER_FIELDS, $groupBy), true)
-            ? $this->mapGroupByColumns([$params['orderBy']])[0]
-            : 'estimated_earnings';
-        $orderDir = $params['orderDir'] ?? 'desc';
-        $query->orderBy($orderBy, $orderDir);
-
-        $countQuery = DB::table(DB::raw("({$query->toSql()}) as sub"))
-            ->mergeBindings($query->getQuery());
-        $total = $countQuery->count();
-
-        $page = $params['page'] ?? 1;
-        $items = $query->offset(($page - 1) * $pageSize)->limit($pageSize)->get();
-
-        return $this->ok([
-            'data'     => CamelizeResource::collection($items),
-            'total'    => $total,
-            'page'     => $page,
-            'pageSize' => $pageSize,
-        ]);
+        return $this->ok($this->adRevenueService->aggregate($request->validated()));
     }
 
     /**
-     * 日期趋势（折线图）
+     * Query revenue trend and optional comparison trend.
      */
     public function trend(AdRevenueTrend $request): JsonResponse
     {
-        $params = $request->validated();
-
-        $query = AdRevenueDaily::query()
-            ->selectRaw(implode(', ', [
-                'report_date',
-                'SUM(ad_requests)        as ad_requests',
-                'SUM(matched_requests)   as matched_requests',
-                'SUM(impressions)        as impressions',
-                'SUM(clicks)             as clicks',
-                'SUM(estimated_earnings) as estimated_earnings',
-                'ROUND(SUM(estimated_earnings) / NULLIF(SUM(impressions), 0) * 1000, 6) as ecpm',
-                'ROUND(SUM(clicks) / NULLIF(SUM(impressions), 0), 6) as ctr',
-            ]))
-            ->groupBy('report_date')
-            ->orderBy('report_date');
-
-        $this->applyFilters($params, $query);
-        $current = $query->get();
-
-        // 对比周期
-        $compare = null;
-        if (!empty($params['compareDateFrom']) && !empty($params['compareDateTo'])) {
-            $cmpQuery = AdRevenueDaily::query()
-                ->selectRaw(implode(', ', [
-                    'report_date',
-                    'SUM(ad_requests)        as ad_requests',
-                    'SUM(impressions)        as impressions',
-                    'SUM(clicks)             as clicks',
-                    'SUM(estimated_earnings) as estimated_earnings',
-                    'ROUND(SUM(estimated_earnings) / NULLIF(SUM(impressions), 0) * 1000, 6) as ecpm',
-                ]))
-                ->groupBy('report_date')
-                ->orderBy('report_date')
-                ->where('report_date', '>=', $params['compareDateFrom'])
-                ->where('report_date', '<=', $params['compareDateTo']);
-
-            $this->applyFiltersExceptDate($params, $cmpQuery);
-            $compare = $cmpQuery->get();
-        }
-
-        return $this->ok([
-            'current' => CamelizeResource::collection($current),
-            'compare' => $compare ? CamelizeResource::collection($compare) : null,
-        ]);
+        return $this->ok($this->adRevenueService->trend($request->validated()));
     }
 
     /**
-     * 汇总概览（卡片数据）
+     * Query ad revenue summary metrics.
      */
     public function summary(AdRevenueSummary $request): JsonResponse
     {
-        $params = $request->validated();
-
-        $query = AdRevenueDaily::query()
-            ->selectRaw(implode(', ', [
-                'SUM(ad_requests)        as ad_requests',
-                'SUM(matched_requests)   as matched_requests',
-                'SUM(impressions)        as impressions',
-                'SUM(clicks)             as clicks',
-                'SUM(estimated_earnings) as estimated_earnings',
-                'ROUND(SUM(estimated_earnings) / NULLIF(SUM(impressions), 0) * 1000, 6) as ecpm',
-                'ROUND(SUM(clicks) / NULLIF(SUM(impressions), 0), 6) as ctr',
-                'ROUND(SUM(matched_requests) / NULLIF(SUM(ad_requests), 0), 6) as match_rate',
-                'COUNT(DISTINCT account_id)      as account_count',
-                'COUNT(DISTINCT provider_app_id)  as app_count',
-                'COUNT(DISTINCT report_date)      as day_count',
-            ]));
-
-        $this->applyFilters($params, $query);
-        $data = $query->first();
-
-        return $this->ok($data ? CamelizeResource::make($data) : null);
+        return $this->ok($this->adRevenueService->summary($request->validated()));
     }
 
     /**
-     * ad_platform_app 列表查询
+     * Query ad platform app list with account metadata.
      */
     public function fetchApps(AdPlatformAppFetch $request): JsonResponse
     {
         try {
-            $params = $request->validated();
-
-            $page     = (int) ($params['page'] ?? 1);
-            $pageSize = (int) ($params['pageSize'] ?? 20);
-
-            $query = AdPlatformApp::query()->with('account:id,account_name,account_label');
-
-            if (!empty($params['sourcePlatform'])) {
-                $query->where('source_platform', $params['sourcePlatform']);
-            }
-            if (!empty($params['accountId'])) {
-                $query->where('account_id', (int) $params['accountId']);
-            }
-            if (!empty($params['keyword'])) {
-                $keyword = $params['keyword'];
-                $query->where(function ($q) use ($keyword) {
-                    $q->where('provider_app_name', 'like', "%{$keyword}%")
-                        ->orWhere('app_store_id', 'like', "%{$keyword}%")
-                        ->orWhere('provider_app_id', 'like', "%{$keyword}%");
-                });
-            }
-
-            $total = $query->count();
-            $rows  = $query->orderByDesc('id')
-                ->offset(($page - 1) * $pageSize)
-                ->limit($pageSize)
-                ->get();
-
-            $list = $rows->map(function ($row) {
-                return [
-                    'id'               => (int) $row->id,
-                    'sourcePlatform'   => $row->source_platform,
-                    'accountId'        => (int) $row->account_id,
-                    'accountName'      => $row->relationLoaded('account') && $row->account
-                        ? $row->account->account_name : null,
-                    'accountLabel'      => $row->relationLoaded('account') && $row->account
-                        ? $row->account->account_label : null,
-                    'providerAppId'    => $row->provider_app_id,
-                    'providerAppName'  => $row->provider_app_name,
-                    'devicePlatform'   => $row->device_platform,
-                    'appStoreId'       => $row->app_store_id,
-                    'appApprovalState' => $row->app_approval_state,
-                    'createdAt'        => $row->created_at,
-                    'updatedAt'        => $row->updated_at,
-                ];
-            });
-
-            return $this->ok([
-                'data'     => $list,
-                'total'    => $total,
-                'page'     => $page,
-                'pageSize' => $pageSize,
-            ]);
+            return $this->ok($this->adRevenueService->fetchApps($request->validated()));
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('AdRevenue fetchApps error: ' . $e->getMessage());
+            Log::error('AdRevenue fetchApps error: ' . $e->getMessage());
+
             return $this->error([500, $e->getMessage()]);
         }
     }
 
     /**
-     * Top 排行榜
+     * Query top rank data by the requested dimension and metric.
      */
     public function topRank(AdRevenueTopRank $request): JsonResponse
     {
-        $params = $request->validated();
-
-        $rankBy = $params['rankBy'];
-        $metric = $params['metric'] ?? 'estimated_earnings';
-        $limit  = (int) ($params['limit'] ?? 20);
-
-        $dimMap = [
-            'app'      => ['provider_app_id', 'provider_app_name'],
-            'ad_unit'  => ['provider_ad_unit_id', 'provider_ad_unit_name'],
-            'country'  => ['country_code'],
-            'account'  => ['account_id'],
-            'platform' => ['device_platform'],
-        ];
-
-        $dims = $dimMap[$rankBy];
-        $metricExpr = $metric === 'ecpm'
-            ? 'ROUND(SUM(estimated_earnings) / NULLIF(SUM(impressions), 0) * 1000, 6)'
-            : "SUM({$metric})";
-
-        $selectParts = array_merge($dims, [
-            "{$metricExpr} as {$metric}",
-            'SUM(impressions)        as impressions',
-            'SUM(clicks)             as clicks',
-            'SUM(estimated_earnings) as estimated_earnings',
-        ]);
-
-        $query = AdRevenueDaily::query()
-            ->selectRaw(implode(', ', $selectParts))
-            ->groupBy($dims)
-            ->orderByDesc($metric)
-            ->limit($limit);
-
-        $this->applyFilters($params, $query);
-
-        return $this->ok(CamelizeResource::collection($query->get()));
+        return $this->ok($this->adRevenueService->topRank($request->validated()));
     }
 
-    // ── camelCase 请求参数 → snake_case 数据库列 映射 ──
-    private const PARAM_COLUMN_MAP = [
-        'sourcePlatform'   => 'source_platform',
-        'accountId'        => 'account_id',
-        'projectId'        => 'project_id',
-        'providerAppId'    => 'provider_app_id',
-        'providerAdUnitId' => 'provider_ad_unit_id',
-        'countryCode'      => 'country_code',
-        'devicePlatform'   => 'device_platform',
-        'adFormat'         => 'ad_format',
-        'reportType'       => 'report_type',
-    ];
-
-    // ── groupBy 维度 camelCase → snake_case 数据库列 映射 ──
-    private const GROUP_BY_COLUMN_MAP = [
-        'reportDate'       => 'report_date',
-        'sourcePlatform'   => 'source_platform',
-        'accountId'        => 'account_id',
-        'providerAppId'    => 'provider_app_id',
-        'providerAdUnitId' => 'provider_ad_unit_id',
-        'countryCode'      => 'country_code',
-        'devicePlatform'   => 'device_platform',
-        'adFormat'         => 'ad_format',
-        'reportType'       => 'report_type',
-        'adSourceCode'     => 'ad_source_code',
-    ];
-
-    // ── 私有：通用筛选 ──────────────────────────
-    private function applyFilters(array $params, $query): void
+    /**
+     * Compare current revenue snapshot with finalized daily revenue.
+     */
+    public function nowDiff(AdRevenueNowDiffRequest $request): JsonResponse
     {
-        $this->applyFiltersExceptDate($params, $query);
-
-        if (!empty($params['dateFrom'])) {
-            $query->where('report_date', '>=', $params['dateFrom']);
-        }
-        if (!empty($params['dateTo'])) {
-            $query->where('report_date', '<=', $params['dateTo']);
-        }
+        return $this->ok($this->adRevenueService->nowDiff($request->validated()));
     }
 
-    private function applyFiltersExceptDate(array $params, $query): void
+    /**
+     * Query current revenue snapshot data.
+     */
+    public function now(AdRevenueNowRequest $request): JsonResponse
     {
-        foreach (self::PARAM_COLUMN_MAP as $camel => $column) {
-            if (!empty($params[$camel])) {
-                $query->where($column, '=', $params[$camel]);
-            }
-        }
+        return $this->ok($this->adRevenueService->now($request->validated()));
     }
-
-    private function mapGroupByColumns(array $groupBy): array
-    {
-        $mapped = [];
-        foreach ($groupBy as $dim) {
-            $mapped[] = self::GROUP_BY_COLUMN_MAP[$dim] ?? $dim;
-        }
-
-        return $mapped;
-    }
-
 }

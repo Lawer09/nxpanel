@@ -16,25 +16,12 @@ class ProjectReportService
         'app_name' => 'appName',
         'package_name' => 'packageName',
         'domain_info_status' => 'domainInfoStatus',
-        'admob_pub_id' => 'admobPubId',
         'domain_url' => 'domainUrl',
-        'privacy_policy_url' => 'privacyPolicyUrl',
-        'terms_url' => 'termsUrl',
-        'facebook_info_status' => 'facebookInfoStatus',
-        'facebook_app_id' => 'facebookAppId',
-        'facebook_app_token' => 'facebookAppToken',
-        'facebook_key_hash' => 'facebookKeyHash',
-        'facebook_class_name' => 'facebookClassName',
-        'admob_account_status' => 'admobAccountStatus',
-        'admob_app_id' => 'admobAppId',
-        'admob_ad_ids' => 'admobAdIds',
-        'admob_app_ads_txt' => 'admobAppAdsTxt',
-        'firebase_config_note' => 'firebaseConfigNote',
-        'yandex_account' => 'yandexAccount',
-        'yandex_ad_ids' => 'yandexAdIds',
-        'yandex_app_ads_txt' => 'yandexAppAdsTxt',
-        'store_page_url' => 'storePageUrl',
     ];
+
+    public function __construct(
+        private readonly AdRevenueService $adRevenueService,
+    ) {}
 
     /**
      * Query project daily aggregate report.
@@ -59,6 +46,7 @@ class ProjectReportService
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->get();
+        $this->applyDailyNowRevenue($rows, $definition);
         if (($definition['includeLimitState'] ?? false) === true) {
             $this->applyDailyLimitState($rows);
         }
@@ -596,6 +584,49 @@ class ProjectReportService
     }
 
     /**
+     * Attach current revenue and current-vs-report revenue diff to project report rows.
+     */
+    private function applyDailyNowRevenue($rows, array $definition): void
+    {
+        $projectCodes = $rows
+            ->map(static fn ($row) => trim((string) ($row->project_code ?? '')))
+            ->filter(static fn ($projectCode) => $projectCode !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($projectCodes)) {
+            return;
+        }
+
+        $nowRevenue = $this->adRevenueService->getNowRevenueByProjectDate(
+            $projectCodes,
+            $definition['dateFrom'],
+            $definition['dateTo']
+        );
+
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode === '') {
+                continue;
+            }
+
+            $nowAmount = null;
+            $reportDate = isset($row->report_date) ? (string) $row->report_date : '';
+            if ($reportDate !== '') {
+                $nowAmount = $nowRevenue['byDate'][$this->makeProjectDateKey($projectCode, $reportDate)] ?? null;
+            } else {
+                $nowAmount = $nowRevenue['byProject'][$projectCode] ?? null;
+            }
+
+            $row->ad_revenue_now = $nowAmount;
+            $row->ad_revenue_diff = $nowAmount === null
+                ? null
+                : $nowAmount - (float) ($row->ad_revenue ?? 0);
+        }
+    }
+
+    /**
      * Apply cached previous-hour limit state to grouped project rows.
      */
     private function applyDailyLimitState($rows): void
@@ -890,6 +921,11 @@ class ProjectReportService
             $data['isLimited'] = $row->is_limited === null ? null : (bool) (int) $row->is_limited;
         }
 
+        if (property_exists($row, 'ad_revenue_now')) {
+            $data['adRevenueNow'] = $this->formatDecimal($row->ad_revenue_now);
+            $data['adRevenueDiff'] = $this->formatDecimal($row->ad_revenue_diff ?? null);
+        }
+
         return $data;
     }
 
@@ -975,5 +1011,13 @@ class ProjectReportService
         $ros = ($adRevenue * ($installUsers / $dauUsers)) / $adSpendCost;
 
         return $this->formatDecimal($ros);
+    }
+
+    /**
+     * Build a stable key for project/date current revenue lookups.
+     */
+    private function makeProjectDateKey(string $projectCode, string $reportDate): string
+    {
+        return trim($projectCode) . "\t" . trim($reportDate);
     }
 }

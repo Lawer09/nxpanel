@@ -454,6 +454,8 @@ class AdminRoute
                 $router->get('/trend',     [AdRevenueController::class, 'trend']);
                 $router->get('/summary',   [AdRevenueController::class, 'summary']);
                 $router->post('/top-rank', [AdRevenueController::class, 'topRank']);
+                $router->post('/now',      [AdRevenueController::class, 'now']);
+                $router->post('/now-diff', [AdRevenueController::class, 'nowDiff']);
             });
 
             // Sync Monitor
