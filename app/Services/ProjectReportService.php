@@ -617,6 +617,7 @@ class ProjectReportService
             } else {
                 $row->is_limited = ($matchedRequests / $adRequests) < 0.8 ? 1 : 0;
             }
+            $row->is_limited = ($matchedRequests / $adRequests) < 0.7 ? 1 : 0;
         }
     }
 
