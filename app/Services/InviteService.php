@@ -72,9 +72,23 @@ class InviteService
             $pendingCommission = (int) round($pendingCommission * ((float) admin_setting('commission_distribution_l1') / 100));
         }
 
+        $invitedUsers = User::query()
+            ->where('invite_user_id', $user->id)
+            ->select(['id', 'email', 'created_at', 'register_metadata'])
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn(User $invitedUser) => [
+                'userId' => (int) $invitedUser->id,
+                'userIdentifier' => (string) $invitedUser->email,
+                'usedAt' => $this->getInviteUsedAt($invitedUser),
+            ])
+            ->values()
+            ->toArray();
+
         return [
             // 'codes' => $user->codes,
-            'invitedUsers' => (int) User::query()->where('invite_user_id', $user->id)->count(),
+            'invitedUsers' => count($invitedUsers),
+            'users' => $invitedUsers,
         ];
     }
 
@@ -141,6 +155,9 @@ class InviteService
             }
 
             $user->invite_user_id = (int) $inviteCodeModel->user_id;
+            $metadata = is_array($user->register_metadata) ? $user->register_metadata : [];
+            $metadata['invite_code_used_at'] = time();
+            $user->register_metadata = $metadata;
             $user->save();
 
             $isMultiUseCode = str_starts_with((string) $inviteCodeModel->code, 'MU-');
@@ -157,5 +174,20 @@ class InviteService
                 ],
             ];
         });
+    }
+
+    /**
+     * Get the time when the invited user used an invitation.
+     */
+    private function getInviteUsedAt(User $user): ?int
+    {
+        $metadata = is_array($user->register_metadata) ? $user->register_metadata : [];
+        $usedAt = $metadata['invite_code_used_at'] ?? null;
+
+        if (is_numeric($usedAt)) {
+            return (int) $usedAt;
+        }
+
+        return $user->created_at ? (int) $user->created_at : null;
     }
 }

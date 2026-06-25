@@ -156,13 +156,19 @@ class RegisterService
             $inviteUserId = $this->handleInviteCode($inviteCode);
         }
 
+        $metadata = $request->input('metadata');
+        if ($inviteUserId) {
+            $metadata = is_array($metadata) ? $metadata : [];
+            $metadata['invite_code_used_at'] = time();
+        }
+
         // 创建用户
         $userService = app(UserService::class);
         $user = $userService->createUser([
             'email' => $email,
             'password' => $password,
             'invite_user_id' => $inviteUserId,
-            'register_metadata' => $request->input('metadata'),
+            'register_metadata' => $metadata,
         ]);
 
         // 保存用户

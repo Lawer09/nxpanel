@@ -732,38 +732,36 @@ POST /api/v3/admin/user/blockedIp/batchDelete
 
 #### 说明
 
-返回当前用户的邀请码列表和汇总统计（对象结构）。
+返回当前用户的邀请统计和被邀请用户列表。
 
 #### 返回字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `codes` | `array` | 当前用户未使用的邀请码列表 |
-| `summary.invitedUsers` | `int` | 已注册邀请用户数 |
-| `summary.totalCommission` | `int` | 累计已获得佣金 |
-| `summary.pendingCommission` | `int` | 待确认佣金（订单已支付但未结算） |
-| `summary.commissionRate` | `int` | 当前佣金比例（%） |
-| `summary.availableCommission` | `int` | 当前可用佣金余额 |
+| `invitedUsers` | `int` | 已注册邀请用户数 |
+| `users` | `array` | 被邀请用户列表 |
+| `users[].userId` | `int` | 被邀请用户 ID |
+| `users[].userIdentifier` | `string` | 用户标识，当前返回用户邮箱 |
+| `users[].usedAt` | `int\|null` | 使用邀请码时间戳；新数据取 `register_metadata.invite_code_used_at`，历史数据无该字段时回退为用户注册时间 `created_at` |
 
 #### 返回示例
 
 ```json
 {
     "data": {
-        "codes": [
+        "invitedUsers": 2,
+        "users": [
             {
-                "id": 101,
-                "code": "AB12CD34",
-                "status": 0
+                "userId": 1002,
+                "userIdentifier": "invitee@example.com",
+                "usedAt": 1780470000
+            },
+            {
+                "userId": 1001,
+                "userIdentifier": "old-invitee@example.com",
+                "usedAt": 1780460000
             }
-        ],
-        "summary": {
-            "invitedUsers": 12,
-            "totalCommission": 5600,
-            "pendingCommission": 800,
-            "commissionRate": 10,
-            "availableCommission": 4200
-        }
+        ]
     }
 }
 ```

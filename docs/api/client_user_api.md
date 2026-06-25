@@ -34,6 +34,27 @@
 | `/api/v3/user/invite-codes/use` | POST | 使用邀请码绑定邀请关系 |
 | `/api/v3/user/invite/summary` | GET | 查询当前用户邀请统计 |
 
+#### `/api/v3/user/invite/summary` 返回补充
+
+该接口除返回邀请总人数 `invitedUsers` 外，还返回 `users` 数组，用于展示被邀请用户标识和使用邀请码时间。
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "invitedUsers": 1,
+    "users": [
+      {
+        "userId": 1002,
+        "userIdentifier": "invitee@example.com",
+        "usedAt": 1780470000
+      }
+    ]
+  }
+}
+```
+
 ### 请求示例
 
 ```http

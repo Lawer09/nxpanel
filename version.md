@@ -431,3 +431,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `isLimited` 聚合结果缓存，恢复每次查询实时读取上一完整小时广告请求聚合数据即可。
+
+## 2026-06-25 邀请统计返回被邀请用户列表
+
+- 日期：2026-06-25
+- 变更摘要：`GET /api/v3/user/invite/summary` 在保留 `invitedUsers` 总人数的基础上新增 `users` 列表，返回被邀请用户 ID、用户标识和使用邀请码时间；注册和补填邀请码时记录 `register_metadata.invite_code_used_at`，历史数据回退使用用户注册时间。
+- 影响范围：`app/Services/InviteService.php`、`app/Services/Auth/RegisterService.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/user_api.md`、`docs/api/client_user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `summary` 中 `users` 返回、邀请码使用时间 metadata 写入逻辑、对应测试和文档说明即可。

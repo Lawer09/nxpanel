@@ -64,9 +64,15 @@ class UserAuthParameterCompatibilityTest extends TestCase
             ->assertJsonPath('data.bound', true)
             ->assertJsonPath('data.inviterUserId', $inviter->id);
 
-        $this->getJson('/api/v3/user/invite/summary?auth_data=' . urlencode($inviterAuth))
+        $summaryResponse = $this->getJson('/api/v3/user/invite/summary?auth_data=' . urlencode($inviterAuth))
             ->assertOk()
-            ->assertJsonPath('data.invitedUsers', 1);
+            ->assertJsonPath('data.invitedUsers', 1)
+            ->assertJsonPath('data.users.0.userId', $invitee->id)
+            ->assertJsonPath('data.users.0.userIdentifier', $invitee->email);
+
+        $invitee->refresh();
+        $usedAt = $summaryResponse->json('data.users.0.usedAt');
+        $this->assertSame($invitee->register_metadata['invite_code_used_at'] ?? null, $usedAt);
     }
 
     public function test_missing_or_invalid_auth_data_is_forbidden(): void
