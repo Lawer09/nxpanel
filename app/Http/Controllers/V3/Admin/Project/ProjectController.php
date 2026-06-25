@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin\Project;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ProjectBatchUpdateAdStatusRequest;
 use App\Http\Requests\Admin\ProjectFetchRequest;
 use App\Http\Requests\Admin\ProjectAggregateRequest;
 use App\Http\Requests\Admin\ProjectSaveRequest;
@@ -77,6 +78,19 @@ class ProjectController extends Controller
             $id = (int) $params['id'];
             $project = $this->projectService->updateStatus($id, $params['status']);
             return $this->ok(ProjectResource::make($project));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        }
+    }
+
+    public function batchUpdateAdStatus(ProjectBatchUpdateAdStatusRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            return $this->ok($this->projectService->batchUpdateAdStatus(
+                $params['ids'],
+                $params['adStatus'] ?? null
+            ));
         } catch (BusinessException $e) {
             return $this->error([$e->getCode(), $e->getMessage()]);
         }

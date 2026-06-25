@@ -13,6 +13,7 @@
 | POST | `/projects/create` | 创建项目 | `ProjectController::store` |
 | POST | `/projects/update` | 编辑项目 | `ProjectController::update` |
 | POST | `/projects/update-status` | 更新项目状态 | `ProjectController::updateStatus` |
+| POST | `/projects/batch-update-ad-status` | 批量更新项目投放状态 | `ProjectController::batchUpdateAdStatus` |
 | POST | `/projects/aggregate` | 手动聚合（同步） | `ProjectController::aggregate` |
 | POST | `/projects/aggregate-async` | 手动聚合（异步） | `ProjectController::aggregateAsync` |
 | GET | `/projects/traffic-accounts` | 流量账号列表 | `ProjectTrafficAccountController::index` |
@@ -376,6 +377,39 @@
 | HTTP 状态码 | 说明 |
 | --- | --- |
 | 404 | 项目不存在 |
+
+### 5.4 批量更新项目投放状态
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-update-ad-status`
+- **控制器**：`ProjectController::batchUpdateAdStatus`
+- **Request**：`ProjectBatchUpdateAdStatusRequest`
+- **说明**：批量更新 `project_projects.ad_status`，不修改系统项目状态 `status`
+
+#### 请求参数（body JSON）
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| ids | int[] | 是 | 项目 ID 数组，单次最多 500 个，不能重复 |
+| adStatus | string/null | 否 | 投放状态，自定义字符串，最大 50 字符；传 `null` 可清空 |
+
+#### 请求示例
+
+```json
+{
+  "ids": [1, 2, 3],
+  "adStatus": "running"
+}
+```
+
+#### 返回示例
+
+```json
+{
+  "requested": 3,
+  "updated": 3,
+  "missingIds": []
+}
+```
 
 ---
 

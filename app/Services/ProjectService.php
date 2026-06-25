@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Project;
 use App\Exceptions\BusinessException;
+use Illuminate\Support\Facades\DB;
 
 class ProjectService
 {
@@ -150,6 +151,47 @@ class ProjectService
         $project->update(['status' => $status]);
 
         return $project;
+    }
+
+    /**
+     * Batch update project ad delivery status.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    public function batchUpdateAdStatus(array $ids, ?string $adStatus): array
+    {
+        $ids = collect($ids)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw new BusinessException([422, '项目ID不能为空']);
+        }
+
+        return DB::transaction(function () use ($ids, $adStatus) {
+            $existingIds = Project::query()
+                ->whereIn('id', $ids->all())
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $missingIds = $ids->diff($existingIds)->values()->all();
+            $updated = 0;
+
+            if ($existingIds->isNotEmpty()) {
+                $updated = Project::query()
+                    ->whereIn('id', $existingIds->all())
+                    ->update(['ad_status' => $adStatus]);
+            }
+
+            return [
+                'requested' => $ids->count(),
+                'updated' => $updated,
+                'missingIds' => $missingIds,
+            ];
+        });
     }
 
     /**

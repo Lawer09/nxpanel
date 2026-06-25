@@ -439,3 +439,11 @@
 - 影响范围：`app/Services/InviteService.php`、`app/Services/Auth/RegisterService.php`、`tests/Feature/UserAuthParameterCompatibilityTest.php`、`docs/api/user_api.md`、`docs/api/client_user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `summary` 中 `users` 返回、邀请码使用时间 metadata 写入逻辑、对应测试和文档说明即可。
+
+## 2026-06-25 项目管理批量更新投放状态
+
+- 日期：2026-06-25
+- 变更摘要：项目管理新增 `POST /api/v3/admin/{securePath}/projects/batch-update-ad-status` 接口，支持按项目 ID 数组批量更新或清空 `project_projects.ad_status`，返回请求数量、实际更新数量和不存在的项目 ID。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateAdStatusRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 Request、Controller 方法、Service 批量更新方法、路由和文档说明即可。
