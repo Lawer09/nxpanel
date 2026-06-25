@@ -610,14 +610,11 @@ class ProjectReportService
             $matchedRequests = (int) ($metrics['matched_requests'] ?? 0);
             $newUsers = (int) ($row->new_users ?? 0);
 
-            if ($adRequests === 0 && $newUsers > 0) {
-                $row->is_limited = 1;
-            } elseif ($adRequests === 0) {
+            if ($adRequests === 0) {
                 $row->is_limited = null;
             } else {
-                $row->is_limited = ($matchedRequests / $adRequests) < 0.8 ? 1 : 0;
+                $row->is_limited = ($matchedRequests / $adRequests) < 0.7 ? 1 : 0;
             }
-            $row->is_limited = ($matchedRequests / $adRequests) < 0.7 ? 1 : 0;
         }
     }
 
