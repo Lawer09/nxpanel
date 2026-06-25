@@ -22,7 +22,8 @@
   "filters": {
     "projectCodes": ["A003"],
     "countries": ["US"],
-    "adStatuses": ["running"]
+    "adStatuses": ["running"],
+    "appPlatforms": ["android"]
   },
   "page": 1,
   "pageSize": 50,
@@ -41,6 +42,7 @@
 | filters.projectCodes | array | 否 | 项目编码过滤 |
 | filters.countries | array | 否 | 国家过滤，内部会转为大写 |
 | filters.adStatuses | array | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
+| filters.appPlatforms | array | 否 | 项目应用平台过滤，匹配 `project_projects.app_platform` |
 | page | integer | 否 | 页码，默认 `1` |
 | pageSize | integer | 否 | 每页条数，默认 `50`，最大 `200` |
 | orderBy | string | 否 | 排序字段 |
@@ -91,6 +93,7 @@
         "projectCode": "A003",
         "isLimited": false,
         "adStatus": "running",
+        "appPlatform": "android",
         "adspowerEnv": "env-placeholder",
         "developerGmail": "developer@example.com",
         "appName": "Example VPN",
@@ -191,7 +194,7 @@
 - `isLimited` 来源于 `ad_revenue_hourly` 上一完整小时数据，通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code`，不额外限定 `platform_code`、`source_platform` 或 `report_type`，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.8` 为 `true`，大于等于 `0.8` 为 `false`
 - 当上一完整小时 `SUM(ad_requests)=0` 时，如果当前报表行聚合后的 `newUsers > 0`，`isLimited` 返回 `true`；否则返回 `null`
 - `isLimited` 使用上一完整小时项目广告请求聚合结果计算，该聚合结果缓存 1 分钟
-- 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainUrl`、`facebookAppId`、`admobAppId`、`firebaseConfigNote`、`storePageUrl` 等
+- 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`appPlatform`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainUrl`、`facebookAppId`、`admobAppId`、`firebaseConfigNote`、`storePageUrl` 等
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
 - CSV 导出保持固定列格式，不附加 `isLimited` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
@@ -216,7 +219,8 @@
   "filters": {
     "projectCodes": ["A003"],
     "countries": ["US"],
-    "adStatuses": ["running"]
+    "adStatuses": ["running"],
+    "appPlatforms": ["android"]
   },
   "orderBy": "adRevenue",
   "orderDirection": "desc"

@@ -14,6 +14,7 @@
 | POST | `/projects/update` | 编辑项目 | `ProjectController::update` |
 | POST | `/projects/update-status` | 更新项目状态 | `ProjectController::updateStatus` |
 | POST | `/projects/batch-update-ad-status` | 批量更新项目投放状态 | `ProjectController::batchUpdateAdStatus` |
+| POST | `/projects/batch-update-app-platform` | 批量更新项目应用平台 | `ProjectController::batchUpdateAppPlatform` |
 | POST | `/projects/aggregate` | 手动聚合（同步） | `ProjectController::aggregate` |
 | POST | `/projects/aggregate-async` | 手动聚合（异步） | `ProjectController::aggregateAsync` |
 | GET | `/projects/traffic-accounts` | 流量账号列表 | `ProjectTrafficAccountController::index` |
@@ -48,6 +49,7 @@
 | keyword | string | 否 | 模糊搜索（匹配 projectCode / projectName） |
 | status | string | 否 | 筛选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态筛选，自定义字符串 |
+| appPlatform | string | 否 | 应用平台筛选，自定义字符串 |
 | packageName | string | 否 | 项目包名精确筛选 |
 | developerGmail | string | 否 | 开发者 Gmail 精确筛选 |
 | ownerId | int | 否 | 按拥有者 ID 筛选 |
@@ -67,6 +69,7 @@
       "department": "技术部",
       "status": "active",
       "adStatus": "running",
+      "appPlatform": "android",
       "adspowerEnv": "env-placeholder",
       "developerGmail": "developer@example.com",
       "appName": "Example VPN",
@@ -151,6 +154,7 @@
 | department | string/null | 所属部门 |
 | status | string | 状态：`active` / `inactive` / `archived` |
 | adStatus | string/null | 投放状态，自定义字符串 |
+| appPlatform | string/null | 应用平台，自定义字符串 |
 | adspowerEnv | string/null | Adspower 环境 |
 | developerGmail | string/null | 开发者 Gmail |
 | appName | string/null | 应用名称 |
@@ -265,6 +269,7 @@
 | department | string | 否 | 所属部门 |
 | status | string | 否 | 默认 `active`，可选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符 |
+| appPlatform | string | 否 | 应用平台，自定义字符串，最大 50 字符 |
 | adspowerEnv | string | 否 | Adspower 环境，最大 100 字符 |
 | developerGmail | string | 否 | 开发者 Gmail，最大 191 字符 |
 | appName | string | 否 | 应用名称，最大 191 字符 |
@@ -318,6 +323,7 @@
 | department | string | 否 | 所属部门 |
 | status | string | 否 | `active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符；传 `null` 可清空 |
+| appPlatform | string | 否 | 应用平台，自定义字符串，最大 50 字符；传 `null` 可清空 |
 | adspowerEnv | string | 否 | Adspower 环境，最大 100 字符；传 `null` 可清空 |
 | developerGmail | string | 否 | 开发者 Gmail，最大 191 字符；传 `null` 可清空 |
 | appName | string | 否 | 应用名称，最大 191 字符；传 `null` 可清空 |
@@ -398,6 +404,37 @@
 {
   "ids": [1, 2, 3],
   "adStatus": "running"
+}
+```
+
+#### 返回示例
+
+```json
+{
+  "requested": 3,
+  "updated": 3,
+  "missingIds": []
+}
+```
+
+### 5.5 批量更新项目应用平台
+- **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-update-app-platform`
+- **控制器**：`ProjectController::batchUpdateAppPlatform`
+- **Request**：`ProjectBatchUpdateAppPlatformRequest`
+- **说明**：批量更新 `project_projects.app_platform`
+
+#### 请求参数（body JSON）
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| ids | int[] | 是 | 项目 ID 数组，单次最多 500 个，不能重复 |
+| appPlatform | string/null | 否 | 应用平台，自定义字符串，最大 50 字符；传 `null` 可清空 |
+
+#### 请求示例
+
+```json
+{
+  "ids": [1, 2, 3],
+  "appPlatform": "android"
 }
 ```
 

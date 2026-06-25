@@ -10,6 +10,7 @@ class ProjectService
 {
     private const PROJECT_METADATA_FIELD_MAP = [
         'adStatus' => 'ad_status',
+        'appPlatform' => 'app_platform',
         'adspowerEnv' => 'adspower_env',
         'developerGmail' => 'developer_gmail',
         'appName' => 'app_name',
@@ -57,6 +58,9 @@ class ProjectService
         }
         if (!empty($params['adStatus'])) {
             $query->where('ad_status', $params['adStatus']);
+        }
+        if (!empty($params['appPlatform'])) {
+            $query->where('app_platform', $params['appPlatform']);
         }
         if (!empty($params['packageName'])) {
             $query->where('package_name', $params['packageName']);
@@ -160,6 +164,26 @@ class ProjectService
      */
     public function batchUpdateAdStatus(array $ids, ?string $adStatus): array
     {
+        return $this->batchUpdateProjectColumn($ids, 'ad_status', $adStatus);
+    }
+
+    /**
+     * Batch update project application platform.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    public function batchUpdateAppPlatform(array $ids, ?string $appPlatform): array
+    {
+        return $this->batchUpdateProjectColumn($ids, 'app_platform', $appPlatform);
+    }
+
+    /**
+     * Batch update one nullable project column and report missing IDs.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    private function batchUpdateProjectColumn(array $ids, string $column, ?string $value): array
+    {
         $ids = collect($ids)
             ->map(fn ($id) => (int) $id)
             ->filter(fn ($id) => $id > 0)
@@ -170,7 +194,7 @@ class ProjectService
             throw new BusinessException([422, '项目ID不能为空']);
         }
 
-        return DB::transaction(function () use ($ids, $adStatus) {
+        return DB::transaction(function () use ($ids, $column, $value) {
             $existingIds = Project::query()
                 ->whereIn('id', $ids->all())
                 ->pluck('id')
@@ -183,7 +207,7 @@ class ProjectService
             if ($existingIds->isNotEmpty()) {
                 $updated = Project::query()
                     ->whereIn('id', $existingIds->all())
-                    ->update(['ad_status' => $adStatus]);
+                    ->update([$column => $value]);
             }
 
             return [

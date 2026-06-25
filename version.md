@@ -447,3 +447,19 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateAdStatusRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Request、Controller 方法、Service 批量更新方法、路由和文档说明即可。
+
+## 2026-06-25 项目应用平台字段与报表筛选
+
+- 日期：2026-06-25
+- 变更摘要：`project_projects` 新增 `app_platform` 应用平台字段；项目管理接口支持 `appPlatform` 读写和列表筛选；项目日报查询、项目日报 CSV 导出与项目小时报表支持通过 `filters.appPlatforms` 按应用平台过滤，且当项目日报返回行包含唯一 `projectCode` 时返回 `appPlatform` 元数据。
+- 影响范围：`database/migrations/2026_06_25_120000_add_app_platform_to_project_projects_table.php`、`app/Services/ProjectService.php`、`app/Services/ProjectReportService.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Requests/Admin/ProjectFetchRequest.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`docs/api/project_api.md`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_06_25_120000_add_app_platform_to_project_projects_table.php`。
+- 回滚说明：回滚新增迁移并移除 `appPlatform` 读写、返回、筛选校验和报表过滤逻辑，同时回退对应文档说明即可。
+
+## 2026-06-25 项目管理批量更新应用平台
+
+- 日期：2026-06-25
+- 变更摘要：项目管理新增 `POST /api/v3/admin/{securePath}/projects/batch-update-app-platform` 接口，支持按项目 ID 数组批量更新或清空 `project_projects.app_platform`，返回请求数量、实际更新数量和不存在的项目 ID。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateAppPlatformRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，依赖 `2026_06_25_120000_add_app_platform_to_project_projects_table.php` 已新增的 `app_platform` 字段。
+- 回滚说明：移除新增 Request、Controller 方法、Service 批量更新方法、路由和文档说明即可。

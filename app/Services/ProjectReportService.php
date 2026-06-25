@@ -10,6 +10,7 @@ class ProjectReportService
 {
     private const PROJECT_METADATA_COLUMNS = [
         'ad_status' => 'adStatus',
+        'app_platform' => 'appPlatform',
         'adspower_env' => 'adspowerEnv',
         'developer_gmail' => 'developerGmail',
         'app_name' => 'appName',
@@ -191,6 +192,7 @@ class ProjectReportService
             $query->whereIn('country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
         $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
 
         if (empty($groupBy)) {
             $sortable = array_merge(array_keys($dimensionMap), array_keys($metricMap));
@@ -346,6 +348,7 @@ class ProjectReportService
             $baseQuery->whereIn('project_daily_aggregates.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
         $this->applyProjectAdStatusFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
 
         $spendMetricsQuery = $this->buildDailySpendMetricSubquery($dateFrom, $dateTo, $filters);
 
@@ -726,6 +729,24 @@ class ProjectReportService
                 ->from('project_projects')
                 ->whereColumn('project_projects.project_code', $projectCodeColumn)
                 ->whereIn('project_projects.ad_status', $adStatuses);
+        });
+    }
+
+    /**
+     * Filter report rows by the application platform stored on project_projects.
+     */
+    private function applyProjectAppPlatformFilter(Builder $query, string $projectCodeColumn, array $filters): void
+    {
+        $appPlatforms = $this->normalizeStringList($filters['appPlatforms'] ?? null);
+        if (empty($appPlatforms)) {
+            return;
+        }
+
+        $query->whereExists(function (Builder $subQuery) use ($projectCodeColumn, $appPlatforms) {
+            $subQuery->selectRaw('1')
+                ->from('project_projects')
+                ->whereColumn('project_projects.project_code', $projectCodeColumn)
+                ->whereIn('project_projects.app_platform', $appPlatforms);
         });
     }
 

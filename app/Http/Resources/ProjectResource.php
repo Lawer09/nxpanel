@@ -21,6 +21,7 @@ class ProjectResource extends JsonResource
             'department'      => $this->department,
             'status'          => $this->status,
             'adStatus'        => $this->ad_status,
+            'appPlatform'     => $this->app_platform,
             'adspowerEnv'     => $this->adspower_env,
             'developerGmail'  => $this->developer_gmail,
             'appName'         => $this->app_name,
