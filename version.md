@@ -463,3 +463,11 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateAppPlatformRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，依赖 `2026_06_25_120000_add_app_platform_to_project_projects_table.php` 已新增的 `app_platform` 字段。
 - 回滚说明：移除新增 Request、Controller 方法、Service 批量更新方法、路由和文档说明即可。
+
+## 2026-06-25 项目报表限流零请求判断修正
+
+- 日期：2026-06-25
+- 变更摘要：项目日报 `isLimited` 字段在上一完整小时广告请求为 0 时，新增通过 `project_report_hourly.install_users` 判断上一小时新增，并通过上一完整小时所属日期、同项目代号在 `project_daily_aggregates` 中聚合的 `SUM(ad_requests)` 判断当日请求；当上一小时请求为 0、上一小时新增大于 0 且当日请求大于 0 时返回 `true`，否则返回 `null`；匹配率阈值保持 `0.7`，缓存键升级为 `project_report:is_limited_metrics:v3:{hour}`。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除上一小时新增与当日请求参与限流判断的逻辑，并将缓存键恢复为旧前缀即可。

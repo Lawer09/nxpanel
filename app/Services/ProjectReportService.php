@@ -608,15 +608,21 @@ class ProjectReportService
                 continue;
             }
 
-            $metrics = $limitMetrics[$projectCode] ?? ['ad_requests' => 0, 'matched_requests' => 0];
-            $adRequests = (int) ($metrics['ad_requests'] ?? 0);
+            $metrics = $limitMetrics[$projectCode] ?? [
+                'hourly_ad_requests' => 0,
+                'matched_requests' => 0,
+                'hourly_new_users' => 0,
+                'daily_ad_requests' => 0,
+            ];
+            $hourlyAdRequests = (int) ($metrics['hourly_ad_requests'] ?? 0);
             $matchedRequests = (int) ($metrics['matched_requests'] ?? 0);
-            $newUsers = (int) ($row->new_users ?? 0);
+            $hourlyNewUsers = (int) ($metrics['hourly_new_users'] ?? 0);
+            $dailyAdRequests = (int) ($metrics['daily_ad_requests'] ?? 0);
 
-            if ($adRequests === 0) {
-                $row->is_limited = null;
+            if ($hourlyAdRequests === 0) {
+                $row->is_limited = $hourlyNewUsers > 0 && $dailyAdRequests > 0 ? 1 : null;
             } else {
-                $row->is_limited = ($matchedRequests / $adRequests) < 0.7 ? 1 : 0;
+                $row->is_limited = ($matchedRequests / $hourlyAdRequests) < 0.7 ? 1 : 0;
             }
         }
     }
@@ -626,15 +632,37 @@ class ProjectReportService
      */
     private function loadPreviousHourLimitMetrics(): array
     {
-        $previousHour = now('Asia/Shanghai')->startOfHour()->subHour()->toDateTimeString();
-        $cacheKey = 'project_report:is_limited_metrics:' . $previousHour;
+        $previousHour = now('Asia/Shanghai')->startOfHour()->subHour();
+        $previousHourDate = $previousHour->toDateString();
+        $previousHourValue = (int) $previousHour->format('G');
+        $previousHourString = $previousHour->toDateTimeString();
+        $cacheKey = 'project_report:is_limited_metrics:v3:' . $previousHourString;
 
-        return Cache::remember($cacheKey, 60, function () use ($previousHour) {
+        return Cache::remember($cacheKey, 60, function () use ($previousHourString, $previousHourDate, $previousHourValue) {
+            $dailyRows = DB::table('project_daily_aggregates')
+                ->where('report_date', '=', $previousHourDate)
+                ->whereNotNull('project_code')
+                ->where('project_code', '!=', '')
+                ->selectRaw('project_code')
+                ->selectRaw('SUM(ad_requests) as daily_ad_requests')
+                ->groupBy('project_code')
+                ->get();
+
+            $hourlyRows = DB::table('project_report_hourly')
+                ->where('date', '=', $previousHourDate)
+                ->where('hour', '=', $previousHourValue)
+                ->whereNotNull('project_code')
+                ->where('project_code', '!=', '')
+                ->selectRaw('project_code')
+                ->selectRaw('SUM(install_users) as hourly_new_users')
+                ->groupBy('project_code')
+                ->get();
+
             $rows = DB::table('project_ad_platform_accounts as papa')
                 ->join('project_projects as p', 'p.project_code', '=', 'papa.project_code')
-                ->leftJoin('ad_revenue_hourly as arh', function ($join) use ($previousHour) {
+                ->leftJoin('ad_revenue_hourly as arh', function ($join) use ($previousHourString) {
                     $join->on('arh.account_id', '=', 'papa.ad_platform_account_id')
-                        ->where('arh.report_hour', '=', $previousHour);
+                        ->where('arh.report_hour', '=', $previousHourString);
                 })
                 ->where('papa.enabled', '=', 1)
                 ->whereNotNull('papa.project_code')
@@ -653,9 +681,41 @@ class ProjectReportService
                 }
 
                 $result[$projectCode] = [
-                    'ad_requests' => (int) ($row->ad_requests ?? 0),
+                    'hourly_ad_requests' => (int) ($row->ad_requests ?? 0),
                     'matched_requests' => (int) ($row->matched_requests ?? 0),
+                    'hourly_new_users' => 0,
+                    'daily_ad_requests' => 0,
                 ];
+            }
+
+            foreach ($hourlyRows as $row) {
+                $projectCode = trim((string) ($row->project_code ?? ''));
+                if ($projectCode === '') {
+                    continue;
+                }
+
+                $result[$projectCode] ??= [
+                    'hourly_ad_requests' => 0,
+                    'matched_requests' => 0,
+                    'hourly_new_users' => 0,
+                    'daily_ad_requests' => 0,
+                ];
+                $result[$projectCode]['hourly_new_users'] = (int) ($row->hourly_new_users ?? 0);
+            }
+
+            foreach ($dailyRows as $row) {
+                $projectCode = trim((string) ($row->project_code ?? ''));
+                if ($projectCode === '') {
+                    continue;
+                }
+
+                $result[$projectCode] ??= [
+                    'hourly_ad_requests' => 0,
+                    'matched_requests' => 0,
+                    'hourly_new_users' => 0,
+                    'daily_ad_requests' => 0,
+                ];
+                $result[$projectCode]['daily_ad_requests'] = (int) ($row->daily_ad_requests ?? 0);
             }
 
             return $result;
