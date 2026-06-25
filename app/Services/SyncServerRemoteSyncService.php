@@ -12,6 +12,7 @@ class SyncServerRemoteSyncService
     public const ENDPOINT_ACCOUNT_META = 'account-meta';
     public const ENDPOINT_APPS = 'apps';
     public const ENDPOINT_REVENUE = 'revenue';
+    public const ENDPOINT_REVENUE_NOW_BACKFILL = 'revenue-now/backfill';
 
     /**
      * Trigger a remote sync endpoint on the configured sync server.

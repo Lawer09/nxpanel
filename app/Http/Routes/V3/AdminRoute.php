@@ -443,6 +443,7 @@ class AdminRoute
                 $router->post('/{server_id}/sync-revenue', [SyncServerController::class, 'syncRevenueByDate']);
                 $router->post('/{server_id}/sync-account-meta', [SyncServerController::class, 'syncAccountMeta']);
                 $router->post('/{server_id}/sync-apps', [SyncServerController::class, 'syncApps']);
+                $router->post('/{server_id}/sync-revenue-now-backfill', [SyncServerController::class, 'syncRevenueNowBackfill']);
             });
 
             // Ad Revenue Report

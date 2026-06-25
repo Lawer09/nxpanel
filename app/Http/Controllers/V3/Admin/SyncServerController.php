@@ -259,6 +259,20 @@ class SyncServerController extends Controller
     }
 
     /**
+     * Trigger remote current revenue aggregate backfill.
+     * POST /admin/sync-servers/{server_id}/sync-revenue-now-backfill
+     */
+    public function syncRevenueNowBackfill(string $serverId, SyncServerRemoteSyncService $remoteSyncService)
+    {
+        return $this->triggerRemoteSyncEndpoint(
+            $serverId,
+            SyncServerRemoteSyncService::ENDPOINT_REVENUE_NOW_BACKFILL,
+            $remoteSyncService,
+            'SyncServer syncRevenueNowBackfill error: '
+        );
+    }
+
+    /**
      * Resolve the sync server and forward a metadata sync request to the remote node.
      */
     private function triggerRemoteSyncEndpoint(

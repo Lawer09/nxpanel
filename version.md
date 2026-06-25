@@ -384,6 +384,14 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Service、Controller 方法、路由和文档说明，并将收益报表同步恢复为旧的远程 `Authorization` 请求头方式即可。
 
+## 2026-06-25 当前收益聚合表远程回填同步
+
+- 日期：2026-06-25
+- 变更摘要：同步服务器管理新增 `POST /api/v3/admin/{securePath}/sync-servers/{server_id}/sync-revenue-now-backfill`，触发远程节点 `POST /api/sync/revenue-now/backfill?key=...`，复用远程同步 Service 的 key 鉴权、远程 `code/msg/data` 解析和返回 URL 脱敏处理。
+- 影响范围：`app/Services/SyncServerRemoteSyncService.php`、`app/Http/Controllers/V3/Admin/SyncServerController.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/sync_servers_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 endpoint 常量、Controller 方法、路由和文档说明即可；其他同步接口不受影响。
+
 ## 2026-06-24 项目报表当前小时限流标记
 
 - 日期：2026-06-24

@@ -152,3 +152,64 @@
 | 404 | 同步服务器不存在 |
 | 422 | `host_ip` 或 `secret_key` 未配置 |
 | 504 | 同步节点连接超时 |
+
+---
+
+## 5. 同步当前收益聚合表
+
+- **方法/路径**：`POST /sync-servers/{server_id}/sync-revenue-now-backfill`
+- **控制器**：`SyncServerController::syncRevenueNowBackfill`
+- **说明**：向同步节点发起 `POST /api/sync/revenue-now/backfill?key=<API_KEY>`，用于触发远程当前收益聚合表回填。
+
+### 5.1 请求参数
+
+| 参数 | 位置 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| server_id | path | string | 是 | 同步服务器唯一 ID |
+
+请求体无必填参数。远程调用使用 `sync_server.secret_key` 作为 `key` query 参数，接口响应中的 `url` 会脱敏为 `key=***`。
+
+### 5.2 返回结构
+
+以下为统一响应外层 `data` 中的内容；外层 `msg` 会透传远程返回的 `msg`，远程 `code != 0` 时本地接口按失败返回。
+
+```json
+{
+  "url": "http://127.0.0.1:8080/api/sync/revenue-now/backfill?key=***",
+  "httpStatus": 200,
+  "code": 0,
+  "msg": "revenue now backfill completed",
+  "data": {
+    "job": "revenue_daily_backfill",
+    "elapsed": "12.34s"
+  }
+}
+```
+
+### 5.3 远程业务失败示例
+
+远程返回 `code=429` 或 `code=500` 时，本地接口外层 `code/msg` 会透传该远程业务码和消息，外层 `data` 中保留脱敏 URL、HTTP 状态和远程上下文。
+
+```json
+{
+  "url": "http://127.0.0.1:8080/api/sync/revenue-now/backfill?key=***",
+  "httpStatus": 200,
+  "code": 429,
+  "msg": "revenue now backfill is already running",
+  "data": {
+    "job": "revenue_daily_backfill",
+    "elapsed": "0s"
+  }
+}
+```
+
+### 5.4 错误码
+
+| HTTP 状态码/业务码 | 说明 |
+| --- | --- |
+| 401 | 远程节点未鉴权 |
+| 404 | 同步服务器不存在 |
+| 422 | `host_ip` 或 `secret_key` 未配置 |
+| 429 | 远程节点任务运行中或触发频率限制 |
+| 500 | 远程节点同步失败或本地转发异常 |
+| 504 | 同步节点连接超时 |
