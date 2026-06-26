@@ -369,6 +369,8 @@ class AdminRoute
                 $router->post('/update-status', [ProjectController::class, 'updateStatus']);
                 $router->post('/batch-update-ad-status', [ProjectController::class, 'batchUpdateAdStatus']);
                 $router->post('/batch-update-app-platform', [ProjectController::class, 'batchUpdateAppPlatform']);
+                $router->post('/batch-update-department', [ProjectController::class, 'batchUpdateDepartment']);
+                $router->get('/departments', [ProjectController::class, 'departments']);
                 $router->post('/aggregate',       [ProjectController::class, 'aggregate']);
                 $router->post('/aggregate-async', [ProjectController::class, 'aggregateAsync']);
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin\Project;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProjectBatchUpdateAdStatusRequest;
 use App\Http\Requests\Admin\ProjectBatchUpdateAppPlatformRequest;
+use App\Http\Requests\Admin\ProjectBatchUpdateDepartmentRequest;
 use App\Http\Requests\Admin\ProjectFetchRequest;
 use App\Http\Requests\Admin\ProjectAggregateRequest;
 use App\Http\Requests\Admin\ProjectSaveRequest;
@@ -108,6 +109,26 @@ class ProjectController extends Controller
         } catch (BusinessException $e) {
             return $this->error([$e->getCode(), $e->getMessage()]);
         }
+    }
+
+    public function batchUpdateDepartment(ProjectBatchUpdateDepartmentRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            return $this->ok($this->projectService->batchUpdateDepartment(
+                $params['ids'],
+                $params['department'] ?? null
+            ));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        }
+    }
+
+    public function departments(): JsonResponse
+    {
+        return $this->ok([
+            'data' => $this->projectService->departments(),
+        ]);
     }
 
     public function aggregate(ProjectAggregateRequest $request): JsonResponse

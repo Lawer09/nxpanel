@@ -17,6 +17,7 @@ class ProjectUpdateRequest extends FormRequest
             'id'          => 'required|integer|min:1',
             'projectName' => 'nullable|string|max:100',
             'ownerName'   => 'nullable|string|max:100',
+            'department'  => 'nullable|string|max:100',
             'status'      => 'nullable|string|in:active,inactive,archived',
             'adStatus'    => 'nullable|string|max:50',
             'appPlatform' => 'nullable|string|max:50',

@@ -783,3 +783,50 @@
 - 所有请求/返回参数均为 **camelCase**
 - 分页接口统一返回 `data` / `total` / `page` / `pageSize`
 - 项目代号（projectCode）在创建接口中全局唯一，重复返回 422
+
+### 5.6 批量更新项目部门
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-update-department`
+- **控制器**：`ProjectController::batchUpdateDepartment`
+- **Request**：`ProjectBatchUpdateDepartmentRequest`
+- **说明**：批量更新 `project_projects.department`，传 `null` 可清空部门。
+
+#### 请求参数（body JSON）
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| ids | int[] | 是 | 项目 ID 数组，单次最多 500 个，不能重复 |
+| department | string/null | 否 | 所属部门，最大 100 字符；传 `null` 可清空 |
+
+#### 请求示例
+
+```json
+{
+  "ids": [1, 2, 3],
+  "department": "技术部"
+}
+```
+
+#### 返回示例
+
+```json
+{
+  "requested": 3,
+  "updated": 3,
+  "missingIds": []
+}
+```
+
+### 5.7 部门列表
+
+- **方法/路径**：`GET /api/v3/admin/{securePath}/projects/departments`
+- **控制器**：`ProjectController::departments`
+- **说明**：从现有 `project_projects.department` 数据中查询非空部门，去重后按部门名称升序返回；不新增独立部门配置表。
+
+#### 返回示例
+
+```json
+{
+  "data": ["产品部", "技术部", "运营部"]
+}
+```

@@ -281,3 +281,10 @@ axios.post(url, payload, { responseType: 'blob' })
 - 前端应优先从响应头 `Content-Disposition` 解析文件名
 - 如果文件名解析失败，可回退为 `project_report_daily.csv`
 - 该接口返回的是 CSV 文件流，前端不要按 `code`、`msg`、`data` 结构解析
+
+## 查询缓存说明
+
+- 项目日报 JSON 查询接口结果会按完整查询参数缓存 60 秒，包含 `data`、`summary`、分页信息、`isLimited`、`adRevenueNow`、`adRevenueDiff` 等返回字段。
+- 缓存 key 会纳入 `dateFrom`、`dateTo`、`groupBy`、`filters`、`page`、`pageSize`、`orderBy`、`orderDirection`；筛选数组会去空、去重并排序，国家筛选统一转为大写。
+- 管理端与应用端复用同一查询 Service，相同参数会共享缓存结果。
+- CSV 导出接口不使用查询缓存，仍按当前筛选条件实时流式导出。

@@ -101,3 +101,9 @@
 - 命令：`project:aggregate-daily`
 - 行为：当前仅聚合 `project_daily_aggregates`，不再同步生成或刷新 `project_report_hourly`
 - 同日重算策略：先删除该日期旧数据，再 upsert 新数据
+
+## 查询缓存说明
+
+- 项目小时报表 JSON 查询接口结果会按完整查询参数缓存 60 秒。
+- 缓存 key 会纳入 `dateFrom`、`dateTo`、`hourFrom`、`hourTo`、`groupBy`、`filters`、`page`、`pageSize`、`orderBy`、`orderDirection`；筛选数组会去空、去重并排序，国家筛选统一转为大写。
+- 该缓存仅影响查询接口，不改变返回结构，也不新增手动清理机制。

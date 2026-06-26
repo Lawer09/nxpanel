@@ -551,3 +551,27 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更，不改变请求参数。
 - 回滚说明：移除 `summary` 当前收益计算与返回字段，并删除对应文档说明即可。
+
+## 2026-06-26 项目报表查询 1 分钟缓存
+
+- 日期：2026-06-26
+- 变更摘要：项目日报和项目小时报表 JSON 查询结果增加 60 秒缓存，缓存 key 覆盖日期、小时、分组、筛选、分页和排序参数；CSV 导出保持实时流式查询，不使用查询缓存。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更，不改变对外接口。
+- 回滚说明：移除 `ProjectReportService` 查询缓存包装和缓存 key 归一化方法，并删除对应文档说明即可。
+
+## 2026-06-26 项目管理 department 创建更新修复
+
+- 日期：2026-06-26
+- 变更摘要：补齐 `project_projects.department` 字段迁移，并修复项目创建、编辑接口对 `department` 参数的校验和保存逻辑；编辑时传 `null` 可清空所属部门。
+- 影响范围：`database/migrations/2026_06_26_120000_add_department_to_project_projects_table.php`、`app/Http/Requests/Admin/ProjectSaveRequest.php`、`app/Http/Requests/Admin/ProjectUpdateRequest.php`、`app/Services/ProjectService.php`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration；回滚会删除 `project_projects.department` 字段。
+- 回滚说明：回滚该 migration，并移除 Request 与 Service 中的 `department` 处理逻辑即可。
+
+## 2026-06-26 项目部门批量更新与列表接口
+
+- 日期：2026-06-26
+- 变更摘要：项目管理新增 `POST /projects/batch-update-department` 批量更新部门接口，以及 `GET /projects/departments` 部门列表接口；部门列表直接从 `project_projects.department` 现有非空数据去重返回，不新增部门表。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateDepartmentRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：依赖本次已新增的 `project_projects.department` 字段迁移；接口本身不新增额外表结构。
+- 回滚说明：移除新增路由、Controller 方法、Request 类、Service 方法和对应文档说明即可。

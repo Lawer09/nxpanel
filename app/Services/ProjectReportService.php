@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectReportService
 {
+    private const QUERY_CACHE_TTL = 60;
+
     private const PROJECT_METADATA_COLUMNS = [
         'ad_status' => 'adStatus',
         'app_platform' => 'appPlatform',
@@ -27,6 +29,16 @@ class ProjectReportService
      * Query project daily aggregate report.
      */
     public function queryDaily(array $validated): array
+    {
+        $params = $this->buildProjectReportCacheParams('daily', $validated);
+
+        return $this->rememberProjectReportQuery('daily', $params, fn () => $this->executeDailyQuery($params));
+    }
+
+    /**
+     * Execute the project daily aggregate report query.
+     */
+    private function executeDailyQuery(array $validated): array
     {
         $definition = $this->buildDailyQueryDefinition($validated);
         $page = (int) ($validated['page'] ?? 1);
@@ -130,6 +142,16 @@ class ProjectReportService
      * Query project hourly report.
      */
     public function queryHourly(array $validated): array
+    {
+        $params = $this->buildProjectReportCacheParams('hourly', $validated);
+
+        return $this->rememberProjectReportQuery('hourly', $params, fn () => $this->executeHourlyQuery($params));
+    }
+
+    /**
+     * Execute the project hourly report query.
+     */
+    private function executeHourlyQuery(array $validated): array
     {
         $dateFrom = $validated['dateFrom'] ?? now()->subDays(1)->toDateString();
         $dateTo = $validated['dateTo'] ?? now()->toDateString();
@@ -273,6 +295,91 @@ class ProjectReportService
             'hourTo' => $hourTo,
             'groupBy' => $groupBy,
         ];
+    }
+
+    /**
+     * Cache project report JSON query results for a short TTL.
+     */
+    private function rememberProjectReportQuery(string $scope, array $params, callable $callback): array
+    {
+        $cacheKey = $this->makeProjectReportCacheKey($scope, $params);
+
+        return Cache::remember($cacheKey, self::QUERY_CACHE_TTL, $callback);
+    }
+
+    /**
+     * Build a stable cache key for project report query parameters.
+     */
+    private function makeProjectReportCacheKey(string $scope, array $params): string
+    {
+        $normalized = $this->normalizeCacheValue($params);
+        $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return sprintf('project_report:%s_query:v1:%s', $scope, md5((string) $payload));
+    }
+
+    /**
+     * Resolve effective query parameters before generating the cache key.
+     */
+    private function buildProjectReportCacheParams(string $scope, array $validated): array
+    {
+        $params = [
+            'dateFrom' => $validated['dateFrom'] ?? now()->subDays(1)->toDateString(),
+            'dateTo' => $validated['dateTo'] ?? now()->toDateString(),
+            'groupBy' => is_array($validated['groupBy'] ?? null) ? array_values($validated['groupBy']) : [],
+            'filters' => is_array($validated['filters'] ?? null) ? $this->normalizeCacheFilters($validated['filters']) : [],
+            'page' => (int) ($validated['page'] ?? 1),
+            'pageSize' => (int) ($validated['pageSize'] ?? 50),
+            'orderBy' => is_string($validated['orderBy'] ?? null) ? $validated['orderBy'] : null,
+            'orderDirection' => $this->normalizeOrderDirection($validated['orderDirection'] ?? null),
+        ];
+
+        if ($scope === 'hourly') {
+            $params['hourFrom'] = isset($validated['hourFrom']) ? (int) $validated['hourFrom'] : null;
+            $params['hourTo'] = isset($validated['hourTo']) ? (int) $validated['hourTo'] : null;
+        }
+
+        return $params;
+    }
+
+    /**
+     * Normalize filters so semantically identical requests share the same cache key.
+     */
+    private function normalizeCacheFilters(array $filters): array
+    {
+        foreach (['projectCodes', 'countries', 'adStatuses', 'appPlatforms'] as $key) {
+            if (array_key_exists($key, $filters)) {
+                $filters[$key] = $this->normalizeStringList($filters[$key]);
+                if ($key === 'countries') {
+                    $filters[$key] = array_map(static fn ($country) => strtoupper($country), $filters[$key]);
+                }
+                sort($filters[$key], SORT_STRING);
+            }
+        }
+
+        return $this->normalizeCacheValue($filters);
+    }
+
+    /**
+     * Recursively sort associative arrays while preserving list order.
+     */
+    private function normalizeCacheValue($value)
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        if (array_is_list($value)) {
+            return array_map(fn ($item) => $this->normalizeCacheValue($item), $value);
+        }
+
+        ksort($value);
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->normalizeCacheValue($item);
+        }
+
+        return $value;
     }
 
     /**

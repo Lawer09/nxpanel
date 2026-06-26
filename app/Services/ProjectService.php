@@ -103,6 +103,7 @@ class ProjectService
             'project_code' => $params['projectCode'],
             'project_name' => $params['projectName'],
             'owner_name'   => $params['ownerName'] ?? null,
+            'department'   => $params['department'] ?? null,
             'status'       => $params['status'] ?? 'active',
             'remark'       => $params['remark'] ?? null,
         ];
@@ -124,9 +125,9 @@ class ProjectService
         if (array_key_exists('ownerName', $params)) {
             $project->owner_name = $params['ownerName'];
         }
-        // if (array_key_exists('department', $params)) {
-        //     $project->department = $params['department'];
-        // }
+        if (array_key_exists('department', $params)) {
+            $project->department = $params['department'];
+        }
         if (array_key_exists('status', $params)) {
             $project->status = $params['status'];
         }
@@ -175,6 +176,40 @@ class ProjectService
     public function batchUpdateAppPlatform(array $ids, ?string $appPlatform): array
     {
         return $this->batchUpdateProjectColumn($ids, 'app_platform', $appPlatform);
+    }
+
+    /**
+     * Batch update project department.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    public function batchUpdateDepartment(array $ids, ?string $department): array
+    {
+        $department = is_string($department) ? trim($department) : $department;
+        if ($department === '') {
+            $department = null;
+        }
+
+        return $this->batchUpdateProjectColumn($ids, 'department', $department);
+    }
+
+    /**
+     * List distinct non-empty departments from existing projects.
+     *
+     * @return array<int, string>
+     */
+    public function departments(): array
+    {
+        return Project::query()
+            ->whereNotNull('department')
+            ->whereRaw("TRIM(department) <> ''")
+            ->distinct()
+            ->selectRaw('TRIM(department) as department')
+            ->orderBy('department')
+            ->pluck('department')
+            ->map(fn ($department) => (string) $department)
+            ->values()
+            ->all();
     }
 
     /**
