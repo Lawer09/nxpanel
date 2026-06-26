@@ -532,6 +532,11 @@ class ProjectReportService
             ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(project_daily_aggregates.traffic_cost))=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_revenue)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(project_daily_aggregates.traffic_cost)),6) END as roi')
             ->first();
 
+        $adRevenueNow = $this->buildDailySummaryNowRevenue($definition);
+        $adRevenueDiff = $adRevenueNow === null
+            ? null
+            : $adRevenueNow - (float) ($row->ad_revenue ?? 0);
+
         return [
             'newUsers' => (int) ($row->new_users ?? 0),
             'reportNewUsers' => (int) ($row->report_new_users ?? 0),
@@ -539,6 +544,8 @@ class ProjectReportService
             'dauUsers' => (int) ($row->dau_users ?? 0),
             'fbDauUsers' => (int) ($row->fb_dau_users ?? 0),
             'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
+            'adRevenueNow' => $this->formatDecimal($adRevenueNow),
+            'adRevenueDiff' => $this->formatDecimal($adRevenueDiff),
             'adRequests' => (int) ($row->ad_requests ?? 0),
             'adMatchedRequests' => (int) ($row->ad_matched_requests ?? 0),
             'adImpressions' => (int) ($row->ad_impressions ?? 0),
@@ -561,6 +568,38 @@ class ProjectReportService
             'roi' => $this->formatDecimal($row->roi ?? null),
             'updatedAt' => $row->updated_at ?? null,
         ];
+    }
+
+    /**
+     * Build current revenue summary using the full filtered project/date range, not paginated rows.
+     */
+    private function buildDailySummaryNowRevenue(array $definition): ?float
+    {
+        $projectCodes = (clone $definition['baseQuery'])
+            ->whereNotNull('project_daily_aggregates.project_code')
+            ->where('project_daily_aggregates.project_code', '!=', '')
+            ->distinct()
+            ->pluck('project_daily_aggregates.project_code')
+            ->map(static fn ($projectCode) => trim((string) $projectCode))
+            ->filter(static fn ($projectCode) => $projectCode !== '')
+            ->values()
+            ->all();
+
+        if (empty($projectCodes)) {
+            return null;
+        }
+
+        $nowRevenue = $this->adRevenueService->getNowRevenueByProjectDate(
+            $projectCodes,
+            $definition['dateFrom'],
+            $definition['dateTo']
+        );
+
+        if (empty($nowRevenue['byProject'])) {
+            return null;
+        }
+
+        return array_sum(array_map(static fn ($amount) => (float) $amount, $nowRevenue['byProject']));
     }
 
     /**

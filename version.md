@@ -527,3 +527,27 @@
 - 影响范围：`app/Console/Commands/AggregateProjectDailyData.php`、`docs/api/project_report_hourly_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `aggregateHourlyReportOneDate()` 调用和小时表写入逻辑，并将日报 upsert 改回单次写入即可。
+
+## 2026-06-26 用户上报失败记录分批写入
+
+- 日期：2026-06-26
+- 变更摘要：`user_report:aggregate` 写入 `v3_user_report_node_fail` 时改为每 500 条分批 `insert`，避免失败记录较多时触发 MySQL prepared statement 占位符数量上限。
+- 影响范围：`app/Console/Commands/AggregateUserReport.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更，不改变对外接口。
+- 回滚说明：将失败记录写入恢复为单次 `insert($insertRows)` 即可。
+
+## 2026-06-26 聚合同步写库批量化
+
+- 日期：2026-06-26
+- 变更摘要：`report_hourly:aggregate`、`perf:aggregate` 中具备稳定唯一键的聚合表写入改为每 500 条分批 `upsert`；投放消耗日报同步改为分批 `upsert`；`StatUserJob` 在 MySQL/MariaDB 路径下按 500 条批量写入用户流量统计，降低逐行写入开销并避免单条 SQL 过大风险。
+- 影响范围：`app/Console/Commands/AggregateReportHourly.php`、`app/Console/Commands/AggregatePerformanceReports.php`、`app/Services/AdSpendSyncService.php`、`app/Jobs/StatUserJob.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更，不改变对外接口。
+- 回滚说明：将上述写入逻辑恢复为原逐行 `updateOrInsert` / `updateOrCreate` / 单行 `upsert` 即可。
+
+## 2026-06-26 项目日报 Summary 当前收益字段
+
+- 日期：2026-06-26
+- 变更摘要：项目日报查询的 `summary` 新增 `adRevenueNow` 与 `adRevenueDiff`，按当前筛选条件下全量项目和日期范围汇总当前收益，不受分页影响；收益差值按 `adRevenueNow - summary.adRevenue` 计算。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更，不改变请求参数。
+- 回滚说明：移除 `summary` 当前收益计算与返回字段，并删除对应文档说明即可。

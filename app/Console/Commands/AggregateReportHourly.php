@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class AggregateReportHourly extends Command
 {
+    private const UPSERT_BATCH_SIZE = 500;
+
     protected $signature = 'report_hourly:aggregate
         {--date= : YYYY-MM-DD}
         {--hour= : 0-23}
@@ -145,27 +147,20 @@ class AggregateReportHourly extends Command
             $merged[$key]['report_count_node'] = (int) $row->report_count_node;
         }
 
-        foreach ($merged as $row) {
-            DB::table('v3_report_user_hourly')->updateOrInsert(
-                [
-                    'date' => $row['date'],
-                    'hour' => $row['hour'],
-                    'user_id' => $row['user_id'],
-                    'app_id' => $row['app_id'],
-                    'app_version' => $row['app_version'],
-                    'country' => $row['country'],
-                ],
-                [
-                    'traffic_usage' => $row['traffic_usage'],
-                    'traffic_use_time' => $row['traffic_use_time'],
-                    'traffic_upload' => $row['traffic_upload'],
-                    'traffic_download' => $row['traffic_download'],
-                    'report_count_user' => $row['report_count_user'],
-                    'report_count_node' => $row['report_count_node'],
-                    'updated_at' => $row['updated_at'],
-                ]
-            );
-        }
+        $this->upsertInBatches(
+            'v3_report_user_hourly',
+            array_values($merged),
+            ['date', 'hour', 'user_id', 'app_id', 'app_version', 'country'],
+            [
+                'traffic_usage',
+                'traffic_use_time',
+                'traffic_upload',
+                'traffic_download',
+                'report_count_user',
+                'report_count_node',
+                'updated_at',
+            ]
+        );
     }
 
     private function aggregateNodeHourly(string $date, int $hour): void
@@ -295,50 +290,44 @@ class AggregateReportHourly extends Command
             $merged[$key]['report_count_user'] = (int) $row->report_count_user;
         }
 
+        $rows = [];
         foreach ($merged as $row) {
             $total = (int) $row['success_count'] + (int) $row['fail_count'];
             $row['success_rate'] = $total > 0 ? round(100 * ((int) $row['success_count']) / $total, 2) : 0.0;
-
-            DB::table('v3_report_node_hourly')->updateOrInsert(
-                [
-                    'date' => $row['date'],
-                    'hour' => $row['hour'],
-                    'node_id' => $row['node_id'],
-                    'node_type' => $row['node_type'],
-                    'node_host' => $row['node_host'],
-                    'node_public_ip' => $row['node_public_ip'],
-                    'probe_stage' => $row['probe_stage'],
-                    'app_id' => $row['app_id'],
-                    'app_version' => $row['app_version'],
-                ],
-                [
-                    'traffic_upload' => $row['traffic_upload'],
-                    'traffic_download' => $row['traffic_download'],
-                    'avg_cpu_usage' => $row['avg_cpu_usage'],
-                    'avg_mem_usage' => $row['avg_mem_usage'],
-                    'max_cpu_usage' => $row['max_cpu_usage'],
-                    'max_mem_usage' => $row['max_mem_usage'],
-                    'avg_disk_usage' => $row['avg_disk_usage'],
-                    'avg_inbound_speed' => $row['avg_inbound_speed'],
-                    'avg_outbound_speed' => $row['avg_outbound_speed'],
-                    'max_inbound_speed' => $row['max_inbound_speed'],
-                    'max_outbound_speed' => $row['max_outbound_speed'],
-                    'avg_tcp_connections' => $row['avg_tcp_connections'],
-                    'max_tcp_connections' => $row['max_tcp_connections'],
-                    'avg_alive_users' => $row['avg_alive_users'],
-                    'max_alive_users' => $row['max_alive_users'],
-                    'avg_delay' => $row['avg_delay'],
-                    'traffic_usage' => $row['traffic_usage'],
-                    'traffic_use_time' => $row['traffic_use_time'],
-                    'success_count' => $row['success_count'],
-                    'fail_count' => $row['fail_count'],
-                    'success_rate' => $row['success_rate'],
-                    'report_count_node' => $row['report_count_node'],
-                    'report_count_user' => $row['report_count_user'],
-                    'updated_at' => $row['updated_at'],
-                ]
-            );
+            $rows[] = $row;
         }
+
+        $this->upsertInBatches(
+            'v3_report_node_hourly',
+            $rows,
+            ['date', 'hour', 'node_id', 'node_type', 'node_host', 'node_public_ip', 'probe_stage', 'app_id', 'app_version'],
+            [
+                'traffic_upload',
+                'traffic_download',
+                'avg_cpu_usage',
+                'avg_mem_usage',
+                'max_cpu_usage',
+                'max_mem_usage',
+                'avg_disk_usage',
+                'avg_inbound_speed',
+                'avg_outbound_speed',
+                'max_inbound_speed',
+                'max_outbound_speed',
+                'avg_tcp_connections',
+                'max_tcp_connections',
+                'avg_alive_users',
+                'max_alive_users',
+                'avg_delay',
+                'traffic_usage',
+                'traffic_use_time',
+                'success_count',
+                'fail_count',
+                'success_rate',
+                'report_count_node',
+                'report_count_user',
+                'updated_at',
+            ]
+        );
     }
 
     private function userKey(string $date, int $hour, int $userId, string $appId, string $appVersion, string $country): string
@@ -349,5 +338,15 @@ class AggregateReportHourly extends Command
     private function nodeKey(string $date, int $hour, int $nodeId, string $nodeType, string $nodeHost, string $nodePublicIp, string $probeStage, string $appId = '', string $appVersion = ''): string
     {
         return implode('|', [$date, $hour, $nodeId, $nodeType, $nodeHost, $nodePublicIp, $probeStage, $appId, $appVersion]);
+    }
+
+    /**
+     * Write aggregate rows in bounded chunks to avoid oversized prepared statements.
+     */
+    private function upsertInBatches(string $table, array $rows, array $uniqueBy, array $updateColumns): void
+    {
+        foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
+            DB::table($table)->upsert($chunk, $uniqueBy, $updateColumns);
+        }
     }
 }

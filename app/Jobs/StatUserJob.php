@@ -16,6 +16,8 @@ class StatUserJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    private const UPSERT_BATCH_SIZE = 500;
+
     protected array $data;
     protected array $server;
     protected string $protocol;
@@ -50,6 +52,12 @@ class StatUserJob implements ShouldQueue
         $recordAt = $this->recordType === 'm'
             ? strtotime(date('Y-m-01'))
             : strtotime(date('Y-m-d'));
+
+        $driver = config('database.default');
+        if ($driver !== 'sqlite' && $driver !== 'pgsql') {
+            $this->processUserStatsForOtherDatabases($recordAt);
+            return;
+        }
 
         foreach ($this->data as $uid => $v) {
             try {
@@ -124,6 +132,44 @@ class StatUserJob implements ShouldQueue
                 'updated_at' => time(),
             ]
         );
+    }
+
+    /**
+     * Batch user traffic increments for MySQL/MariaDB to avoid per-user writes.
+     */
+    protected function processUserStatsForOtherDatabases(int $recordAt): void
+    {
+        $rows = [];
+        $now = time();
+
+        foreach ($this->data as $uid => $v) {
+            if (!is_array($v)) {
+                continue;
+            }
+
+            $rows[] = [
+                'user_id' => (int) $uid,
+                'server_rate' => $this->server['rate'],
+                'record_at' => $recordAt,
+                'record_type' => $this->recordType,
+                'u' => ((int) ($v[0] ?? 0) * $this->server['rate']),
+                'd' => ((int) ($v[1] ?? 0) * $this->server['rate']),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
+            StatUser::upsert(
+                $chunk,
+                ['user_id', 'server_rate', 'record_at', 'record_type'],
+                [
+                    'u' => DB::raw('u + VALUES(u)'),
+                    'd' => DB::raw('d + VALUES(d)'),
+                    'updated_at' => $now,
+                ]
+            );
+        }
     }
 
     /**

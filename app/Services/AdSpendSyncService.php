@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
 use App\Models\AdSpendSyncJob;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +11,7 @@ class AdSpendSyncService
 {
     public const SOURCE_MANUAL = 'manual';
     public const SOURCE_SCHEDULED = 'scheduled';
+    private const UPSERT_BATCH_SIZE = 500;
 
     /**
      * Sync ad spend daily reports for one account and one date range.
@@ -59,6 +59,8 @@ class AdSpendSyncService
             $totalRecords = 0;
             $matchedRecords = 0;
             $unmatchedRecords = 0;
+            $reportRows = [];
+            $now = now();
 
             foreach ($records as $record) {
                 if (!is_array($record)) {
@@ -81,28 +83,28 @@ class AdSpendSyncService
                     $country = '';
                 }
 
-                AdSpendDailyReport::updateOrCreate(
-                    [
-                        'platform_account_id' => $account->id,
-                        'project_code' => $projectCode,
-                        'report_date' => $reportDate,
-                        'country' => $country,
-                    ],
-                    [
-                        'platform_code' => $account->platform_code,
-                        'project_code' => $projectCode,
-                        'impressions' => (int) ($record['impressions'] ?? 0),
-                        'clicks' => (int) ($record['clicks'] ?? 0),
-                        'spend' => $this->toDecimal($record['spend'] ?? 0, true),
-                        'ctr' => $this->toDecimal($record['ctr'] ?? null, false),
-                        'cpm' => $this->toDecimal($record['cpm'] ?? null, false),
-                        'cpc' => $this->toDecimal($record['cpc'] ?? null, false),
-                        'raw_group_name' => $rawGroupName,
-                    ]
-                );
+                $reportKey = implode('|', [$account->id, $projectCode, $reportDate, $country]);
+                $reportRows[$reportKey] = [
+                    'platform_account_id' => $account->id,
+                    'platform_code' => $account->platform_code,
+                    'project_code' => $projectCode,
+                    'report_date' => $reportDate,
+                    'country' => $country,
+                    'impressions' => (int) ($record['impressions'] ?? 0),
+                    'clicks' => (int) ($record['clicks'] ?? 0),
+                    'spend' => $this->toDecimal($record['spend'] ?? 0, true),
+                    'ctr' => $this->toDecimal($record['ctr'] ?? null, false),
+                    'cpm' => $this->toDecimal($record['cpm'] ?? null, false),
+                    'cpc' => $this->toDecimal($record['cpc'] ?? null, false),
+                    'raw_group_name' => $rawGroupName,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
 
                 $matchedRecords++;
             }
+
+            $this->upsertReports(array_values($reportRows));
 
             $job->update([
                 'status' => AdSpendSyncJob::STATUS_SUCCESS,
@@ -160,6 +162,30 @@ class AdSpendSyncService
                 return [strtoupper($value) => $value];
             })
             ->toArray();
+    }
+
+    /**
+     * Write matched spend reports in bounded chunks to avoid oversized prepared statements.
+     */
+    private function upsertReports(array $rows): void
+    {
+        foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
+            DB::table('ad_spend_platform_daily_reports')->upsert(
+                $chunk,
+                ['platform_account_id', 'project_code', 'report_date', 'country'],
+                [
+                    'platform_code',
+                    'impressions',
+                    'clicks',
+                    'spend',
+                    'ctr',
+                    'cpm',
+                    'cpc',
+                    'raw_group_name',
+                    'updated_at',
+                ]
+            );
+        }
     }
 
     /**

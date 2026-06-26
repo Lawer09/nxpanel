@@ -139,6 +139,8 @@
       "dauUsers": 1350,
       "fbDauUsers": 1210,
       "adRevenue": "880.500000",
+      "adRevenueNow": "900.000000",
+      "adRevenueDiff": "19.500000",
       "adRequests": 280000,
       "adMatchedRequests": 255000,
       "adImpressions": 240000,
@@ -175,6 +177,8 @@
 
 - `summary` 为当前筛选条件下的整体汇总，不受分页影响
 - `summary` 与 `data`、`total`、`page`、`pageSize` 同级，位于 `data` 对象内部
+- `summary.adRevenueNow` is the current revenue total for all filtered projects in `dateFrom ~ dateTo`, independent of pagination; it returns `null` when no project or current revenue can be matched
+- `summary.adRevenueDiff = summary.adRevenueNow - summary.adRevenue`, formatted to 6 decimals; current revenue has no country dimension, so summary current revenue is aggregated only by project and date range even when `country` is filtered or grouped
 - 当返回行包含唯一 `projectCode` 时，会附带 `adRevenueNow` 和 `adRevenueDiff`，字段位于返回行一级结构；无当前收益匹配数据时均返回 `null`
 - `adRevenueNow` 来源于 `AdRevenueService::now()` 相同口径，即读取 `ad_revenue_daily_now` 并通过 `project_ad_platform_accounts` 映射到项目代号后聚合
 - `adRevenueDiff = adRevenueNow - adRevenue`，结果保留 6 位小数

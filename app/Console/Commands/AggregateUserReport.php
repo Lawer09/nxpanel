@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Storage;
 
 class AggregateUserReport extends Command
 {
+    private const INSERT_BATCH_SIZE = 500;
+
     protected $signature = 'user_report:aggregate
         {--batch=10000 : 每次处理的最大 payload 数}
         {--bucket= : 指定桶时间(yyyyMMddHHmm, UTC+8)}
@@ -486,7 +488,9 @@ class AggregateUserReport extends Command
             ];
         }, $rows);
 
-        DB::table('v3_user_report_node_fail')->insert($insertRows);
+        foreach (array_chunk($insertRows, self::INSERT_BATCH_SIZE) as $chunk) {
+            DB::table('v3_user_report_node_fail')->insert($chunk);
+        }
 
         foreach ($rows as $row) {
             $this->bumpCacheVersion('v3_user_report_node_fail', $row['date'], (int) $row['hour']);

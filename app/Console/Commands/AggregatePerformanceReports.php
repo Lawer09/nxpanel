@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class AggregatePerformanceReports extends Command
 {
+    private const UPSERT_BATCH_SIZE = 500;
+
     protected $signature = 'perf:aggregate
         {--batch=5000 : 每次从 Redis 弹出的最大条数}
         {--temp : 同时写入 *_temp 调试表}';
@@ -433,6 +435,7 @@ class AggregatePerformanceReports extends Command
             ]);
         });
 
+        $rows = [];
         foreach ($grouped as $items) {
             $first = $items->first();
             $bucket = $this->resolveEventBucket($first);
@@ -452,51 +455,45 @@ class AggregatePerformanceReports extends Command
                 (string) ($first['error_code'] ?? ''),
             ]));
 
-            DB::table('v2_node_probe_aggregated')->updateOrInsert(
-                [
-                    'dimension_hash' => $dimensionHash,
-                ],
-                [
-                    'date' => $bucket['date'],
-                    'hour' => $bucket['hour'],
-                    'minute' => $bucket['minute'],
-                    'node_id' => (int) ($first['node_id'] ?? 0),
-                    'node_ip' => $first['node_ip'] ?? null,
-                    'client_country' => $first['client_country'] ?? null,
-                    'platform' => $first['platform'] ?? null,
-                    'client_isp' => $first['client_isp'] ?? null,
-                    'app_id' => $first['app_id'] ?? null,
-                    'app_version' => $first['app_version'] ?? null,
-                    'probe_stage' => $first['probe_stage'] ?? 'unknown',
-                    'status' => $first['status'] ?? 'unknown',
-                    'error_code' => $first['error_code'] ?? null,
-                    'total_count' => DB::raw('total_count + ' . $items->count()),
-                ]
-            );
+            $rows[] = [
+                'dimension_hash' => $dimensionHash,
+                'date' => $bucket['date'],
+                'hour' => $bucket['hour'],
+                'minute' => $bucket['minute'],
+                'node_id' => (int) ($first['node_id'] ?? 0),
+                'node_ip' => $first['node_ip'] ?? null,
+                'client_country' => $first['client_country'] ?? null,
+                'platform' => $first['platform'] ?? null,
+                'client_isp' => $first['client_isp'] ?? null,
+                'app_id' => $first['app_id'] ?? null,
+                'app_version' => $first['app_version'] ?? null,
+                'probe_stage' => $first['probe_stage'] ?? 'unknown',
+                'status' => $first['status'] ?? 'unknown',
+                'error_code' => $first['error_code'] ?? null,
+                'total_count' => $items->count(),
+            ];
+        }
 
-            if ($writeTemp) {
-                DB::table('v2_node_probe_aggregated_temp')->updateOrInsert(
-                    [
-                        'dimension_hash' => $dimensionHash,
-                    ],
-                    [
-                        'date' => $bucket['date'],
-                        'hour' => $bucket['hour'],
-                        'minute' => $bucket['minute'],
-                        'node_id' => (int) ($first['node_id'] ?? 0),
-                        'node_ip' => $first['node_ip'] ?? null,
-                        'client_country' => $first['client_country'] ?? null,
-                        'platform' => $first['platform'] ?? null,
-                        'client_isp' => $first['client_isp'] ?? null,
-                        'app_id' => $first['app_id'] ?? null,
-                        'app_version' => $first['app_version'] ?? null,
-                        'probe_stage' => $first['probe_stage'] ?? 'unknown',
-                        'status' => $first['status'] ?? 'unknown',
-                        'error_code' => $first['error_code'] ?? null,
-                        'total_count' => DB::raw('total_count + ' . $items->count()),
-                    ]
-                );
-            }
+        $updateColumns = [
+            'date',
+            'hour',
+            'minute',
+            'node_id',
+            'node_ip',
+            'client_country',
+            'platform',
+            'client_isp',
+            'app_id',
+            'app_version',
+            'probe_stage',
+            'status',
+            'error_code',
+            'total_count' => DB::raw('total_count + VALUES(total_count)'),
+        ];
+
+        $this->upsertInBatches('v2_node_probe_aggregated', $rows, ['dimension_hash'], $updateColumns);
+        if ($writeTemp) {
+            $this->upsertInBatches('v2_node_probe_aggregated_temp', $rows, ['dimension_hash'], $updateColumns);
         }
 
         $this->info('Aggregated probe metrics groups: ' . $grouped->count());
@@ -536,12 +533,10 @@ class AggregatePerformanceReports extends Command
             ]);
         });
 
+        $rows = [];
         foreach ($grouped as $items) {
             $first = $items->first();
             $bucket = $this->resolveTrafficBucket($first);
-            $totalSeconds = (int) $items->sum('vpn_user_time_seconds');
-            $totalMb = round((float) $items->sum('vpn_user_traffic_mb'), 3);
-            $reportCount = $items->count();
             $dimensionHash = md5(implode('|', [
                 $bucket['date'],
                 $bucket['hour'],
@@ -556,51 +551,45 @@ class AggregatePerformanceReports extends Command
                 (string) ($first['app_version'] ?? ''),
             ]));
 
-            DB::table('v2_node_traffic_aggregated')->updateOrInsert(
-                [
-                    'dimension_hash' => $dimensionHash,
-                ],
-                [
-                    'date' => $bucket['date'],
-                    'hour' => $bucket['hour'],
-                    'minute' => $bucket['minute'],
-                    'user_id' => (int) ($first['user_id'] ?? 0),
-                    'node_id' => (int) ($first['node_id'] ?? 0),
-                    'node_ip' => $first['node_ip'] ?? null,
-                    'client_country' => $first['client_country'] ?? null,
-                    'platform' => $first['platform'] ?? null,
-                    'client_isp' => $first['client_isp'] ?? null,
-                    'app_id' => $first['app_id'] ?? null,
-                    'app_version' => $first['app_version'] ?? null,
-                    'total_usage_seconds' => DB::raw('total_usage_seconds + ' . $totalSeconds),
-                    'total_usage_mb' => DB::raw('ROUND(total_usage_mb + ' . $totalMb . ', 3)'),
-                    'report_count' => DB::raw('report_count + ' . $reportCount),
-                ]
-            );
+            $rows[] = [
+                'dimension_hash' => $dimensionHash,
+                'date' => $bucket['date'],
+                'hour' => $bucket['hour'],
+                'minute' => $bucket['minute'],
+                'user_id' => (int) ($first['user_id'] ?? 0),
+                'node_id' => (int) ($first['node_id'] ?? 0),
+                'node_ip' => $first['node_ip'] ?? null,
+                'client_country' => $first['client_country'] ?? null,
+                'platform' => $first['platform'] ?? null,
+                'client_isp' => $first['client_isp'] ?? null,
+                'app_id' => $first['app_id'] ?? null,
+                'app_version' => $first['app_version'] ?? null,
+                'total_usage_seconds' => (int) $items->sum('vpn_user_time_seconds'),
+                'total_usage_mb' => round((float) $items->sum('vpn_user_traffic_mb'), 3),
+                'report_count' => $items->count(),
+            ];
+        }
 
-            if ($writeTemp) {
-                DB::table('v2_node_traffic_aggregated_temp')->updateOrInsert(
-                    [
-                        'dimension_hash' => $dimensionHash,
-                    ],
-                    [
-                        'date' => $bucket['date'],
-                        'hour' => $bucket['hour'],
-                        'minute' => $bucket['minute'],
-                        'user_id' => (int) ($first['user_id'] ?? 0),
-                        'node_id' => (int) ($first['node_id'] ?? 0),
-                        'node_ip' => $first['node_ip'] ?? null,
-                        'client_country' => $first['client_country'] ?? null,
-                        'platform' => $first['platform'] ?? null,
-                        'client_isp' => $first['client_isp'] ?? null,
-                        'app_id' => $first['app_id'] ?? null,
-                        'app_version' => $first['app_version'] ?? null,
-                        'total_usage_seconds' => DB::raw('total_usage_seconds + ' . $totalSeconds),
-                        'total_usage_mb' => DB::raw('ROUND(total_usage_mb + ' . $totalMb . ', 3)'),
-                        'report_count' => DB::raw('report_count + ' . $reportCount),
-                    ]
-                );
-            }
+        $updateColumns = [
+            'date',
+            'hour',
+            'minute',
+            'user_id',
+            'node_id',
+            'node_ip',
+            'client_country',
+            'platform',
+            'client_isp',
+            'app_id',
+            'app_version',
+            'total_usage_seconds' => DB::raw('total_usage_seconds + VALUES(total_usage_seconds)'),
+            'total_usage_mb' => DB::raw('ROUND(total_usage_mb + VALUES(total_usage_mb), 3)'),
+            'report_count' => DB::raw('report_count + VALUES(report_count)'),
+        ];
+
+        $this->upsertInBatches('v2_node_traffic_aggregated', $rows, ['dimension_hash'], $updateColumns);
+        if ($writeTemp) {
+            $this->upsertInBatches('v2_node_traffic_aggregated_temp', $rows, ['dimension_hash'], $updateColumns);
         }
 
         $this->info('Aggregated traffic metrics groups: ' . $grouped->count());
@@ -665,6 +654,7 @@ class AggregatePerformanceReports extends Command
             ]);
         });
 
+        $rows = [];
         foreach ($userGrouped as $items) {
             $last = $items->last();
             $userId = (int) ($last['user_id'] ?? 0);
@@ -672,43 +662,34 @@ class AggregatePerformanceReports extends Command
                 continue;
             }
 
-            DB::table('v3_user_report_count')->updateOrInsert(
-                [
-                    'date'    => $last['date'],
-                    'hour'    => (int) $last['hour'],
-                    'minute'  => (int) $last['minute'],
-                    'user_id' => $userId,
-                ],
-                [
-                    'report_count'   => DB::raw('report_count + ' . $items->count()),
-                    'node_count'     => (int) ($items->max('node_count') ?? 0),
-                    'client_country' => $last['client_country'] ?? null,
-                    'client_isp'     => $last['client_isp'] ?? null,
-                    'platform'       => $last['platform'] ?? null,
-                    'app_id'         => $last['app_id'] ?? null,
-                    'app_version'    => $last['app_version'] ?? null,
-                ]
-            );
+            $rows[] = [
+                'date' => $last['date'],
+                'hour' => (int) $last['hour'],
+                'minute' => (int) $last['minute'],
+                'user_id' => $userId,
+                'report_count' => $items->count(),
+                'node_count' => (int) ($items->max('node_count') ?? 0),
+                'client_country' => $last['client_country'] ?? null,
+                'client_isp' => $last['client_isp'] ?? null,
+                'platform' => $last['platform'] ?? null,
+                'app_id' => $last['app_id'] ?? null,
+                'app_version' => $last['app_version'] ?? null,
+            ];
+        }
 
-            if ($writeTemp) {
-                DB::table('v3_user_report_count_temp')->updateOrInsert(
-                    [
-                        'date'    => $last['date'],
-                        'hour'    => (int) $last['hour'],
-                        'minute'  => (int) $last['minute'],
-                        'user_id' => $userId,
-                    ],
-                    [
-                        'report_count'   => DB::raw('report_count + ' . $items->count()),
-                        'node_count'     => (int) ($items->max('node_count') ?? 0),
-                        'client_country' => $last['client_country'] ?? null,
-                        'client_isp'     => $last['client_isp'] ?? null,
-                        'platform'       => $last['platform'] ?? null,
-                        'app_id'         => $last['app_id'] ?? null,
-                        'app_version'    => $last['app_version'] ?? null,
-                    ]
-                );
-            }
+        $updateColumns = [
+            'report_count' => DB::raw('report_count + VALUES(report_count)'),
+            'node_count',
+            'client_country',
+            'client_isp',
+            'platform',
+            'app_id',
+            'app_version',
+        ];
+
+        $this->upsertInBatches('v3_user_report_count', $rows, ['date', 'hour', 'minute', 'user_id'], $updateColumns);
+        if ($writeTemp) {
+            $this->upsertInBatches('v3_user_report_count_temp', $rows, ['date', 'hour', 'minute', 'user_id'], $updateColumns);
         }
 
         $this->info("Aggregated user report counts for " . $userGrouped->count() . " users.");
@@ -1158,6 +1139,16 @@ class AggregatePerformanceReports extends Command
                 'path'  => $path,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Write aggregate rows in bounded chunks to avoid oversized prepared statements.
+     */
+    private function upsertInBatches(string $table, array $rows, array $uniqueBy, array $updateColumns): void
+    {
+        foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
+            DB::table($table)->upsert($chunk, $uniqueBy, $updateColumns);
         }
     }
 }
