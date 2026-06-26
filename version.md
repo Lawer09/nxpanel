@@ -575,3 +575,11 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchUpdateDepartmentRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：依赖本次已新增的 `project_projects.department` 字段迁移；接口本身不新增额外表结构。
 - 回滚说明：移除新增路由、Controller 方法、Request 类、Service 方法和对应文档说明即可。
+
+## 2026-06-26 项目批量保存接口
+
+- 日期：2026-06-26
+- 变更摘要：项目管理新增 `POST /projects/batch-save` 批量保存接口，按 `projectCode` 判断创建或更新项目主表；更新已有项目时只更新显式传入字段，未传字段保持原值，不处理项目关联内容。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchSaveRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无新增数据库结构；依赖 `project_projects` 现有字段。
+- 回滚说明：移除新增路由、Controller 方法、Request 类、Service 批量保存方法和对应文档说明即可。

@@ -367,6 +367,7 @@ class AdminRoute
                 $router->post('/create',       [ProjectController::class, 'store']);
                 $router->post('/update',       [ProjectController::class, 'update']);
                 $router->post('/update-status', [ProjectController::class, 'updateStatus']);
+                $router->post('/batch-save', [ProjectController::class, 'batchSave']);
                 $router->post('/batch-update-ad-status', [ProjectController::class, 'batchUpdateAdStatus']);
                 $router->post('/batch-update-app-platform', [ProjectController::class, 'batchUpdateAppPlatform']);
                 $router->post('/batch-update-department', [ProjectController::class, 'batchUpdateDepartment']);

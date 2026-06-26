@@ -830,3 +830,71 @@
   "data": ["产品部", "技术部", "运营部"]
 }
 ```
+### 5.8 批量保存项目
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-save`
+- **控制器**：`ProjectController::batchSave`
+- **Request**：`ProjectBatchSaveRequest`
+- **说明**：按 `projectCode` 判断项目是否存在；存在则更新，不存在则创建。该接口只处理 `project_projects` 主表字段，不处理流量账号、广告账号、用户 App 绑定等关联内容。
+
+#### 请求参数（body JSON）
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| items | object[] | 是 | 项目数组，单次最多 500 条 |
+| items[].projectCode | string | 是 | 项目代号，同一请求内不能重复 |
+| items[].projectName | string | 新建必填 | 项目名称；更新已有项目时可不传，传了则必须非空 |
+| items[].ownerName | string/null | 否 | 负责人；更新时未传不修改，传 `null` 可清空 |
+| items[].department | string/null | 否 | 部门；更新时未传不修改，传 `null` 可清空 |
+| items[].status | string | 否 | `active` / `inactive` / `archived`；新建默认 `active` |
+| items[].adStatus | string/null | 否 | 投放状态；更新时未传不修改，传 `null` 可清空 |
+| items[].appPlatform | string/null | 否 | 应用平台；更新时未传不修改，传 `null` 可清空 |
+| items[].remark | string/null | 否 | 备注；更新时未传不修改，传 `null` 可清空 |
+
+其他项目元数据字段与创建/编辑项目接口一致，例如 `adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainInfoStatus`、`domainUrl` 等；更新时同样遵循“未传不修改，传 `null` 清空 nullable 字段”。
+
+#### 请求示例
+
+```json
+{
+  "items": [
+    {
+      "projectCode": "A001",
+      "projectName": "Project A",
+      "ownerName": "Alice",
+      "department": "技术部",
+      "status": "active",
+      "adStatus": "running",
+      "appPlatform": "android",
+      "packageName": "com.example.app",
+      "remark": "optional"
+    },
+    {
+      "projectCode": "A002",
+      "department": null
+    }
+  ]
+}
+```
+
+#### 返回示例
+
+```json
+{
+  "created": 1,
+  "updated": 1,
+  "total": 2,
+  "items": [
+    {
+      "projectCode": "A001",
+      "action": "created",
+      "id": 101
+    },
+    {
+      "projectCode": "A002",
+      "action": "updated",
+      "id": 102
+    }
+  ]
+}
+```

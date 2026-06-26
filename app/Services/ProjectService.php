@@ -8,6 +8,14 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectService
 {
+    private const PROJECT_BASE_FIELD_MAP = [
+        'projectName' => 'project_name',
+        'ownerName' => 'owner_name',
+        'department' => 'department',
+        'status' => 'status',
+        'remark' => 'remark',
+    ];
+
     private const PROJECT_METADATA_FIELD_MAP = [
         'adStatus' => 'ad_status',
         'appPlatform' => 'app_platform',
@@ -145,6 +153,70 @@ class ProjectService
         return $project;
     }
 
+    /**
+     * Create or update projects by projectCode without touching related tables.
+     *
+     * @return array{created: int, updated: int, total: int, items: array<int, array{projectCode: string, action: string, id: int}>}
+     */
+    public function batchSave(array $items): array
+    {
+        $projectCodes = collect($items)
+            ->pluck('projectCode')
+            ->map(fn ($code) => trim((string) $code))
+            ->filter(fn ($code) => $code !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($projectCodes)) {
+            throw new BusinessException([422, 'projectCode cannot be empty']);
+        }
+
+        return DB::transaction(function () use ($items, $projectCodes) {
+            $existingProjects = Project::query()
+                ->whereIn('project_code', $projectCodes)
+                ->get()
+                ->keyBy('project_code');
+
+            $created = 0;
+            $updated = 0;
+            $results = [];
+
+            foreach ($items as $item) {
+                $projectCode = trim((string) $item['projectCode']);
+                /** @var Project|null $project */
+                $project = $existingProjects->get($projectCode);
+
+                if ($project) {
+                    $project->fill($this->extractProjectUpdateAttributes($item));
+                    if ($project->isDirty()) {
+                        $project->save();
+                    }
+                    $updated++;
+                    $action = 'updated';
+                } else {
+                    $project = Project::create($this->extractProjectCreateAttributes($item));
+                    $existingProjects->put($projectCode, $project);
+                    $created++;
+                    $action = 'created';
+                }
+
+                $results[] = [
+                    'projectCode' => $projectCode,
+                    'action' => $action,
+                    'id' => (int) $project->id,
+                ];
+            }
+
+            return [
+                'created' => $created,
+                'updated' => $updated,
+                'total' => count($items),
+                'items' => $results,
+            ];
+        });
+    }
+
     public function updateStatus(int $id, string $status): Project
     {
         $project = Project::find($id);
@@ -266,5 +338,37 @@ class ProjectService
         }
 
         return $attributes;
+    }
+
+    /**
+     * Build attributes for creating a project from a batch-save item.
+     */
+    private function extractProjectCreateAttributes(array $params): array
+    {
+        $attributes = [
+            'project_code' => trim((string) $params['projectCode']),
+            'project_name' => $params['projectName'],
+            'owner_name' => $params['ownerName'] ?? null,
+            'department' => $params['department'] ?? null,
+            'status' => $params['status'] ?? 'active',
+            'remark' => $params['remark'] ?? null,
+        ];
+
+        return array_merge($attributes, $this->extractMetadataAttributes($params));
+    }
+
+    /**
+     * Build attributes for updating only fields explicitly present in a batch-save item.
+     */
+    private function extractProjectUpdateAttributes(array $params): array
+    {
+        $attributes = [];
+        foreach (self::PROJECT_BASE_FIELD_MAP as $requestKey => $column) {
+            if (array_key_exists($requestKey, $params)) {
+                $attributes[$column] = $params[$requestKey];
+            }
+        }
+
+        return array_merge($attributes, $this->extractMetadataAttributes($params));
     }
 }
