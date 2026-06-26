@@ -16,7 +16,8 @@ class TicketSave extends FormRequest
         return [
             'subject' => 'required',
             'level' => 'required|in:0,1,2',
-            'message' => 'required'
+            'message' => 'required',
+            'personal_email' => 'nullable|email:strict|max:255'
         ];
     }
 
@@ -26,7 +27,9 @@ class TicketSave extends FormRequest
             'subject.required' => __('Ticket subject cannot be empty'),
             'level.required' => __('Ticket level cannot be empty'),
             'level.in' => __('Incorrect ticket level format'),
-            'message.required' => __('Message cannot be empty')
+            'message.required' => __('Message cannot be empty'),
+            'personal_email.email' => __('Email format is incorrect'),
+            'personal_email.max' => __('Email is too long')
         ];
     }
 }

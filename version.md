@@ -579,7 +579,15 @@
 ## 2026-06-26 项目批量保存接口
 
 - 日期：2026-06-26
-- 变更摘要：项目管理新增 `POST /projects/batch-save` 批量保存接口，按 `projectCode` 判断创建或更新项目主表；更新已有项目时只更新显式传入字段，未传字段保持原值，不处理项目关联内容。
+- 变更摘要：项目管理新增 `POST /projects/batch-save` 批量保存接口，按 `projectCode` 判断创建或更新项目主表；更新已有项目时只更新显式传入字段，未传字段保持原值；接口接收任意数量并在 Service 内每 100 条分批处理，不处理项目关联内容。
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectBatchSaveRequest.php`、`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无新增数据库结构；依赖 `project_projects` 现有字段。
 - 回滚说明：移除新增路由、Controller 方法、Request 类、Service 批量保存方法和对应文档说明即可。
+
+## 2026-06-26 工单多开与个人邮箱字段
+
+- 日期：2026-06-26
+- 变更摘要：用户创建工单时不再限制同一用户只能存在一个未关闭工单；创建工单新增可选 `personal_email` 个人邮箱字段并在用户端工单查询响应中返回。
+- 影响范围：`database/migrations/2026_06_26_130000_add_personal_email_to_v2_ticket_table.php`、`app/Http/Requests/User/TicketSave.php`、`app/Services/TicketService.php`、`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`docs/api/ticket_api.md`、`tests/Feature/TicketCreateTest.php`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration；回滚会删除 `v2_ticket.personal_email` 字段。
+- 回滚说明：回滚该 migration，并恢复 `TicketService::createTicket()` 的未关闭工单限制，移除请求校验、传参、Resource 返回字段、测试和文档说明即可。

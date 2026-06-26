@@ -16,7 +16,7 @@ class ProjectBatchSaveRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items' => 'required|array|min:1|max:500',
+            'items' => 'required|array|min:1',
             'items.*.projectCode' => 'required|string|max:100|distinct',
             'items.*.projectName' => 'sometimes|required|string|max:100',
             'items.*.ownerName' => 'nullable|string|max:100',
@@ -84,10 +84,15 @@ class ProjectBatchSaveRequest extends FormRequest
                 $validator->errors()->add('items', "projectCode {$duplicatedCode} cannot be duplicated");
             }
 
-            $existingCodes = Project::query()
-                ->whereIn('project_code', $codes->all())
-                ->pluck('project_code')
-                ->mapWithKeys(fn ($code) => [(string) $code => true]);
+            $existingCodes = collect();
+            foreach ($codes->chunk(100) as $codeChunk) {
+                $existingCodes = $existingCodes->merge(
+                    Project::query()
+                        ->whereIn('project_code', $codeChunk->all())
+                        ->pluck('project_code')
+                );
+            }
+            $existingCodes = $existingCodes->mapWithKeys(fn ($code) => [(string) $code => true]);
 
             foreach ($items as $index => $item) {
                 if (!is_array($item)) {
@@ -113,7 +118,6 @@ class ProjectBatchSaveRequest extends FormRequest
             'items.required' => 'items are required',
             'items.array' => 'items must be an array',
             'items.min' => 'items cannot be empty',
-            'items.max' => 'at most 500 projects can be saved at once',
             'items.*.projectCode.required' => 'projectCode is required',
             'items.*.projectCode.distinct' => 'projectCode cannot be duplicated',
             'items.*.status.in' => 'status must be active, inactive, or archived',

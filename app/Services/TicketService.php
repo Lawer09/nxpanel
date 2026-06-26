@@ -70,18 +70,18 @@ class TicketService
         $this->sendEmailNotify($ticket, $ticketMessage);
     }
 
-    public function createTicket($userId, $subject, $level, $message)
+    /**
+     * 创建工单并写入首条消息。
+     */
+    public function createTicket($userId, $subject, $level, $message, ?string $personalEmail = null)
     {
         try {
             DB::beginTransaction();
-            if (Ticket::where('status', 0)->where('user_id', $userId)->lockForUpdate()->first()) {
-                DB::rollBack();
-                throw new ApiException('存在未关闭的工单');
-            }
             $ticket = Ticket::create([
                 'user_id' => $userId,
                 'subject' => $subject,
-                'level' => $level
+                'level' => $level,
+                'personal_email' => $personalEmail
             ]);
             if (!$ticket) {
                 throw new ApiException('工单创建失败');

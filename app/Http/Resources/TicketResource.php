@@ -20,6 +20,7 @@ class TicketResource extends JsonResource
             "reply_status" => $this['reply_status'],
             "status" => $this['status'],
             "subject" => $this['subject'],
+            "personal_email" => $this['personal_email'],
             "message" => array_key_exists('message',$this->additional) ? MessageResource::collection($this['message']) : null,
             "created_at" => $this['created_at'],
             "updated_at" => $this['updated_at']

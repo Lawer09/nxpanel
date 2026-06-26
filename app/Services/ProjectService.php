@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectService
 {
+    private const BATCH_SAVE_CHUNK_SIZE = 100;
+
     private const PROJECT_BASE_FIELD_MAP = [
         'projectName' => 'project_name',
         'ownerName' => 'owner_name',
@@ -172,49 +174,73 @@ class ProjectService
             throw new BusinessException([422, 'projectCode cannot be empty']);
         }
 
-        return DB::transaction(function () use ($items, $projectCodes) {
-            $existingProjects = Project::query()
-                ->whereIn('project_code', $projectCodes)
-                ->get()
-                ->keyBy('project_code');
+        $created = 0;
+        $updated = 0;
+        $results = [];
 
-            $created = 0;
-            $updated = 0;
-            $results = [];
+        foreach (array_chunk($items, self::BATCH_SAVE_CHUNK_SIZE) as $itemChunk) {
+            $chunkCodes = collect($itemChunk)
+                ->pluck('projectCode')
+                ->map(fn ($code) => trim((string) $code))
+                ->filter(fn ($code) => $code !== '')
+                ->unique()
+                ->values()
+                ->all();
 
-            foreach ($items as $item) {
-                $projectCode = trim((string) $item['projectCode']);
-                /** @var Project|null $project */
-                $project = $existingProjects->get($projectCode);
+            $chunkResult = DB::transaction(function () use ($itemChunk, $chunkCodes) {
+                $existingProjects = Project::query()
+                    ->whereIn('project_code', $chunkCodes)
+                    ->get()
+                    ->keyBy('project_code');
 
-                if ($project) {
-                    $project->fill($this->extractProjectUpdateAttributes($item));
-                    if ($project->isDirty()) {
-                        $project->save();
+                $chunkCreated = 0;
+                $chunkUpdated = 0;
+                $chunkResults = [];
+
+                foreach ($itemChunk as $item) {
+                    $projectCode = trim((string) $item['projectCode']);
+                    /** @var Project|null $project */
+                    $project = $existingProjects->get($projectCode);
+
+                    if ($project) {
+                        $project->fill($this->extractProjectUpdateAttributes($item));
+                        if ($project->isDirty()) {
+                            $project->save();
+                        }
+                        $chunkUpdated++;
+                        $action = 'updated';
+                    } else {
+                        $project = Project::create($this->extractProjectCreateAttributes($item));
+                        $existingProjects->put($projectCode, $project);
+                        $chunkCreated++;
+                        $action = 'created';
                     }
-                    $updated++;
-                    $action = 'updated';
-                } else {
-                    $project = Project::create($this->extractProjectCreateAttributes($item));
-                    $existingProjects->put($projectCode, $project);
-                    $created++;
-                    $action = 'created';
+
+                    $chunkResults[] = [
+                        'projectCode' => $projectCode,
+                        'action' => $action,
+                        'id' => (int) $project->id,
+                    ];
                 }
 
-                $results[] = [
-                    'projectCode' => $projectCode,
-                    'action' => $action,
-                    'id' => (int) $project->id,
+                return [
+                    'created' => $chunkCreated,
+                    'updated' => $chunkUpdated,
+                    'items' => $chunkResults,
                 ];
-            }
+            });
 
-            return [
-                'created' => $created,
-                'updated' => $updated,
-                'total' => count($items),
-                'items' => $results,
-            ];
-        });
+            $created += $chunkResult['created'];
+            $updated += $chunkResult['updated'];
+            $results = array_merge($results, $chunkResult['items']);
+        }
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'total' => count($items),
+            'items' => $results,
+        ];
     }
 
     public function updateStatus(int $id, string $status): Project

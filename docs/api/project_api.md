@@ -841,7 +841,7 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| items | object[] | 是 | 项目数组，单次最多 500 条 |
+| items | object[] | 是 | 项目数组；接口接收任意数量，服务端每 100 条分批处理 |
 | items[].projectCode | string | 是 | 项目代号，同一请求内不能重复 |
 | items[].projectName | string | 新建必填 | 项目名称；更新已有项目时可不传，传了则必须非空 |
 | items[].ownerName | string/null | 否 | 负责人；更新时未传不修改，传 `null` 可清空 |
