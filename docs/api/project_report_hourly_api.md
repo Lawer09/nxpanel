@@ -1,6 +1,6 @@
 # Project Report Hourly 口径说明
 
-本文档说明 `project_report_hourly` 表字段及计算口径。该表由 `project:aggregate-daily` 在每日聚合后同步产出。
+本文档说明 `project_report_hourly` 表字段及计算口径。注意：`project:aggregate-daily` 已停止同步写入该表，现有查询只读取表内已有数据。
 
 ## 查询接口
 
@@ -99,5 +99,5 @@
 ## 5. 触发方式
 
 - 命令：`project:aggregate-daily`
-- 行为：每个日期先聚合 `project_daily_aggregates`，再同步生成 `project_report_hourly`
+- 行为：当前仅聚合 `project_daily_aggregates`，不再同步生成或刷新 `project_report_hourly`
 - 同日重算策略：先删除该日期旧数据，再 upsert 新数据

@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Log;
 
 class AggregateProjectDailyData extends Command
 {
+    private const UPSERT_BATCH_SIZE = 500;
+
     protected $signature = 'project:aggregate-daily
         {--start-date= : 开始日期(Y-m-d)}
         {--end-date= : 结束日期(Y-m-d)}
@@ -31,7 +33,6 @@ class AggregateProjectDailyData extends Command
             while ($cursor->lte($end)) {
                 $date = $cursor->toDateString();
                 $this->aggregateOneDate($date, $targetProjectCode);
-                $this->aggregateHourlyReportOneDate($date, $targetProjectCode);
                 $cursor->addDay();
             }
 
@@ -227,7 +228,8 @@ class AggregateProjectDailyData extends Command
             ];
         }
 
-        DB::table('project_daily_aggregates')->upsert(
+        $this->upsertInBatches(
+            'project_daily_aggregates',
             $rows,
             ['report_date', 'project_code', 'country'],
             [
@@ -748,18 +750,7 @@ class AggregateProjectDailyData extends Command
             return;
         }
 
-        DB::table('project_report_hourly')->upsert(
-            $rows,
-            ['date', 'hour', 'project_code', 'country'],
-            [
-                'install_users',
-                'dau_users',
-                'ad_revenue',
-                'ad_spend_cost',
-                'ros',
-                'updated_at',
-            ]
-        );
+        // Hourly report synchronization is intentionally disabled.
     }
 
     /**
@@ -1031,6 +1022,16 @@ class AggregateProjectDailyData extends Command
         }
 
         return round($numerator / $denominator, 6);
+    }
+
+    /**
+     * Upsert rows in bounded batches to avoid MySQL prepared statement placeholder limits.
+     */
+    private function upsertInBatches(string $table, array $rows, array $uniqueBy, array $updateColumns): void
+    {
+        foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
+            DB::table($table)->upsert($chunk, $uniqueBy, $updateColumns);
+        }
     }
 
     private function parseJson(string $json)

@@ -519,3 +519,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将上述字段重新加入项目报表元数据映射，并恢复项目报表文档说明即可。
+
+## 2026-06-26 停止项目小时报同步并分批写入日报聚合
+
+- 日期：2026-06-26
+- 变更摘要：`project:aggregate-daily` 停止同步生成或刷新 `project_report_hourly`，仅继续聚合 `project_daily_aggregates`；日报聚合 upsert 改为分批写入，避免数据量较大时触发 MySQL prepared statement 占位符数量上限。
+- 影响范围：`app/Console/Commands/AggregateProjectDailyData.php`、`docs/api/project_report_hourly_api.md`、`docs/api/project_aggregates_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `aggregateHourlyReportOneDate()` 调用和小时表写入逻辑，并将日报 upsert 改回单次写入即可。

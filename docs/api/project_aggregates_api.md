@@ -127,7 +127,7 @@
 }
 ```
 
-说明：该接口会同步调用 `project:aggregate-daily --start-date --end-date`；传入 `projectId` 时会追加 `--project-id`，并且只删除/重建该项目的日报与小时报聚合结果。
+说明：该接口会同步调用 `project:aggregate-daily --start-date --end-date`；传入 `projectId` 时会追加 `--project-id`，并且只删除/重建该项目的日报聚合结果；`project_report_hourly` 已停止由该命令同步。
 
 ---
 
