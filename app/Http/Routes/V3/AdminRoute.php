@@ -421,6 +421,10 @@ class AdminRoute
 
                 $router->get('/errors/top', [FirebaseAnalyticsApiErrorController::class, 'errorsTop']);
                 $router->get('/nodes/quality-rank', [FirebaseAnalyticsNodeController::class, 'qualityRank']);
+                $router->get('/nodes/status', [FirebaseAnalyticsNodeController::class, 'status']);
+                $router->get('/nodes/connection-summary', [FirebaseAnalyticsNodeController::class, 'connectionSummary']);
+                $router->get('/nodes/connection-error-distribution', [FirebaseAnalyticsNodeController::class, 'connectionErrorDistribution']);
+                $router->get('/nodes/connection-results', [FirebaseAnalyticsNodeController::class, 'connectionResults']);
                 $router->get('/server-api-error/summary', [FirebaseAnalyticsApiErrorController::class, 'summary']);
                 $router->get('/server-api-error/trend', [FirebaseAnalyticsApiErrorController::class, 'trend']);
                 $router->get('/server-api-error/http-status-distribution', [FirebaseAnalyticsApiErrorController::class, 'httpStatusDistribution']);

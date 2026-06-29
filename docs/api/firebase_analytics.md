@@ -1,5 +1,109 @@
 # Firebase Analytics API
 
+## Firebase 节点状态与连接明细接口
+
+### GET /nodes/status
+
+节点状态菜单主列表，返回探测与连接合并后的节点视图。
+
+#### 请求参数
+
+继承通用查询参数：`start_time`、`end_time`、`time_field`、`app_id`、`platform`、`app_version`、`user_country`、`user_region`、`network_type`、`isp`、`asn`。
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| node_id | string | 否 | - | 节点 ID |
+| node_name | string | 否 | - | 节点名称 |
+| node_country | string | 否 | - | 节点国家/地区 |
+| node_region | string | 否 | - | 节点区域 |
+| protocol | string | 否 | - | 协议 |
+| diagnosis_status | string | 否 | - | `connect_gap` / `probe_only` / `dual_risk` / `session_risk` / `probe_risk` / `session_only` / `healthy` |
+| sample_scope | string | 否 | all | `all` / `probe_only` / `session_only` / `dual` |
+| page | int | 否 | 1 | 当前页 |
+| page_size | int | 否 | 20 | 每页数量，最大 200 |
+| sort_by | string | 否 | diagnosis_priority | `diagnosis_priority` / `rate_gap` / `probe_success_rate` / `session_success_rate` / `probe_test_count` / `session_count` / `p95_latency_ms` / `p95_connect_ms` / `last_probe_received_at` / `last_session_received_at` |
+| order | string | 否 | 自动 | `asc` / `desc`；未传 `sort_by` 时按 `diagnosis_priority` 升序，其他排序默认降序 |
+
+#### 返回结构
+
+`data.page`、`data.page_size`、`data.total`、`data.items[]`。
+
+`items[]` 固定字段：
+
+- 节点基础：`node_id`、`node_name`、`node_country`、`node_region`、`protocol`
+- 诊断字段：`diagnosis_status`、`diagnosis_priority`、`sample_scope`、`rate_gap`
+- 连接侧：`session_count`、`session_success_count`、`session_fail_count`、`session_success_rate`、`avg_connect_ms`、`p95_connect_ms`、`avg_duration_ms`、`retry_session_count`、`total_bytes`、`session_top_error_code`、`last_session_received_at`
+- 探测侧：`probe_test_count`、`probe_success_count`、`probe_fail_count`、`probe_success_rate`、`avg_latency_ms`、`p95_latency_ms`、`avg_tcp_connect_ms`、`avg_tls_hk_ms`、`avg_proxy_hk_ms`、`probe_top_error_code`、`last_probe_received_at`
+
+#### 诊断口径
+
+| 状态 | 优先级 | 说明 |
+|---|---:|---|
+| connect_gap | 10 | 探测成功率正常、连接成功率低，且两侧成功率差值大于等于 0.3 |
+| dual_risk | 20 | 探测与连接成功率均低于 0.8 |
+| session_risk | 30 | 连接成功率低于 0.8 |
+| probe_risk | 40 | 探测成功率低于 0.8 |
+| probe_only | 50 | 仅有探测样本 |
+| session_only | 60 | 仅有连接样本 |
+| healthy | 100 | 未命中以上风险 |
+
+### GET /nodes/connection-summary
+
+节点详情页顶部连接摘要卡片。
+
+#### 请求参数
+
+继承通用查询参数，并支持节点标识参数：`node_id`、`node_name`、`node_country`、`node_region`、`protocol`。
+
+#### 返回字段
+
+`data.session_count`、`data.success_count`、`data.fail_count`、`data.success_rate`、`data.active_devices`、`data.avg_connect_ms`、`data.p95_connect_ms`、`data.avg_duration_ms`、`data.retry_session_count`、`data.retry_rate`、`data.total_upload_bytes`、`data.total_download_bytes`、`data.total_bytes`、`data.top_error_code`、`data.last_received_at`。
+
+### GET /nodes/connection-error-distribution
+
+节点详情页中部连接错误分布。
+
+#### 请求参数
+
+继承通用查询参数，并支持节点标识参数：`node_id`、`node_name`、`node_country`、`node_region`、`protocol`；额外支持 `limit`，默认 20，最大 200。
+
+#### 返回字段
+
+`data.items[]` 固定包含：`error_stage`、`error_code`、`count`、`ratio`、`affected_devices`。
+
+### GET /nodes/connection-results
+
+节点详情页底部连接明细表格。
+
+#### 请求参数
+
+继承通用查询参数，并支持节点标识参数：`node_id`、`node_name`、`node_country`、`node_region`、`protocol`。
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| success | bool | 否 | - | 是否连接成功 |
+| error_stage | string | 否 | - | 错误阶段 |
+| error_code | string | 否 | - | 错误码 |
+| page | int | 否 | 1 | 当前页 |
+| page_size | int | 否 | 20 | 每页数量，最大 200 |
+| sort_by | string | 否 | received_at | `received_at` / `event_time_ms` / `connect_ms` / `duration_ms` / `retry_count` / `id` |
+| order | string | 否 | desc | `asc` / `desc` |
+
+#### 返回结构
+
+`data.page`、`data.page_size`、`data.total`、`data.items[]`。
+
+`items[]` 固定包含：`id`、`event_id`、`received_at`、`event_time_ms`、`app_id`、`platform`、`app_version`、`device_id`、`user_id`、`user_country`、`user_region`、`network_type`、`isp`、`asn`、`session_id`、`node_id`、`node_name`、`node_country`、`node_region`、`protocol`、`connect_type`、`success`、`connect_ms`、`duration_ms`、`retry_count`、`error_stage`、`error_code`、`error_message`。
+
+#### 数据来源
+
+| 接口 | 数据来源 | 说明 |
+|---|---|---|
+| /nodes/status | firebase_event_vpn_session、firebase_event_vpn_probe_result、firebase_event_common | 按节点、区域、协议合并连接与探测指标 |
+| /nodes/connection-summary | firebase_event_vpn_session、firebase_event_common | 单节点连接汇总 |
+| /nodes/connection-error-distribution | firebase_event_vpn_session、firebase_event_common | 单节点连接错误分布 |
+| /nodes/connection-results | firebase_event_vpn_session、firebase_event_common | 单节点连接明细 |
+
 ## 模块说明
 
 面向管理后台的 Firebase 数据分析模块，提供事件总览、趋势、质量排行、错误分析、明细与筛选项接口。
@@ -69,6 +173,10 @@
 | 地区质量分布 | GET | /dashboard/region-quality | 地区质量分布 |
 | 错误 Top 排行 | GET | /errors/top | 错误排行 |
 | 节点质量排行 | GET | /nodes/quality-rank | 节点质量排行 |
+| 节点状态列表 | GET | /nodes/status | 探测与连接合并后的节点状态视图 |
+| 单节点连接汇总 | GET | /nodes/connection-summary | 节点详情页连接摘要 |
+| 单节点连接错误分布 | GET | /nodes/connection-error-distribution | 节点详情页连接错误分布 |
+| 单节点连接明细 | GET | /nodes/connection-results | 节点详情页连接明细表格 |
 | App 打开汇总 | GET | /app-open/summary | App 打开汇总 |
 | App 打开趋势 | GET | /app-open/trend | App 打开趋势 |
 | 启动类型分布 | GET | /app-open/open-type-distribution | 启动类型分布 |

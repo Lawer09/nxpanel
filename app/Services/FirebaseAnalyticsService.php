@@ -404,6 +404,283 @@ class FirebaseAnalyticsService
         }, 60);
     }
 
+    /**
+     * Query merged node status metrics from VPN session and probe result samples.
+     */
+    public function nodesStatus(array $params): array
+    {
+        return $this->remember('nodes-status', $params, function () use ($params) {
+            $page = max(1, (int) ($params['page'] ?? 1));
+            $pageSize = min(max(1, (int) ($params['page_size'] ?? 20)), 200);
+            $sortBy = $params['sort_by'] ?? 'diagnosis_priority';
+            $order = $params['order'] ?? ($sortBy === 'diagnosis_priority' ? 'asc' : 'desc');
+            $order = $order === 'asc' ? 'asc' : 'desc';
+
+            $sessionQuery = $this->baseSessionQuery($params);
+            $this->applyNodeFilters($sessionQuery, $params, 's');
+            $sessionRows = $sessionQuery
+                ->selectRaw('s.node_id, s.node_name, s.node_country, s.node_region, s.protocol')
+                ->selectRaw('COUNT(*) as session_count')
+                ->selectRaw('SUM(s.success = 1) as session_success_count')
+                ->selectRaw('SUM(s.success = 0) as session_fail_count')
+                ->selectRaw('AVG(s.connect_ms) as avg_connect_ms')
+                ->selectRaw('AVG(s.duration_ms) as avg_duration_ms')
+                ->selectRaw('SUM(COALESCE(s.retry_count, 0) > 0) as retry_session_count')
+                ->selectRaw('SUM(s.total_bytes) as total_bytes')
+                ->selectRaw('MAX(c.received_at) as last_session_received_at')
+                ->groupBy('s.node_id', 's.node_name', 's.node_country', 's.node_region', 's.protocol')
+                ->get();
+
+            $probeQuery = $this->baseProbeResultQuery($params);
+            $this->applyNodeFilters($probeQuery, $params, 'r');
+            $probeRows = $probeQuery
+                ->selectRaw('r.node_id, r.node_name, r.node_country, r.node_region, r.protocol')
+                ->selectRaw('COUNT(*) as probe_test_count')
+                ->selectRaw('SUM(r.success = 1) as probe_success_count')
+                ->selectRaw('SUM(r.success = 0) as probe_fail_count')
+                ->selectRaw('AVG(r.latency_ms) as avg_latency_ms')
+                ->selectRaw('AVG(r.tcp_connect_ms) as avg_tcp_connect_ms')
+                ->selectRaw('AVG(r.tls_hk_ms) as avg_tls_hk_ms')
+                ->selectRaw('AVG(r.proxy_hk_ms) as avg_proxy_hk_ms')
+                ->selectRaw('MAX(c.received_at) as last_probe_received_at')
+                ->groupBy('r.node_id', 'r.node_name', 'r.node_country', 'r.node_region', 'r.protocol')
+                ->get();
+
+            $p95ConnectByNodeKey = $this->p95ValuesByNodeKey('session', 'connect_ms', $params);
+            $p95LatencyByNodeKey = $this->p95ValuesByNodeKey('probe', 'latency_ms', $params);
+            $sessionTopErrors = $this->topErrorCodesByNodeKey('session', $params);
+            $probeTopErrors = $this->topErrorCodesByNodeKey('probe', $params);
+            $itemsByKey = [];
+
+            foreach ($sessionRows as $row) {
+                $key = $this->nodeKeyFromRow($row);
+                $item = $this->emptyNodeStatusItem($row);
+                $sessionCount = (int) $row->session_count;
+                $sessionSuccessCount = (int) $row->session_success_count;
+
+                $item->session_count = $sessionCount;
+                $item->session_success_count = $sessionSuccessCount;
+                $item->session_fail_count = (int) $row->session_fail_count;
+                $item->session_success_rate = $this->safeRate($sessionSuccessCount, $sessionCount);
+                $item->avg_connect_ms = (int) ($row->avg_connect_ms ?? 0);
+                $item->p95_connect_ms = $p95ConnectByNodeKey[$key] ?? null;
+                $item->avg_duration_ms = (int) ($row->avg_duration_ms ?? 0);
+                $item->retry_session_count = (int) ($row->retry_session_count ?? 0);
+                $item->total_bytes = (int) ($row->total_bytes ?? 0);
+                $item->session_top_error_code = $sessionTopErrors[$key] ?? null;
+                $item->last_session_received_at = $row->last_session_received_at;
+                $itemsByKey[$key] = $item;
+            }
+
+            foreach ($probeRows as $row) {
+                $key = $this->nodeKeyFromRow($row);
+                $item = $itemsByKey[$key] ?? $this->emptyNodeStatusItem($row);
+                $probeTestCount = (int) $row->probe_test_count;
+                $probeSuccessCount = (int) $row->probe_success_count;
+
+                $item->probe_test_count = $probeTestCount;
+                $item->probe_success_count = $probeSuccessCount;
+                $item->probe_fail_count = (int) $row->probe_fail_count;
+                $item->probe_success_rate = $this->safeRate($probeSuccessCount, $probeTestCount);
+                $item->avg_latency_ms = (int) ($row->avg_latency_ms ?? 0);
+                $item->p95_latency_ms = $p95LatencyByNodeKey[$key] ?? null;
+                $item->avg_tcp_connect_ms = (int) ($row->avg_tcp_connect_ms ?? 0);
+                $item->avg_tls_hk_ms = (int) ($row->avg_tls_hk_ms ?? 0);
+                $item->avg_proxy_hk_ms = (int) ($row->avg_proxy_hk_ms ?? 0);
+                $item->probe_top_error_code = $probeTopErrors[$key] ?? null;
+                $item->last_probe_received_at = $row->last_probe_received_at;
+                $itemsByKey[$key] = $item;
+            }
+
+            $items = collect(array_values($itemsByKey))->map(function ($item) {
+                $hasSession = $item->session_count > 0;
+                $hasProbe = $item->probe_test_count > 0;
+                $item->sample_scope = $hasSession && $hasProbe
+                    ? 'dual'
+                    : ($hasProbe ? 'probe_only' : 'session_only');
+                $item->rate_gap = $hasSession && $hasProbe
+                    ? round(abs($item->session_success_rate - $item->probe_success_rate), 4)
+                    : null;
+
+                [$item->diagnosis_status, $item->diagnosis_priority] = $this->diagnoseNodeStatus($item);
+                return $item;
+            });
+
+            if (!empty($params['sample_scope']) && $params['sample_scope'] !== 'all') {
+                $items = $items->where('sample_scope', $params['sample_scope'])->values();
+            }
+
+            if (!empty($params['diagnosis_status'])) {
+                $items = $items->where('diagnosis_status', $params['diagnosis_status'])->values();
+            }
+
+            $items = $this->sortCollectionByField($items, $sortBy, $order)->values();
+            $total = $items->count();
+            $items = $items->forPage($page, $pageSize)->values();
+
+            return [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'total' => $total,
+                'items' => $items,
+            ];
+        }, 60);
+    }
+
+    /**
+     * Query connection summary metrics for a single node filter set.
+     */
+    public function nodeConnectionSummary(array $params): array
+    {
+        return $this->remember('node-connection-summary', $params, function () use ($params) {
+            $query = $this->baseSessionQuery($params);
+            $this->applyNodeFilters($query, $params, 's');
+
+            $agg = $query
+                ->selectRaw('COUNT(*) as session_count')
+                ->selectRaw('SUM(s.success = 1) as success_count')
+                ->selectRaw('SUM(s.success = 0) as fail_count')
+                ->selectRaw('COUNT(DISTINCT c.device_id) as active_devices')
+                ->selectRaw('AVG(s.connect_ms) as avg_connect_ms')
+                ->selectRaw('AVG(s.duration_ms) as avg_duration_ms')
+                ->selectRaw('SUM(COALESCE(s.retry_count, 0) > 0) as retry_session_count')
+                ->selectRaw('SUM(s.upload_bytes) as total_upload_bytes')
+                ->selectRaw('SUM(s.download_bytes) as total_download_bytes')
+                ->selectRaw('SUM(s.total_bytes) as total_bytes')
+                ->selectRaw('MAX(c.received_at) as last_received_at')
+                ->first();
+
+            $sessionCount = (int) ($agg->session_count ?? 0);
+            $successCount = (int) ($agg->success_count ?? 0);
+            $retrySessionCount = (int) ($agg->retry_session_count ?? 0);
+
+            return [
+                'session_count' => $sessionCount,
+                'success_count' => $successCount,
+                'fail_count' => (int) ($agg->fail_count ?? 0),
+                'success_rate' => $this->safeRate($successCount, $sessionCount),
+                'active_devices' => (int) ($agg->active_devices ?? 0),
+                'avg_connect_ms' => (int) ($agg->avg_connect_ms ?? 0),
+                'p95_connect_ms' => $this->p95SessionConnectMs($params),
+                'avg_duration_ms' => (int) ($agg->avg_duration_ms ?? 0),
+                'retry_session_count' => $retrySessionCount,
+                'retry_rate' => $this->safeRate($retrySessionCount, $sessionCount),
+                'total_upload_bytes' => (int) ($agg->total_upload_bytes ?? 0),
+                'total_download_bytes' => (int) ($agg->total_download_bytes ?? 0),
+                'total_bytes' => (int) ($agg->total_bytes ?? 0),
+                'top_error_code' => $this->topSessionErrorCode($params),
+                'last_received_at' => $agg->last_received_at ?? null,
+            ];
+        }, 60);
+    }
+
+    /**
+     * Query connection error code distribution for a single node filter set.
+     */
+    public function nodeConnectionErrorDistribution(array $params): array
+    {
+        return $this->remember('node-connection-error-distribution', $params, function () use ($params) {
+            $limit = min(max(1, (int) ($params['limit'] ?? 20)), 200);
+            $base = $this->baseSessionQuery($params);
+            $this->applyNodeFilters($base, $params, 's');
+            $base->whereNotNull('s.error_code');
+            $total = (clone $base)->count();
+
+            $items = $base
+                ->selectRaw('s.error_stage, s.error_code, COUNT(*) as count')
+                ->selectRaw('COUNT(DISTINCT c.device_id) as affected_devices')
+                ->groupBy('s.error_stage', 's.error_code')
+                ->orderByDesc('count')
+                ->limit($limit)
+                ->get()
+                ->map(fn ($item) => (object) [
+                    'error_stage' => $item->error_stage,
+                    'error_code' => $item->error_code,
+                    'count' => (int) $item->count,
+                    'ratio' => $this->safeRate((int) $item->count, (int) $total),
+                    'affected_devices' => (int) $item->affected_devices,
+                ]);
+
+            return [
+                'items' => $items,
+            ];
+        }, 60);
+    }
+
+    /**
+     * Query paginated connection detail rows for a single node filter set.
+     */
+    public function nodeConnectionResults(array $params): array
+    {
+        $page = max(1, (int) ($params['page'] ?? 1));
+        $pageSize = min(max(1, (int) ($params['page_size'] ?? 20)), 200);
+        $sortMap = [
+            'received_at' => 'c.received_at',
+            'event_time_ms' => 'c.event_time_ms',
+            'connect_ms' => 's.connect_ms',
+            'duration_ms' => 's.duration_ms',
+            'retry_count' => 's.retry_count',
+            'id' => 's.event_id',
+        ];
+        $sortBy = $params['sort_by'] ?? 'received_at';
+        $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query = $this->baseSessionQuery($params);
+        $this->applyNodeFilters($query, $params, 's');
+
+        if (array_key_exists('success', $params)) {
+            $query->where('s.success', (bool) $params['success']);
+        }
+        if (!empty($params['error_stage'])) {
+            $query->where('s.error_stage', $params['error_stage']);
+        }
+        if (!empty($params['error_code'])) {
+            $query->where('s.error_code', $params['error_code']);
+        }
+
+        $total = (clone $query)->count();
+        $items = $query
+            ->orderBy($sortMap[$sortBy] ?? $sortMap['received_at'], $order)
+            ->orderBy('s.event_id', $order)
+            ->forPage($page, $pageSize)
+            ->get([
+                's.event_id as id',
+                's.event_id',
+                'c.received_at',
+                'c.event_time_ms',
+                'c.app_id',
+                'c.platform',
+                'c.app_version',
+                'c.device_id',
+                'c.user_id',
+                'c.user_country',
+                'c.user_region',
+                'c.network_type',
+                'c.isp',
+                'c.asn',
+                's.session_id',
+                's.node_id',
+                's.node_name',
+                's.node_country',
+                's.node_region',
+                's.protocol',
+                's.connect_type',
+                's.success',
+                's.connect_ms',
+                's.duration_ms',
+                's.retry_count',
+                's.error_stage',
+                's.error_code',
+                's.error_message',
+            ]);
+
+        return [
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+            'items' => $items,
+        ];
+    }
+
     public function appOpenSummary(array $params): array
     {
         return $this->remember('app-open-summary', $params, function () use ($params) {
@@ -1296,6 +1573,199 @@ class FirebaseAnalyticsService
         if (array_key_exists('success', $params)) {
             $query->where('r.success', (bool) $params['success']);
         }
+    }
+
+    private function applyNodeFilters(Builder $query, array $params, string $alias): void
+    {
+        $map = [
+            'node_id' => 'node_id',
+            'node_name' => 'node_name',
+            'node_country' => 'node_country',
+            'node_region' => 'node_region',
+            'protocol' => 'protocol',
+        ];
+
+        foreach ($map as $param => $column) {
+            if (!empty($params[$param])) {
+                $query->where($alias . '.' . $column, $params[$param]);
+            }
+        }
+    }
+
+    private function emptyNodeStatusItem(object $row): object
+    {
+        return (object) [
+            'node_id' => $row->node_id,
+            'node_name' => $row->node_name,
+            'node_country' => $row->node_country,
+            'node_region' => $row->node_region,
+            'protocol' => $row->protocol,
+            'diagnosis_status' => 'healthy',
+            'diagnosis_priority' => 100,
+            'sample_scope' => 'session_only',
+            'rate_gap' => null,
+            'session_count' => 0,
+            'session_success_count' => 0,
+            'session_fail_count' => 0,
+            'session_success_rate' => 0.0,
+            'avg_connect_ms' => 0,
+            'p95_connect_ms' => null,
+            'avg_duration_ms' => 0,
+            'retry_session_count' => 0,
+            'total_bytes' => 0,
+            'session_top_error_code' => null,
+            'last_session_received_at' => null,
+            'probe_test_count' => 0,
+            'probe_success_count' => 0,
+            'probe_fail_count' => 0,
+            'probe_success_rate' => 0.0,
+            'avg_latency_ms' => 0,
+            'p95_latency_ms' => null,
+            'avg_tcp_connect_ms' => 0,
+            'avg_tls_hk_ms' => 0,
+            'avg_proxy_hk_ms' => 0,
+            'probe_top_error_code' => null,
+            'last_probe_received_at' => null,
+        ];
+    }
+
+    private function nodeKeyFromRow(object $row): string
+    {
+        return implode('|', [
+            (string) ($row->node_id ?? ''),
+            (string) ($row->node_name ?? ''),
+            (string) ($row->node_country ?? ''),
+            (string) ($row->node_region ?? ''),
+            (string) ($row->protocol ?? ''),
+        ]);
+    }
+
+    private function diagnoseNodeStatus(object $item): array
+    {
+        $hasSession = $item->session_count > 0;
+        $hasProbe = $item->probe_test_count > 0;
+        $sessionRisk = $hasSession && $item->session_success_rate < 0.8;
+        $probeRisk = $hasProbe && $item->probe_success_rate < 0.8;
+
+        if ($hasSession && $hasProbe && !$probeRisk && $sessionRisk && ($item->rate_gap ?? 0) >= 0.3) {
+            return ['connect_gap', 10];
+        }
+        if ($hasSession && $hasProbe && $sessionRisk && $probeRisk) {
+            return ['dual_risk', 20];
+        }
+        if ($sessionRisk) {
+            return ['session_risk', 30];
+        }
+        if ($probeRisk) {
+            return ['probe_risk', 40];
+        }
+        if ($hasProbe && !$hasSession) {
+            return ['probe_only', 50];
+        }
+        if ($hasSession && !$hasProbe) {
+            return ['session_only', 60];
+        }
+
+        return ['healthy', 100];
+    }
+
+    private function p95SessionConnectMs(array $params): ?int
+    {
+        $query = $this->baseSessionQuery($params);
+        $this->applyNodeFilters($query, $params, 's');
+
+        $values = $query
+            ->whereNotNull('s.connect_ms')
+            ->orderBy('s.connect_ms')
+            ->pluck('s.connect_ms')
+            ->map(fn ($value) => (int) $value)
+            ->all();
+
+        return $this->percentile95($values);
+    }
+
+    private function p95ValuesByNodeKey(string $source, string $column, array $params): array
+    {
+        $alias = $source === 'probe' ? 'r' : 's';
+        $query = $source === 'probe'
+            ? $this->baseProbeResultQuery($params)
+            : $this->baseSessionQuery($params);
+
+        $this->applyNodeFilters($query, $params, $alias);
+
+        $rows = $query
+            ->whereNotNull($alias . '.' . $column)
+            ->get([
+                $alias . '.node_id',
+                $alias . '.node_name',
+                $alias . '.node_country',
+                $alias . '.node_region',
+                $alias . '.protocol',
+                $alias . '.' . $column . ' as metric_value',
+            ]);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[$this->nodeKeyFromRow($row)][] = (int) $row->metric_value;
+        }
+
+        $result = [];
+        foreach ($grouped as $key => $values) {
+            $result[$key] = $this->percentile95($values);
+        }
+
+        return $result;
+    }
+
+    private function topSessionErrorCode(array $params): ?string
+    {
+        $query = $this->baseSessionQuery($params);
+        $this->applyNodeFilters($query, $params, 's');
+
+        $row = $query
+            ->whereNotNull('s.error_code')
+            ->selectRaw('s.error_code, COUNT(*) as count')
+            ->groupBy('s.error_code')
+            ->orderByDesc('count')
+            ->first();
+
+        return $row->error_code ?? null;
+    }
+
+    private function topErrorCodesByNodeKey(string $source, array $params): array
+    {
+        $alias = $source === 'probe' ? 'r' : 's';
+        $query = $source === 'probe'
+            ? $this->baseProbeResultQuery($params)
+            : $this->baseSessionQuery($params);
+
+        $this->applyNodeFilters($query, $params, $alias);
+
+        $rows = $query
+            ->whereNotNull($alias . '.error_code')
+            ->selectRaw($alias . '.node_id, ' . $alias . '.node_name, ' . $alias . '.node_country, ' . $alias . '.node_region, ' . $alias . '.protocol')
+            ->selectRaw($alias . '.error_code, COUNT(*) as count')
+            ->groupBy(
+                $alias . '.node_id',
+                $alias . '.node_name',
+                $alias . '.node_country',
+                $alias . '.node_region',
+                $alias . '.protocol',
+                $alias . '.error_code'
+            )
+            ->orderBy($alias . '.node_id')
+            ->orderByDesc('count')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $key = $this->nodeKeyFromRow($row);
+            if (!array_key_exists($key, $result)) {
+                $result[$key] = $row->error_code;
+            }
+        }
+
+        return $result;
     }
 
     private function applyCommonFilters(Builder $query, array $params, string $alias = 'c'): Builder

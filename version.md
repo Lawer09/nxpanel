@@ -623,3 +623,11 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsVpnProbeController.php`、`app/Http/Requests/Admin/FirebaseAnalyticsProbeNodeStatsRequest.php`、`app/Services/FirebaseAnalyticsService.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
 - 是否需要迁移：否，复用现有 Firebase 事件与探测结果表；已有查询优化索引可辅助该接口。
 - 回滚说明：移除新增路由、Controller 方法、Request 类、Service 统计方法、测试和文档说明即可。
+
+## 2026-06-29 Firebase 节点状态与连接明细接口
+
+- 日期：2026-06-29
+- 变更摘要：新增管理端 `GET /api/v3/{secure_path}/firebase-analytics/nodes/status`、`/nodes/connection-summary`、`/nodes/connection-error-distribution`、`/nodes/connection-results` 接口，支持查看探测与连接合并后的节点状态、节点连接摘要、连接错误分布和连接明细。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsNodeController.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodesStatusRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionSummaryRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionErrorDistributionRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionResultsRequest.php`、`app/Services/FirebaseAnalyticsService.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
+- 是否需要迁移：否，复用现有 `firebase_event_vpn_session`、`firebase_event_vpn_probe_result`、`firebase_event_common` 表；已有查询优化索引可辅助节点查询。
+- 回滚说明：移除新增路由、Controller 方法、Request 类、Service 查询与统计方法、测试和文档说明即可。

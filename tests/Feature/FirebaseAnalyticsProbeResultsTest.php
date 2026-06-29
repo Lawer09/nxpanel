@@ -245,6 +245,222 @@ class FirebaseAnalyticsProbeResultsTest extends TestCase
         ]))->assertStatus(422);
     }
 
+    public function test_nodes_status_merges_session_and_probe_metrics(): void
+    {
+        $this->seedSession('evt_node_status_session_a', [
+            'node_id' => 'node-a',
+            'node_name' => 'Node A',
+            'success' => 0,
+            'connect_ms' => 900,
+            'retry_count' => 1,
+            'total_bytes' => 2048,
+            'error_code' => 'TCP_TIMEOUT',
+            'received_at' => '2026-06-29 09:00:00',
+        ]);
+        $this->seedProbeResult('evt_node_status_probe_a', [
+            'node_id' => 'node-a',
+            'node_name' => 'Node A',
+            'success' => 1,
+            'latency_ms' => 80,
+            'received_at' => '2026-06-29 09:05:00',
+        ]);
+        $this->seedProbeResult('evt_node_status_probe_b', [
+            'node_id' => 'node-b',
+            'node_name' => 'Node B',
+            'success' => 0,
+            'latency_ms' => 450,
+            'error_code' => 'PROBE_TIMEOUT',
+            'received_at' => '2026-06-29 09:10:00',
+        ]);
+
+        $this->getJson($this->adminFirebaseUri('nodes/status') . '?' . http_build_query([
+            'sort_by' => 'diagnosis_priority',
+            'order' => 'asc',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.page', 1)
+            ->assertJsonPath('data.page_size', 20)
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.items.0.node_id', 'node-a')
+            ->assertJsonPath('data.items.0.diagnosis_status', 'connect_gap')
+            ->assertJsonPath('data.items.0.sample_scope', 'dual')
+            ->assertJsonPath('data.items.0.rate_gap', 1)
+            ->assertJsonPath('data.items.0.session_count', 1)
+            ->assertJsonPath('data.items.0.session_success_rate', 0)
+            ->assertJsonPath('data.items.0.p95_connect_ms', 900)
+            ->assertJsonPath('data.items.0.session_top_error_code', 'TCP_TIMEOUT')
+            ->assertJsonPath('data.items.0.probe_test_count', 1)
+            ->assertJsonPath('data.items.0.probe_success_rate', 1)
+            ->assertJsonPath('data.items.0.p95_latency_ms', 80)
+            ->assertJsonPath('data.items.1.node_id', 'node-b')
+            ->assertJsonPath('data.items.1.diagnosis_status', 'probe_risk')
+            ->assertJsonPath('data.items.1.sample_scope', 'probe_only')
+            ->assertJsonPath('data.items.1.probe_top_error_code', 'PROBE_TIMEOUT');
+    }
+
+    public function test_nodes_status_filters_diagnosis_and_validates_sorting_parameters(): void
+    {
+        $this->seedSession('evt_node_status_filter_session', [
+            'node_id' => 'node-filter',
+            'success' => 1,
+        ]);
+
+        $this->getJson($this->adminFirebaseUri('nodes/status') . '?' . http_build_query([
+            'sample_scope' => 'session_only',
+            'diagnosis_status' => 'session_only',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.items.0.node_id', 'node-filter');
+
+        $this->getJson($this->adminFirebaseUri('nodes/status') . '?' . http_build_query([
+            'sort_by' => 'unsafe_column',
+            'order' => 'sideways',
+        ]))->assertStatus(422);
+    }
+
+    public function test_node_connection_summary_returns_single_node_metrics(): void
+    {
+        $this->seedSession('evt_conn_summary_success', [
+            'node_id' => 'node-summary',
+            'success' => 1,
+            'connect_ms' => 100,
+            'duration_ms' => 60000,
+            'retry_count' => 0,
+            'upload_bytes' => 1000,
+            'download_bytes' => 2000,
+            'total_bytes' => 3000,
+            'device_id' => 'device-a',
+            'received_at' => '2026-06-29 09:00:00',
+        ]);
+        $this->seedSession('evt_conn_summary_fail', [
+            'node_id' => 'node-summary',
+            'success' => 0,
+            'connect_ms' => 900,
+            'duration_ms' => 0,
+            'retry_count' => 2,
+            'upload_bytes' => 10,
+            'download_bytes' => 20,
+            'total_bytes' => 30,
+            'device_id' => 'device-b',
+            'error_code' => 'TCP_TIMEOUT',
+            'received_at' => '2026-06-29 09:05:00',
+        ]);
+
+        $this->getJson($this->adminFirebaseUri('nodes/connection-summary') . '?' . http_build_query([
+            'node_id' => 'node-summary',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.session_count', 2)
+            ->assertJsonPath('data.success_count', 1)
+            ->assertJsonPath('data.fail_count', 1)
+            ->assertJsonPath('data.success_rate', 0.5)
+            ->assertJsonPath('data.active_devices', 2)
+            ->assertJsonPath('data.avg_connect_ms', 500)
+            ->assertJsonPath('data.p95_connect_ms', 900)
+            ->assertJsonPath('data.avg_duration_ms', 30000)
+            ->assertJsonPath('data.retry_session_count', 1)
+            ->assertJsonPath('data.retry_rate', 0.5)
+            ->assertJsonPath('data.total_upload_bytes', 1010)
+            ->assertJsonPath('data.total_download_bytes', 2020)
+            ->assertJsonPath('data.total_bytes', 3030)
+            ->assertJsonPath('data.top_error_code', 'TCP_TIMEOUT')
+            ->assertJsonPath('data.last_received_at', '2026-06-29 09:05:00');
+    }
+
+    public function test_node_connection_error_distribution_groups_error_codes(): void
+    {
+        $this->seedSession('evt_conn_error_a', [
+            'node_id' => 'node-errors',
+            'success' => 0,
+            'error_stage' => 'tcp_connect',
+            'error_code' => 'TCP_TIMEOUT',
+            'device_id' => 'device-a',
+        ]);
+        $this->seedSession('evt_conn_error_b', [
+            'node_id' => 'node-errors',
+            'success' => 0,
+            'error_stage' => 'tcp_connect',
+            'error_code' => 'TCP_TIMEOUT',
+            'device_id' => 'device-b',
+        ]);
+        $this->seedSession('evt_conn_error_c', [
+            'node_id' => 'node-errors',
+            'success' => 0,
+            'error_stage' => 'dns',
+            'error_code' => 'DNS_FAILED',
+            'device_id' => 'device-a',
+        ]);
+
+        $this->getJson($this->adminFirebaseUri('nodes/connection-error-distribution') . '?' . http_build_query([
+            'node_id' => 'node-errors',
+            'limit' => 1,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.items.0.error_stage', 'tcp_connect')
+            ->assertJsonPath('data.items.0.error_code', 'TCP_TIMEOUT')
+            ->assertJsonPath('data.items.0.count', 2)
+            ->assertJsonPath('data.items.0.ratio', 0.6667)
+            ->assertJsonPath('data.items.0.affected_devices', 2);
+    }
+
+    public function test_node_connection_results_filters_paginates_and_returns_detail_fields(): void
+    {
+        $this->seedSession('evt_conn_result_match', [
+            'node_id' => 'node-results',
+            'session_id' => 'sess-match',
+            'connect_type' => 'retry',
+            'success' => 0,
+            'connect_ms' => 800,
+            'duration_ms' => 0,
+            'retry_count' => 2,
+            'error_stage' => 'tcp_connect',
+            'error_code' => 'TCP_TIMEOUT',
+            'error_message' => 'connect timeout',
+            'received_at' => '2026-06-29 09:00:00',
+        ]);
+        $this->seedSession('evt_conn_result_other', [
+            'node_id' => 'node-results',
+            'session_id' => 'sess-other',
+            'success' => 1,
+            'connect_ms' => 100,
+            'error_stage' => null,
+            'error_code' => null,
+            'received_at' => '2026-06-29 09:10:00',
+        ]);
+
+        $this->getJson($this->adminFirebaseUri('nodes/connection-results') . '?' . http_build_query([
+            'node_id' => 'node-results',
+            'success' => false,
+            'error_stage' => 'tcp_connect',
+            'error_code' => 'TCP_TIMEOUT',
+            'page' => 1,
+            'page_size' => 1,
+            'sort_by' => 'connect_ms',
+            'order' => 'desc',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.page', 1)
+            ->assertJsonPath('data.page_size', 1)
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.items.0.id', 'evt_conn_result_match')
+            ->assertJsonPath('data.items.0.event_id', 'evt_conn_result_match')
+            ->assertJsonPath('data.items.0.session_id', 'sess-match')
+            ->assertJsonPath('data.items.0.node_id', 'node-results')
+            ->assertJsonPath('data.items.0.connect_type', 'retry')
+            ->assertJsonPath('data.items.0.success', 0)
+            ->assertJsonPath('data.items.0.connect_ms', 800)
+            ->assertJsonPath('data.items.0.retry_count', 2)
+            ->assertJsonPath('data.items.0.error_stage', 'tcp_connect')
+            ->assertJsonPath('data.items.0.error_code', 'TCP_TIMEOUT')
+            ->assertJsonPath('data.items.0.error_message', 'connect timeout');
+
+        $this->getJson($this->adminFirebaseUri('nodes/connection-results') . '?' . http_build_query([
+            'sort_by' => 'unsafe_column',
+            'order' => 'sideways',
+        ]))->assertStatus(422);
+    }
+
     public function test_region_quality_aggregates_session_metrics_without_per_region_queries(): void
     {
         $this->seedSession('evt_region_sg_success', [
@@ -327,18 +543,25 @@ class FirebaseAnalyticsProbeResultsTest extends TestCase
 
         Schema::create('firebase_event_vpn_session', function ($table) {
             $table->string('event_id')->primary();
+            $table->string('session_id', 64)->nullable();
             $table->string('node_id', 128)->nullable();
             $table->string('node_host', 255)->nullable();
             $table->string('node_name', 128)->nullable();
             $table->string('node_country', 16)->nullable();
             $table->string('node_region', 64)->nullable();
             $table->string('protocol', 64)->nullable();
+            $table->string('connect_type', 32)->nullable();
             $table->boolean('success')->nullable();
             $table->bigInteger('connect_ms')->nullable();
             $table->bigInteger('duration_ms')->nullable();
+            $table->bigInteger('upload_bytes')->nullable();
+            $table->bigInteger('download_bytes')->nullable();
             $table->bigInteger('total_bytes')->nullable();
             $table->integer('retry_count')->nullable();
+            $table->string('fail_stage', 32)->nullable();
+            $table->string('error_stage', 64)->nullable();
             $table->string('error_code', 64)->nullable();
+            $table->string('error_message', 255)->nullable();
         });
 
         Schema::create('firebase_event_vpn_probe', function ($table) {
@@ -447,18 +670,25 @@ class FirebaseAnalyticsProbeResultsTest extends TestCase
 
         DB::table('firebase_event_vpn_session')->insert([
             'event_id' => $eventId,
+            'session_id' => $overrides['session_id'] ?? 'sess-' . $eventId,
             'node_id' => $overrides['node_id'] ?? 'node-sg-01',
             'node_host' => $overrides['node_host'] ?? 'sg01.example.test',
             'node_name' => $overrides['node_name'] ?? 'Singapore 01',
             'node_country' => $overrides['node_country'] ?? 'SG',
             'node_region' => $overrides['node_region'] ?? 'Singapore',
             'protocol' => $overrides['protocol'] ?? 'vless_reality',
+            'connect_type' => $overrides['connect_type'] ?? 'auto',
             'success' => $overrides['success'] ?? 1,
             'connect_ms' => $overrides['connect_ms'] ?? 120,
             'duration_ms' => $overrides['duration_ms'] ?? 60000,
+            'upload_bytes' => $overrides['upload_bytes'] ?? 512,
+            'download_bytes' => $overrides['download_bytes'] ?? 512,
             'total_bytes' => $overrides['total_bytes'] ?? 1024,
             'retry_count' => $overrides['retry_count'] ?? 0,
+            'fail_stage' => $overrides['fail_stage'] ?? null,
+            'error_stage' => $overrides['error_stage'] ?? null,
             'error_code' => $overrides['error_code'] ?? null,
+            'error_message' => $overrides['error_message'] ?? null,
         ]);
     }
 
