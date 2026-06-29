@@ -797,7 +797,7 @@ class ProjectReportService
             $dailyAdRequests = (int) ($metrics['daily_ad_requests'] ?? 0);
 
             if ($hourlyAdRequests === 0) {
-                $row->is_limited = $dailyAdRequests > 0 ? 1 : null;
+                $row->is_limited = 0;
             } else {
                 $row->is_limited = ($matchedRequests / $hourlyAdRequests) < 0.7 ? 1 : 0;
             }
