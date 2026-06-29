@@ -12,6 +12,7 @@ class AdSpendSyncService
     public const SOURCE_MANUAL = 'manual';
     public const SOURCE_SCHEDULED = 'scheduled';
     private const UPSERT_BATCH_SIZE = 500;
+    private const FETCH_PAGE_SIZE = 500;
 
     /**
      * Sync ad spend daily reports for one account and one date range.
@@ -28,7 +29,7 @@ class AdSpendSyncService
             'dims' => ['date', 'group_name', 'group_id', 'country'],
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'size' => 200,
+            'size' => self::FETCH_PAGE_SIZE,
         ];
 
         $job = AdSpendSyncJob::create([
@@ -53,7 +54,6 @@ class AdSpendSyncService
         ]);
 
         try {
-            $records = $platformService->fetchDailyRecords($account, $startDate, $endDate, 200);
             $projectCodeLookup = $this->loadProjectCodeLookup();
 
             $totalRecords = 0;
@@ -62,46 +62,28 @@ class AdSpendSyncService
             $reportRows = [];
             $now = now();
 
-            foreach ($records as $record) {
-                if (!is_array($record)) {
-                    continue;
+            foreach ($platformService->fetchDailyRecordPages($account, $startDate, $endDate, self::FETCH_PAGE_SIZE) as $records) {
+                foreach ($records as $record) {
+                    if (!is_array($record)) {
+                        continue;
+                    }
+
+                    $totalRecords++;
+
+                    $row = $this->buildReportRow($account, $record, $projectCodeLookup, $now);
+                    if ($row === null) {
+                        $unmatchedRecords++;
+                        continue;
+                    }
+
+                    $reportRows[$this->reportRowKey($row)] = $row;
+                    $matchedRecords++;
+
+                    if (count($reportRows) >= self::UPSERT_BATCH_SIZE) {
+                        $this->upsertReports(array_values($reportRows));
+                        $reportRows = [];
+                    }
                 }
-
-                $totalRecords++;
-
-                $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
-                $projectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
-                $reportDate = (string) ($record['date'] ?? '');
-
-                if ($reportDate === '' || $projectCode === '') {
-                    $unmatchedRecords++;
-                    continue;
-                }
-
-                $country = (string) ($record['country'] ?? '');
-                if ($country === 'null') {
-                    $country = '';
-                }
-
-                $reportKey = implode('|', [$account->id, $projectCode, $reportDate, $country]);
-                $reportRows[$reportKey] = [
-                    'platform_account_id' => $account->id,
-                    'platform_code' => $account->platform_code,
-                    'project_code' => $projectCode,
-                    'report_date' => $reportDate,
-                    'country' => $country,
-                    'impressions' => (int) ($record['impressions'] ?? 0),
-                    'clicks' => (int) ($record['clicks'] ?? 0),
-                    'spend' => $this->toDecimal($record['spend'] ?? 0, true),
-                    'ctr' => $this->toDecimal($record['ctr'] ?? null, false),
-                    'cpm' => $this->toDecimal($record['cpm'] ?? null, false),
-                    'cpc' => $this->toDecimal($record['cpc'] ?? null, false),
-                    'raw_group_name' => $rawGroupName,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-
-                $matchedRecords++;
             }
 
             $this->upsertReports(array_values($reportRows));
@@ -149,9 +131,58 @@ class AdSpendSyncService
         }
     }
 
+    /**
+     * Build a normalized report row or return null when the source record cannot be matched.
+     */
+    private function buildReportRow(AdSpendPlatformAccount $account, array $record, array $projectCodeLookup, $now): ?array
+    {
+        $rawGroupName = trim((string) ($record['groupName'] ?? $record['group_name'] ?? $record['groupId'] ?? $record['group_id'] ?? ''));
+        $projectCode = $this->resolveProjectCode($rawGroupName, $projectCodeLookup);
+        $reportDate = (string) ($record['date'] ?? '');
+
+        if ($reportDate === '' || $projectCode === '') {
+            return null;
+        }
+
+        $country = (string) ($record['country'] ?? '');
+        if ($country === 'null') {
+            $country = '';
+        }
+
+        return [
+            'platform_account_id' => $account->id,
+            'platform_code' => $account->platform_code,
+            'project_code' => $projectCode,
+            'report_date' => $reportDate,
+            'country' => $country,
+            'impressions' => (int) ($record['impressions'] ?? 0),
+            'clicks' => (int) ($record['clicks'] ?? 0),
+            'spend' => $this->toDecimal($record['spend'] ?? 0, true),
+            'ctr' => $this->toDecimal($record['ctr'] ?? null, false),
+            'cpm' => $this->toDecimal($record['cpm'] ?? null, false),
+            'cpc' => $this->toDecimal($record['cpc'] ?? null, false),
+            'raw_group_name' => $rawGroupName,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+    }
+
+    /**
+     * Build the uniqueness key used by the destination daily report table.
+     */
+    private function reportRowKey(array $row): string
+    {
+        return implode('|', [
+            $row['platform_account_id'],
+            $row['project_code'],
+            $row['report_date'],
+            $row['country'],
+        ]);
+    }
+
     private function loadProjectCodeLookup(): array
     {
-        return DB::table('project_projects')
+        $lookup = DB::table('project_projects')
             ->pluck('project_code')
             ->mapWithKeys(function ($code) {
                 $value = trim((string) $code);
@@ -162,6 +193,10 @@ class AdSpendSyncService
                 return [strtoupper($value) => $value];
             })
             ->toArray();
+
+        uksort($lookup, fn ($a, $b) => strlen($b) <=> strlen($a));
+
+        return $lookup;
     }
 
     /**
@@ -215,10 +250,7 @@ class AdSpendSyncService
             return $projectCodeLookup[$upperRaw];
         }
 
-        $keys = array_keys($projectCodeLookup);
-        usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
-
-        foreach ($keys as $upperCode) {
+        foreach (array_keys($projectCodeLookup) as $upperCode) {
             $pattern = '/(^|[^A-Z0-9])' . preg_quote($upperCode, '/') . '([^A-Z0-9]|$)/';
             if (preg_match($pattern, $upperRaw) === 1) {
                 return $projectCodeLookup[$upperCode];

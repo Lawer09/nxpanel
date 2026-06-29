@@ -10,6 +10,8 @@ use Illuminate\Console\Command;
 
 class SyncAdSpendReports extends Command
 {
+    private const ACCOUNT_CHUNK_SIZE = 50;
+
     protected $signature = 'ad-spend:sync
         {--start-date= : 同步开始日期 (Y-m-d)}
         {--end-date= : 同步结束日期 (Y-m-d)}
@@ -35,39 +37,47 @@ class SyncAdSpendReports extends Command
             $accountsQuery->whereIn('id', $accountIds);
         }
 
-        $accounts = $accountsQuery->orderBy('id')->get();
-        if ($accounts->isEmpty()) {
+        $accountCount = (clone $accountsQuery)->count();
+        if ($accountCount === 0) {
             $this->warn('No enabled ad spend accounts found.');
             return self::SUCCESS;
         }
 
-        $this->info(sprintf('Start syncing ad spend reports: %s ~ %s, accounts=%d', $startDate, $endDate, $accounts->count()));
+        $this->info(sprintf('Start syncing ad spend reports: %s ~ %s, accounts=%d', $startDate, $endDate, $accountCount));
 
         $failedAccounts = 0;
 
-        foreach ($accounts as $account) {
-            try {
-                $job = $syncService->syncAccount(
-                    $account,
-                    $startDate,
-                    $endDate,
-                    $platformService,
-                    AdSpendSyncService::SOURCE_SCHEDULED
-                );
+        $accountsQuery->chunkById(self::ACCOUNT_CHUNK_SIZE, function ($accounts) use (
+            $platformService,
+            $syncService,
+            $startDate,
+            $endDate,
+            &$failedAccounts
+        ) {
+            foreach ($accounts as $account) {
+                try {
+                    $job = $syncService->syncAccount(
+                        $account,
+                        $startDate,
+                        $endDate,
+                        $platformService,
+                        AdSpendSyncService::SOURCE_SCHEDULED
+                    );
 
-                $this->info(sprintf(
-                    'Account #%d synced. total=%d, matched=%d, unmatched=%d',
-                    $account->id,
-                    (int) $job->total_records,
-                    (int) $job->matched_records,
-                    (int) $job->unmatched_records
-                ));
-            } catch (\Throwable $e) {
-                $failedAccounts++;
+                    $this->info(sprintf(
+                        'Account #%d synced. total=%d, matched=%d, unmatched=%d',
+                        $account->id,
+                        (int) $job->total_records,
+                        (int) $job->matched_records,
+                        (int) $job->unmatched_records
+                    ));
+                } catch (\Throwable $e) {
+                    $failedAccounts++;
 
-                $this->error(sprintf('Account #%d sync failed: %s', $account->id, $e->getMessage()));
+                    $this->error(sprintf('Account #%d sync failed: %s', $account->id, $e->getMessage()));
+                }
             }
-        }
+        });
 
         if ($failedAccounts > 0) {
             $this->warn(sprintf('Sync completed with failures: failed_accounts=%d', $failedAccounts));

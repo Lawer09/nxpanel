@@ -591,3 +591,11 @@
 - 影响范围：`database/migrations/2026_06_26_130000_add_personal_email_to_v2_ticket_table.php`、`app/Http/Requests/User/TicketSave.php`、`app/Services/TicketService.php`、`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`docs/api/ticket_api.md`、`tests/Feature/TicketCreateTest.php`、`version.md`
 - 是否需要迁移：是，需要执行新增 migration；回滚会删除 `v2_ticket.personal_email` 字段。
 - 回滚说明：回滚该 migration，并恢复 `TicketService::createTicket()` 的未关闭工单限制，移除请求校验、传参、Resource 返回字段、测试和文档说明即可。
+
+## 2026-06-29 投放消耗同步改为 10 分钟并优化大数据处理
+
+- 日期：2026-06-29
+- 变更摘要：`ad-spend:sync --lookback-days=2` 调度从每小时第 5 分钟改为每 10 分钟执行；同步命令按账号分批遍历，单账号同步按投放平台分页流式处理并继续分批 upsert，降低大量日报数据下的内存峰值和单条 SQL 体积。
+- 影响范围：`app/Console/Kernel.php`、`app/Console/Commands/SyncAdSpendReports.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`tests/Feature/AdSpendSyncServiceTest.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更；仅调整调度频率和同步处理流程。
+- 回滚说明：将调度恢复为 `hourlyAt(5)->withoutOverlapping(55)`，命令恢复为一次性加载账号集合，投放平台日报同步恢复为一次性拉取全部记录后处理即可。

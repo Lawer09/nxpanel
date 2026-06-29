@@ -232,6 +232,10 @@ class AdSpendSyncServiceTest extends TestCase
     private function mockPlatformService(array $records): AdSpendPlatformService
     {
         $mock = Mockery::mock(AdSpendPlatformService::class);
+        $mock->shouldReceive('fetchDailyRecordPages')
+            ->andReturnUsing(function () use ($records) {
+                yield $records;
+            });
         $mock->shouldReceive('fetchDailyRecords')
             ->andReturn($records);
 

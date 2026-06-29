@@ -137,8 +137,21 @@ class AdSpendPlatformService
      */
     public function fetchDailyRecords(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): array
     {
-        $size = max(1, min(500, $size));
         $records = [];
+
+        foreach ($this->fetchDailyRecordPages($account, $startDate, $endDate, $size) as $pageRecords) {
+            $records = array_merge($records, $pageRecords);
+        }
+
+        return $records;
+    }
+
+    /**
+     * Stream daily report pages so large date windows do not accumulate all rows in memory.
+     */
+    public function fetchDailyRecordPages(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): \Generator
+    {
+        $size = max(1, min(500, $size));
         $current = 1;
 
         while (true) {
@@ -159,11 +172,9 @@ class AdSpendPlatformService
                 break;
             }
 
-            $records = array_merge($records, $pageRecords);
+            yield $pageRecords;
             $current++;
         }
-
-        return $records;
     }
 
     private function requestReportPage(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $current, int $size): array
