@@ -631,3 +631,11 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsNodeController.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodesStatusRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionSummaryRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionErrorDistributionRequest.php`、`app/Http/Requests/Admin/FirebaseAnalyticsNodeConnectionResultsRequest.php`、`app/Services/FirebaseAnalyticsService.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
 - 是否需要迁移：否，复用现有 `firebase_event_vpn_session`、`firebase_event_vpn_probe_result`、`firebase_event_common` 表；已有查询优化索引可辅助节点查询。
 - 回滚说明：移除新增路由、Controller 方法、Request 类、Service 查询与统计方法、测试和文档说明即可。
+
+## 2026-06-29 项目日报限流 hourly_status 字段
+
+- 日期：2026-06-29
+- 变更摘要：项目日报在返回 `isLimited` 的项目维度行中新增 `hourly_status` 字段；当上一小时广告请求数为 0 时，使用位运算 `|` 组合状态：`1` 表示小时广告请求为 0、`2` 表示小时用户新增为 0、`4` 表示日新增为 0，正常为 `0`；限流指标缓存键升级到 `project_report:is_limited_metrics:v4:{hour}`，项目报表查询缓存键升级到 `project_report:{scope}_query:v2:{hash}`。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `hourly_status` 计算与返回字段，并将限流缓存键恢复为上一版本即可。

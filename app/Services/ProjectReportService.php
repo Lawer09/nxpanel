@@ -315,7 +315,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v1:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v2:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -790,11 +790,13 @@ class ProjectReportService
                 'matched_requests' => 0,
                 'hourly_new_users' => 0,
                 'daily_ad_requests' => 0,
+                'daily_new_users' => 0,
             ];
             $hourlyAdRequests = (int) ($metrics['hourly_ad_requests'] ?? 0);
             $matchedRequests = (int) ($metrics['matched_requests'] ?? 0);
             $hourlyNewUsers = (int) ($metrics['hourly_new_users'] ?? 0);
-            $dailyAdRequests = (int) ($metrics['daily_ad_requests'] ?? 0);
+            $dailyNewUsers = (int) ($metrics['daily_new_users'] ?? 0);
+            $row->hourly_status = $this->buildHourlyLimitStatus($hourlyAdRequests, $hourlyNewUsers, $dailyNewUsers);
 
             if ($hourlyAdRequests === 0) {
                 $row->is_limited = 0;
@@ -813,7 +815,7 @@ class ProjectReportService
         $previousHourDate = $previousHour->toDateString();
         $previousHourValue = (int) $previousHour->format('G');
         $previousHourString = $previousHour->toDateTimeString();
-        $cacheKey = 'project_report:is_limited_metrics:v3:' . $previousHourString;
+        $cacheKey = 'project_report:is_limited_metrics:v4:' . $previousHourString;
 
         return Cache::remember($cacheKey, 60, function () use ($previousHourString, $previousHourDate, $previousHourValue) {
             $dailyRows = DB::table('project_daily_aggregates')
@@ -822,6 +824,7 @@ class ProjectReportService
                 ->where('project_code', '!=', '')
                 ->selectRaw('project_code')
                 ->selectRaw('SUM(ad_requests) as daily_ad_requests')
+                ->selectRaw('SUM(new_users) as daily_new_users')
                 ->groupBy('project_code')
                 ->get();
 
@@ -862,6 +865,7 @@ class ProjectReportService
                     'matched_requests' => (int) ($row->matched_requests ?? 0),
                     'hourly_new_users' => 0,
                     'daily_ad_requests' => 0,
+                    'daily_new_users' => 0,
                 ];
             }
 
@@ -876,6 +880,7 @@ class ProjectReportService
                     'matched_requests' => 0,
                     'hourly_new_users' => 0,
                     'daily_ad_requests' => 0,
+                    'daily_new_users' => 0,
                 ];
                 $result[$projectCode]['hourly_new_users'] = (int) ($row->hourly_new_users ?? 0);
             }
@@ -891,12 +896,34 @@ class ProjectReportService
                     'matched_requests' => 0,
                     'hourly_new_users' => 0,
                     'daily_ad_requests' => 0,
+                    'daily_new_users' => 0,
                 ];
                 $result[$projectCode]['daily_ad_requests'] = (int) ($row->daily_ad_requests ?? 0);
+                $result[$projectCode]['daily_new_users'] = (int) ($row->daily_new_users ?? 0);
             }
 
             return $result;
         });
+    }
+
+    /**
+     * Build hourly status bit flags when previous-hour ad requests are zero.
+     */
+    private function buildHourlyLimitStatus(int $hourlyAdRequests, int $hourlyNewUsers, int $dailyNewUsers): int
+    {
+        if ($hourlyAdRequests > 0) {
+            return 0;
+        }
+
+        $status = 1;
+        if ($hourlyNewUsers === 0) {
+            $status |= 2;
+        }
+        if ($dailyNewUsers === 0) {
+            $status |= 4;
+        }
+
+        return $status;
     }
 
     /**
@@ -1065,6 +1092,10 @@ class ProjectReportService
 
         if (property_exists($row, 'is_limited')) {
             $data['isLimited'] = $row->is_limited === null ? null : (bool) (int) $row->is_limited;
+        }
+
+        if (property_exists($row, 'hourly_status')) {
+            $data['hourly_status'] = (int) $row->hourly_status;
         }
 
         if (property_exists($row, 'ad_revenue_now')) {
