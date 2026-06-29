@@ -39,11 +39,23 @@
 - `/dashboard/region-quality`
 - `/errors/top`
 - `/nodes/quality-rank`
+- `/vpn-session/quality-trend`
+- `/app-open/trend`
+- `/vpn-probe/node-rank`
 
 不建议缓存：
 
 - `/events`
 - `/events/{event_id}`
+- `/vpn-probe/results`
+
+说明：统计、趋势和排行接口默认使用 60 秒服务端缓存；事件明细和探测结果明细保持实时查询，不做服务端缓存。
+
+## 分页参数约定
+
+- 事件明细与 Firebase Analytics 明细接口使用 `page` / `page_size`。
+- 最近事件接口保留 Redis 列表接口既有参数 `page` / `pageSize`。
+- Firebase 聚合报表接口保留管理端报表既有参数 `page` / `pageSize`。
 
 ---
 
@@ -385,6 +397,8 @@
 | sort_by | string | 否 | session_count | `success_rate` / `avg_connect_ms` / `p95_connect_ms` / `total_bytes` / `session_count` |
 | order | string | 否 | desc | `asc` / `desc` |
 | limit | int | 否 | 20 | 返回条数 |
+
+说明：`success_rate`、`p95_connect_ms` 等计算字段支持排序，服务端会按数据源映射到安全的聚合表达式；`source=probe` 时 `session_count` 表示探测结果数；`source=mixed` 当前按 `session` 口径兼容处理。
 
 #### 返回示例
 
@@ -1035,6 +1049,8 @@
 | order | string | 否 | desc | `asc` / `desc` |
 | limit | int | 否 | 20 | 返回条数 |
 
+说明：`success_rate` 与 `p95_latency_ms` 为计算字段，服务端会先完成聚合与 P95 计算，再按请求参数安全排序。
+
 #### 返回示例
 
 ```json
@@ -1542,3 +1558,146 @@
 - `app/Services/FirebaseAnalytics*Service.php`
 
 ---
+
+## 接口补充：探测结果明细
+
+### GET /vpn-probe/node-stats
+
+分页查看节点维度的探测统计，用于检查节点探测成功率、失败数、延迟和主要错误码。
+
+#### 请求参数
+
+继承通用查询参数；未传 `start_time` / `end_time` 时默认查询今日。
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| page | int | 否 | 1 | 当前页 |
+| page_size | int | 否 | 20 | 每页数量，最大 200 |
+| probe_id | string | 否 | - | 批量探测 ID |
+| node_id | string | 否 | - | 节点 ID |
+| node_name | string | 否 | - | 节点名称 |
+| node_country | string | 否 | - | 节点国家或地区 |
+| node_region | string | 否 | - | 节点区域 |
+| protocol | string | 否 | - | 协议 |
+| sort_by | string | 否 | success_rate | `node_id` / `test_count` / `success_count` / `fail_count` / `success_rate` / `avg_latency_ms` / `p95_latency_ms` / `avg_tcp_connect_ms` / `avg_tls_hk_ms` / `avg_proxy_hk_ms` / `last_received_at` |
+| order | string | 否 | desc | `asc` / `desc` |
+
+#### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "page": 1,
+    "page_size": 20,
+    "total": 1,
+    "items": [
+      {
+        "node_id": "node-sg-01",
+        "node_name": "Singapore 01",
+        "node_country": "SG",
+        "node_region": "Singapore",
+        "protocol": "vless_reality",
+        "test_count": 100,
+        "success_count": 96,
+        "fail_count": 4,
+        "success_rate": 0.96,
+        "avg_latency_ms": 120,
+        "p95_latency_ms": 300,
+        "avg_tcp_connect_ms": 80,
+        "avg_tls_hk_ms": 90,
+        "avg_proxy_hk_ms": 100,
+        "top_error_code": "PROBE_TIMEOUT",
+        "last_received_at": "2026-06-29 10:00:00"
+      }
+    ]
+  }
+}
+```
+
+#### 数据来源
+
+| 字段 | 表 | 说明 |
+|---|---|---|
+| 节点维度与探测耗时 | firebase_event_vpn_probe_result | 按节点、区域、协议聚合探测结果 |
+| last_received_at | firebase_event_common | 节点最近一次探测上报时间 |
+| top_error_code | firebase_event_vpn_probe_result | 节点维度出现次数最多的错误码 |
+
+### GET /vpn-probe/results
+
+分页查看 `firebase_event_vpn_probe_result` 单节点探测结果明细。该接口用于明细排查；统计分析仍使用 `/vpn-probe/summary`、`/vpn-probe/trend` 和 `/vpn-probe/node-rank`。
+
+#### 请求参数
+
+继承通用查询参数；未传 `start_time` / `end_time` 时默认查询今日。
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| page | int | 否 | 1 | 当前页 |
+| page_size | int | 否 | 20 | 每页数量，最大 200 |
+| event_id | string | 否 | - | Firebase 事件 ID |
+| probe_id | string | 否 | - | 批量探测 ID |
+| node_id | string | 否 | - | 节点 ID |
+| node_name | string | 否 | - | 节点名称 |
+| node_country | string | 否 | - | 节点国家或地区 |
+| node_region | string | 否 | - | 节点区域 |
+| protocol | string | 否 | - | 协议 |
+| success | bool | 否 | - | 是否成功 |
+| error_code | string | 否 | - | 错误码 |
+| sort_by | string | 否 | received_at | `received_at` / `result_index` / `latency_ms` / `tcp_connect_ms` / `tls_hk_ms` / `proxy_hk_ms` / `timeout_ms` / `id` |
+| order | string | 否 | desc | `asc` / `desc` |
+
+#### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "page": 1,
+    "page_size": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": 1001,
+        "event_id": "evt_probe_001",
+        "received_at": "2026-06-29 10:00:00",
+        "event_time_ms": 1782708000000,
+        "app_id": "com.example.vpn",
+        "platform": "android",
+        "app_version": "1.0.0",
+        "device_id": "device_001",
+        "user_id": "user_001",
+        "user_country": "SG",
+        "network_type": "wifi",
+        "probe_id": "probe_001",
+        "probe_type": "full_probe",
+        "probe_trigger": "manual_refresh",
+        "result_index": 0,
+        "node_id": "node-sg-01",
+        "node_name": "Singapore 01",
+        "node_country": "SG",
+        "node_region": "Singapore",
+        "protocol": "vless_reality",
+        "success": 1,
+        "latency_ms": 120,
+        "tcp_connect_ms": 80,
+        "tls_hk_ms": 90,
+        "proxy_hk_ms": 100,
+        "error_code": null,
+        "error_message": null,
+        "timeout_ms": 3000
+      }
+    ]
+  }
+}
+```
+
+#### 数据来源
+
+| 字段 | 表 | 说明 |
+|---|---|---|
+| 事件信息 | firebase_event_common | 时间、App、设备、用户、地区、网络信息 |
+| probe_id / probe_type / probe_trigger | firebase_event_vpn_probe | 批量探测上下文 |
+| 节点与耗时结果 | firebase_event_vpn_probe_result | 单节点探测结果明细 |

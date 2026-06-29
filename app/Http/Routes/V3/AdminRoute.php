@@ -411,6 +411,8 @@ class AdminRoute
                 $router->get('/vpn-probe/trigger-distribution', [FirebaseAnalyticsVpnProbeController::class, 'triggerDistribution']);
                 $router->get('/vpn-probe/type-distribution', [FirebaseAnalyticsVpnProbeController::class, 'typeDistribution']);
                 $router->get('/vpn-probe/node-rank', [FirebaseAnalyticsVpnProbeController::class, 'nodeRank']);
+                $router->get('/vpn-probe/node-stats', [FirebaseAnalyticsVpnProbeController::class, 'nodeStats']);
+                $router->get('/vpn-probe/results', [FirebaseAnalyticsVpnProbeController::class, 'results']);
 
                 $router->get('/app-open/summary', [FirebaseAnalyticsAppOpenController::class, 'summary']);
                 $router->get('/app-open/trend', [FirebaseAnalyticsAppOpenController::class, 'trend']);

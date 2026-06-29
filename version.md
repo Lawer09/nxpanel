@@ -599,3 +599,27 @@
 - 影响范围：`app/Console/Kernel.php`、`app/Console/Commands/SyncAdSpendReports.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`tests/Feature/AdSpendSyncServiceTest.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更；仅调整调度频率和同步处理流程。
 - 回滚说明：将调度恢复为 `hourlyAt(5)->withoutOverlapping(55)`，命令恢复为一次性加载账号集合，投放平台日报同步恢复为一次性拉取全部记录后处理即可。
+
+## 2026-06-29 Firebase 探测结果明细接口
+
+- 日期：2026-06-29
+- 变更摘要：新增管理端 `GET /api/v3/{secure_path}/firebase-analytics/vpn-probe/results` 接口，支持分页查看 `firebase_event_vpn_probe_result` 探测结果明细，并可按事件、探测批次、节点、成功状态和错误码筛选。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsVpnProbeController.php`、`app/Http/Requests/Admin/FirebaseAnalyticsProbeResultsRequest.php`、`app/Services/FirebaseAnalyticsService.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
+- 是否需要迁移：否，复用现有 Firebase 事件与探测结果表。
+- 回滚说明：移除新增路由、Controller 方法、Request 类、Service 查询方法、测试和文档说明即可。
+
+## 2026-06-29 Firebase Analytics 查询优化
+
+- 日期：2026-06-29
+- 变更摘要：优化 Firebase Analytics 统计与排行接口，修复计算字段直接排序可能导致的 SQL 风险；地区质量、节点排行和协议错误码改为批量聚合查询；VPN 质量趋势和 App 打开趋势复用 60 秒缓存并批量计算 P95；补充高频过滤、排行和明细查询索引。
+- 影响范围：`app/Services/FirebaseAnalyticsService.php`、`database/migrations/2026_06_29_140000_add_firebase_analytics_query_indexes.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
+- 是否需要迁移：是，需要执行新增索引 migration；回滚会删除本次新增的 Firebase 查询优化索引，不删除业务数据。
+- 回滚说明：回滚新增 migration，并恢复 Firebase Analytics Service 中排序映射、批量 P95/Top 错误码聚合、趋势缓存和文档说明即可。
+
+## 2026-06-29 Firebase 探测节点统计接口
+
+- 日期：2026-06-29
+- 变更摘要：新增管理端 `GET /api/v3/{secure_path}/firebase-analytics/vpn-probe/node-stats` 接口，按节点、区域和协议分页返回探测次数、成功数、失败数、成功率、平均/P95 延迟、主要错误码和最近上报时间。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Firebase/FirebaseAnalyticsVpnProbeController.php`、`app/Http/Requests/Admin/FirebaseAnalyticsProbeNodeStatsRequest.php`、`app/Services/FirebaseAnalyticsService.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`docs/api/firebase_analytics.md`、`version.md`
+- 是否需要迁移：否，复用现有 Firebase 事件与探测结果表；已有查询优化索引可辅助该接口。
+- 回滚说明：移除新增路由、Controller 方法、Request 类、Service 统计方法、测试和文档说明即可。

@@ -139,66 +139,73 @@ class FirebaseAnalyticsService
 
     public function vpnQualityTrend(array $params): array
     {
-        $interval = $this->resolveInterval($params);
-        $timeExpr = $this->timeBucketExpression($params, $interval);
+        return $this->remember('vpn-quality-trend', $params, function () use ($params) {
+            $interval = $this->resolveInterval($params);
+            $timeExpr = $this->timeBucketExpression($params, $interval);
+            $p95ByBucket = $this->p95ValuesByBucket('firebase_event_vpn_session', 'connect_ms', $params, $interval);
 
-        $items = $this->baseSessionQuery($params)
-            ->selectRaw("{$timeExpr} as time")
-            ->selectRaw('COUNT(*) as session_count')
-            ->selectRaw('SUM(success = 1) as success_count')
-            ->selectRaw('SUM(success = 0) as fail_count')
-            ->selectRaw('AVG(connect_ms) as avg_connect_ms')
-            ->selectRaw('AVG(duration_ms) as avg_duration_ms')
-            ->selectRaw('SUM(retry_count) as retry_count')
-            ->groupBy('time')
-            ->orderBy('time')
-            ->get();
+            $items = $this->baseSessionQuery($params)
+                ->selectRaw("{$timeExpr} as time")
+                ->selectRaw('COUNT(*) as session_count')
+                ->selectRaw('SUM(success = 1) as success_count')
+                ->selectRaw('SUM(success = 0) as fail_count')
+                ->selectRaw('AVG(connect_ms) as avg_connect_ms')
+                ->selectRaw('AVG(duration_ms) as avg_duration_ms')
+                ->selectRaw('SUM(retry_count) as retry_count')
+                ->groupBy('time')
+                ->orderBy('time')
+                ->get();
 
-        $items = $items->map(function ($item) use ($params, $interval) {
-            $bucket = $item->time;
-            $p95 = $this->p95Value('firebase_event_vpn_session', 'connect_ms', $params, $bucket, $interval);
-            $item->p95_connect_ms = $p95;
-            $item->success_rate = $this->safeRate((int) $item->success_count, (int) $item->session_count);
-            return $item;
-        });
+            $items = $items->map(function ($item) use ($p95ByBucket) {
+                $item->p95_connect_ms = $p95ByBucket[(string) $item->time] ?? null;
+                $item->success_rate = $this->safeRate((int) $item->success_count, (int) $item->session_count);
+                return $item;
+            });
 
-        return [
-            'interval' => $interval,
-            'items' => $items,
-        ];
+            return [
+                'interval' => $interval,
+                'items' => $items,
+            ];
+        }, 60);
     }
 
     public function regionQuality(array $params): array
     {
         return $this->remember('region-quality', $params, function () use ($params) {
-            $sortBy = $params['sort_by'] ?? 'event_count';
-            $order = $params['order'] ?? 'desc';
+            $sortMap = [
+                'event_count' => 'event_count',
+                'vpn_success_rate' => 'vpn_success_rate',
+                'api_error_count' => 'api_error_count',
+                'avg_connect_ms' => 'avg_connect_ms',
+            ];
+            $sortBy = $sortMap[$params['sort_by'] ?? 'event_count'] ?? 'event_count';
+            $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
             $limit = (int) ($params['limit'] ?? 50);
 
+            $sessionAgg = $this->baseSessionQuery($params)
+                ->selectRaw("COALESCE(c.user_country, '') as join_user_country")
+                ->selectRaw("COALESCE(c.user_region, '') as join_user_region")
+                ->selectRaw('COUNT(*) as session_total')
+                ->selectRaw('SUM(success = 1) as session_success')
+                ->selectRaw('AVG(connect_ms) as avg_connect_ms')
+                ->groupByRaw("COALESCE(c.user_country, ''), COALESCE(c.user_region, '')");
+
             $items = $this->baseCommonQuery($params)
-                ->selectRaw('user_country, user_region')
+                ->leftJoinSub($sessionAgg, 'session_region', function ($join) {
+                    $join->on(DB::raw("COALESCE(c.user_country, '')"), '=', 'session_region.join_user_country')
+                        ->on(DB::raw("COALESCE(c.user_region, '')"), '=', 'session_region.join_user_region');
+                })
+                ->selectRaw('c.user_country, c.user_region')
                 ->selectRaw('COUNT(*) as event_count')
-                ->selectRaw('COUNT(DISTINCT device_id) as active_devices')
-                ->selectRaw('SUM(event_name = "vpn_session") as vpn_session_count')
-                ->selectRaw('SUM(event_name = "server_api_error") as api_error_count')
-                ->groupBy('user_country', 'user_region')
+                ->selectRaw('COUNT(DISTINCT c.device_id) as active_devices')
+                ->selectRaw('SUM(c.event_name = "vpn_session") as vpn_session_count')
+                ->selectRaw('SUM(c.event_name = "server_api_error") as api_error_count')
+                ->selectRaw('COALESCE(ROUND(MAX(session_region.session_success) / NULLIF(MAX(session_region.session_total), 0), 4), 0) as vpn_success_rate')
+                ->selectRaw('COALESCE(ROUND(MAX(session_region.avg_connect_ms), 0), 0) as avg_connect_ms')
+                ->groupBy('c.user_country', 'c.user_region')
                 ->orderBy($sortBy, $order)
                 ->limit($limit)
                 ->get();
-
-            $items = $items->map(function ($item) use ($params) {
-                $sessionAgg = $this->baseSessionQuery($params)
-                    ->where('c.user_country', $item->user_country)
-                    ->where('c.user_region', $item->user_region)
-                    ->selectRaw('COUNT(*) as total')
-                    ->selectRaw('SUM(success = 1) as success_count')
-                    ->selectRaw('AVG(connect_ms) as avg_connect_ms')
-                    ->first();
-
-                $item->vpn_success_rate = $this->safeRate((int) ($sessionAgg->success_count ?? 0), (int) ($sessionAgg->total ?? 0));
-                $item->avg_connect_ms = (int) ($sessionAgg->avg_connect_ms ?? 0);
-                return $item;
-            });
 
             return [
                 'items' => $items,
@@ -285,30 +292,41 @@ class FirebaseAnalyticsService
     {
         return $this->remember('nodes-quality-rank', $params, function () use ($params) {
             $source = $params['source'] ?? 'session';
+            $querySource = $source === 'probe' ? 'probe' : 'session';
             $sortBy = $params['sort_by'] ?? 'session_count';
-            $order = $params['order'] ?? 'desc';
+            $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
             $limit = (int) ($params['limit'] ?? 20);
+            $sortsAfterP95 = $sortBy === 'p95_connect_ms';
 
-            if ($source === 'probe') {
-                $items = $this->baseProbeResultQuery($params)
+            if ($querySource === 'probe') {
+                $sortMap = [
+                    'session_count' => 'test_count',
+                    'success_rate' => 'success_rate',
+                    'avg_connect_ms' => 'avg_tcp_connect_ms',
+                    'total_bytes' => 'test_count',
+                ];
+                $query = $this->baseProbeResultQuery($params)
                     ->selectRaw('node_id, node_name, node_country, protocol')
                     ->selectRaw('COUNT(*) as test_count')
                     ->selectRaw('SUM(success = 1) as success_count')
+                    ->selectRaw('ROUND(SUM(success = 1) / NULLIF(COUNT(*), 0), 4) as success_rate')
                     ->selectRaw('AVG(latency_ms) as avg_latency_ms')
                     ->selectRaw('AVG(tcp_connect_ms) as avg_tcp_connect_ms')
                     ->selectRaw('AVG(tls_hk_ms) as avg_tls_hk_ms')
                     ->selectRaw('AVG(proxy_hk_ms) as avg_proxy_hk_ms')
-                    ->groupBy('node_id', 'node_name', 'node_country', 'protocol')
-                    ->orderBy($sortBy, $order)
-                    ->limit($limit)
-                    ->get();
+                    ->groupBy('node_id', 'node_name', 'node_country', 'protocol');
 
-                $items = $items->map(function ($item, $index) use ($params) {
-                    $p95 = $this->p95Value('firebase_event_vpn_probe_result', 'latency_ms', $params, null, null, [
-                        'node_id' => $item->node_id,
-                    ]);
+                if (!$sortsAfterP95) {
+                    $query->orderBy($sortMap[$sortBy] ?? 'test_count', $order)->limit($limit);
+                }
+
+                $rows = $query->get();
+                $nodeIds = $rows->pluck('node_id')->filter()->unique()->values()->all();
+                $p95ByNodeId = $this->p95ValuesByField('firebase_event_vpn_probe_result', 'latency_ms', 'node_id', $nodeIds, $params);
+                $topErrors = $this->topProbeErrorCodesByNodeIds($params, $nodeIds);
+
+                $items = $rows->map(function ($item) use ($p95ByNodeId, $topErrors) {
                     return (object) [
-                        'rank' => $index + 1,
                         'node_id' => $item->node_id,
                         'node_name' => $item->node_name,
                         'node_country' => $item->node_country,
@@ -318,31 +336,41 @@ class FirebaseAnalyticsService
                         'success_count' => (int) $item->success_count,
                         'success_rate' => $this->safeRate((int) $item->success_count, (int) $item->test_count),
                         'avg_connect_ms' => (int) $item->avg_tcp_connect_ms,
-                        'p95_connect_ms' => $p95,
+                        'p95_connect_ms' => $p95ByNodeId[(string) $item->node_id] ?? null,
                         'avg_duration_ms' => (int) $item->avg_latency_ms,
                         'total_bytes' => 0,
-                        'top_error_code' => $this->topProbeErrorCode($params, $item->node_id),
+                        'top_error_code' => $topErrors[(string) $item->node_id] ?? null,
                     ];
                 });
             } else {
-                $items = $this->baseSessionQuery($params)
+                $sortMap = [
+                    'session_count' => 'session_count',
+                    'success_rate' => 'success_rate',
+                    'avg_connect_ms' => 'avg_connect_ms',
+                    'total_bytes' => 'total_bytes',
+                ];
+                $query = $this->baseSessionQuery($params)
                     ->selectRaw('node_id, node_name, node_country, node_region, protocol')
                     ->selectRaw('COUNT(*) as session_count')
                     ->selectRaw('SUM(success = 1) as success_count')
+                    ->selectRaw('ROUND(SUM(success = 1) / NULLIF(COUNT(*), 0), 4) as success_rate')
                     ->selectRaw('AVG(connect_ms) as avg_connect_ms')
                     ->selectRaw('AVG(duration_ms) as avg_duration_ms')
                     ->selectRaw('SUM(total_bytes) as total_bytes')
-                    ->groupBy('node_id', 'node_name', 'node_country', 'node_region', 'protocol')
-                    ->orderBy($sortBy, $order)
-                    ->limit($limit)
-                    ->get();
+                    ->groupBy('node_id', 'node_name', 'node_country', 'node_region', 'protocol');
 
-                $items = $items->map(function ($item, $index) use ($params) {
-                    $p95 = $this->p95Value('firebase_event_vpn_session', 'connect_ms', $params, null, null, [
-                        'node_id' => $item->node_id,
-                    ]);
+                if (!$sortsAfterP95) {
+                    $query->orderBy($sortMap[$sortBy] ?? 'session_count', $order)->limit($limit);
+                }
+
+                $rows = $query->get();
+                $nodeIds = $rows->pluck('node_id')->filter()->unique()->values()->all();
+                $protocols = $rows->pluck('protocol')->filter()->unique()->values()->all();
+                $p95ByNodeId = $this->p95ValuesByField('firebase_event_vpn_session', 'connect_ms', 'node_id', $nodeIds, $params);
+                $topErrors = $this->topErrorCodesByProtocols($params, $protocols);
+
+                $items = $rows->map(function ($item) use ($p95ByNodeId, $topErrors) {
                     return (object) [
-                        'rank' => $index + 1,
                         'node_id' => $item->node_id,
                         'node_name' => $item->node_name,
                         'node_country' => $item->node_country,
@@ -352,13 +380,22 @@ class FirebaseAnalyticsService
                         'success_count' => (int) $item->success_count,
                         'success_rate' => $this->safeRate((int) $item->success_count, (int) $item->session_count),
                         'avg_connect_ms' => (int) $item->avg_connect_ms,
-                        'p95_connect_ms' => $p95,
+                        'p95_connect_ms' => $p95ByNodeId[(string) $item->node_id] ?? null,
                         'avg_duration_ms' => (int) $item->avg_duration_ms,
                         'total_bytes' => (int) $item->total_bytes,
-                        'top_error_code' => $this->topErrorCodeByProtocol($params, $item->protocol),
+                        'top_error_code' => $topErrors[(string) $item->protocol] ?? null,
                     ];
                 });
             }
+
+            if ($sortsAfterP95) {
+                $items = $this->sortCollectionByField($items, 'p95_connect_ms', $order)->take($limit)->values();
+            }
+
+            $items = $items->values()->map(function ($item, $index) {
+                $item->rank = $index + 1;
+                return $item;
+            });
 
             return [
                 'source' => $source,
@@ -407,6 +444,7 @@ class FirebaseAnalyticsService
         return $this->remember('app-open-trend', $params, function () use ($params) {
             $interval = $this->resolveInterval($params);
             $timeExpr = $this->timeBucketExpression($params, $interval);
+            $p95ByBucket = $this->p95ValuesByBucket('firebase_event_app_open', 'launch_ms', $params, $interval);
 
             $items = $this->baseAppOpenQuery($params)
                 ->selectRaw("{$timeExpr} as time")
@@ -417,8 +455,8 @@ class FirebaseAnalyticsService
                 ->orderBy('time')
                 ->get();
 
-            $items = $items->map(function ($item) use ($params, $interval) {
-                $item->p95_launch_ms = $this->p95Value('firebase_event_app_open', 'launch_ms', $params, $item->time, $interval);
+            $items = $items->map(function ($item) use ($p95ByBucket) {
+                $item->p95_launch_ms = $p95ByBucket[(string) $item->time] ?? null;
                 return $item;
             });
 
@@ -589,13 +627,15 @@ class FirebaseAnalyticsService
                 ->orderByDesc('session_count')
                 ->get();
 
+            $topErrors = $this->topErrorCodesByProtocols($params, $items->pluck('protocol')->filter()->unique()->values()->all());
+
             $items = $items->map(fn ($item) => (object) [
                 'protocol' => $item->protocol,
                 'session_count' => (int) $item->session_count,
                 'success_rate' => $this->safeRate((int) $item->success_count, (int) $item->session_count),
                 'avg_connect_ms' => (int) $item->avg_connect_ms,
                 'avg_duration_ms' => (int) $item->avg_duration_ms,
-                'top_error_code' => $this->topErrorCodeByProtocol($params, $item->protocol),
+                'top_error_code' => $topErrors[(string) $item->protocol] ?? null,
             ]);
 
             return [
@@ -711,24 +751,38 @@ class FirebaseAnalyticsService
     {
         return $this->remember('probe-node-rank', $params, function () use ($params) {
             $sortBy = $params['sort_by'] ?? 'success_rate';
-            $order = $params['order'] ?? 'desc';
+            $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
             $limit = (int) ($params['limit'] ?? 20);
+            $sortsAfterP95 = $sortBy === 'p95_latency_ms';
+            $sortMap = [
+                'success_rate' => 'success_rate',
+                'avg_latency_ms' => 'avg_latency_ms',
+                'avg_tcp_connect_ms' => 'avg_tcp_connect_ms',
+                'avg_tls_hk_ms' => 'avg_tls_hk_ms',
+                'avg_proxy_hk_ms' => 'avg_proxy_hk_ms',
+            ];
 
-            $items = $this->baseProbeResultQuery($params)
+            $query = $this->baseProbeResultQuery($params)
                 ->selectRaw('node_id, node_name, node_country, protocol')
                 ->selectRaw('COUNT(*) as test_count')
                 ->selectRaw('SUM(success = 1) as success_count')
+                ->selectRaw('ROUND(SUM(success = 1) / NULLIF(COUNT(*), 0), 4) as success_rate')
                 ->selectRaw('AVG(latency_ms) as avg_latency_ms')
                 ->selectRaw('AVG(tcp_connect_ms) as avg_tcp_connect_ms')
                 ->selectRaw('AVG(tls_hk_ms) as avg_tls_hk_ms')
                 ->selectRaw('AVG(proxy_hk_ms) as avg_proxy_hk_ms')
-                ->groupBy('node_id', 'node_name', 'node_country', 'protocol')
-                ->orderBy($sortBy, $order)
-                ->limit($limit)
-                ->get();
+                ->groupBy('node_id', 'node_name', 'node_country', 'protocol');
 
-            $items = $items->map(fn ($item, $index) => (object) [
-                'rank' => $index + 1,
+            if (!$sortsAfterP95) {
+                $query->orderBy($sortMap[$sortBy] ?? 'success_rate', $order)->limit($limit);
+            }
+
+            $rows = $query->get();
+            $nodeIds = $rows->pluck('node_id')->filter()->unique()->values()->all();
+            $p95ByNodeId = $this->p95ValuesByField('firebase_event_vpn_probe_result', 'latency_ms', 'node_id', $nodeIds, $params);
+            $topErrors = $this->topProbeErrorCodesByNodeIds($params, $nodeIds);
+
+            $items = $rows->map(fn ($item) => (object) [
                 'node_id' => $item->node_id,
                 'node_name' => $item->node_name,
                 'node_country' => $item->node_country,
@@ -736,19 +790,186 @@ class FirebaseAnalyticsService
                 'test_count' => (int) $item->test_count,
                 'success_rate' => $this->safeRate((int) $item->success_count, (int) $item->test_count),
                 'avg_latency_ms' => (int) $item->avg_latency_ms,
-                'p95_latency_ms' => $this->p95Value('firebase_event_vpn_probe_result', 'latency_ms', $params, null, null, [
-                    'node_id' => $item->node_id,
-                ]),
+                'p95_latency_ms' => $p95ByNodeId[(string) $item->node_id] ?? null,
                 'avg_tcp_connect_ms' => (int) $item->avg_tcp_connect_ms,
                 'avg_tls_hk_ms' => (int) $item->avg_tls_hk_ms,
                 'avg_proxy_hk_ms' => (int) $item->avg_proxy_hk_ms,
-                'top_error_code' => $this->topProbeErrorCode($params, $item->node_id),
+                'top_error_code' => $topErrors[(string) $item->node_id] ?? null,
             ]);
+
+            if ($sortsAfterP95) {
+                $items = $this->sortCollectionByField($items, 'p95_latency_ms', $order)->take($limit)->values();
+            }
+
+            $items = $items->values()->map(function ($item, $index) {
+                $item->rank = $index + 1;
+                return $item;
+            });
 
             return [
                 'items' => $items,
             ];
         }, 60);
+    }
+
+    /**
+     * Query paginated Firebase VPN probe node statistics.
+     */
+    public function probeNodeStats(array $params): array
+    {
+        return $this->remember('probe-node-stats', $params, function () use ($params) {
+            $page = max(1, (int) ($params['page'] ?? 1));
+            $pageSize = min(max(1, (int) ($params['page_size'] ?? 20)), 200);
+            $sortBy = $params['sort_by'] ?? 'success_rate';
+            $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+            $sortsAfterP95 = $sortBy === 'p95_latency_ms';
+            $sortMap = [
+                'node_id' => 'node_id',
+                'test_count' => 'test_count',
+                'success_count' => 'success_count',
+                'fail_count' => 'fail_count',
+                'success_rate' => 'success_rate',
+                'avg_latency_ms' => 'avg_latency_ms',
+                'avg_tcp_connect_ms' => 'avg_tcp_connect_ms',
+                'avg_tls_hk_ms' => 'avg_tls_hk_ms',
+                'avg_proxy_hk_ms' => 'avg_proxy_hk_ms',
+                'last_received_at' => 'last_received_at',
+            ];
+
+            $query = DB::table('firebase_event_vpn_probe_result as r')
+                ->join('firebase_event_vpn_probe as p', 'p.event_id', '=', 'r.event_id')
+                ->join('firebase_event_common as c', 'c.event_id', '=', 'r.event_id');
+
+            $query = $this->applyCommonFilters($query, $params, 'c');
+            $query = $this->applyTimeFilters($query, $params, 'c');
+            $this->applyProbeResultFilters($query, $params);
+
+            $query->selectRaw('r.node_id, r.node_name, r.node_country, r.node_region, r.protocol')
+                ->selectRaw('COUNT(*) as test_count')
+                ->selectRaw('SUM(r.success = 1) as success_count')
+                ->selectRaw('SUM(r.success = 0) as fail_count')
+                ->selectRaw('ROUND(SUM(r.success = 1) / NULLIF(COUNT(*), 0), 4) as success_rate')
+                ->selectRaw('AVG(r.latency_ms) as avg_latency_ms')
+                ->selectRaw('AVG(r.tcp_connect_ms) as avg_tcp_connect_ms')
+                ->selectRaw('AVG(r.tls_hk_ms) as avg_tls_hk_ms')
+                ->selectRaw('AVG(r.proxy_hk_ms) as avg_proxy_hk_ms')
+                ->selectRaw('MAX(c.received_at) as last_received_at')
+                ->groupBy('r.node_id', 'r.node_name', 'r.node_country', 'r.node_region', 'r.protocol');
+
+            if (!$sortsAfterP95) {
+                $query->orderBy($sortMap[$sortBy] ?? 'success_rate', $order);
+            }
+
+            $rows = $query->get();
+            $nodeIds = $rows->pluck('node_id')->filter()->unique()->values()->all();
+            $p95ByNodeId = $this->p95ValuesByField('firebase_event_vpn_probe_result', 'latency_ms', 'node_id', $nodeIds, $params);
+            $topErrors = $this->topProbeErrorCodesByNodeIds($params, $nodeIds);
+
+            $items = $rows->map(fn ($item) => (object) [
+                'node_id' => $item->node_id,
+                'node_name' => $item->node_name,
+                'node_country' => $item->node_country,
+                'node_region' => $item->node_region,
+                'protocol' => $item->protocol,
+                'test_count' => (int) $item->test_count,
+                'success_count' => (int) $item->success_count,
+                'fail_count' => (int) $item->fail_count,
+                'success_rate' => $this->safeRate((int) $item->success_count, (int) $item->test_count),
+                'avg_latency_ms' => (int) $item->avg_latency_ms,
+                'p95_latency_ms' => $p95ByNodeId[(string) $item->node_id] ?? null,
+                'avg_tcp_connect_ms' => (int) $item->avg_tcp_connect_ms,
+                'avg_tls_hk_ms' => (int) $item->avg_tls_hk_ms,
+                'avg_proxy_hk_ms' => (int) $item->avg_proxy_hk_ms,
+                'top_error_code' => $topErrors[(string) $item->node_id] ?? null,
+                'last_received_at' => $item->last_received_at,
+            ]);
+
+            if ($sortsAfterP95) {
+                $items = $this->sortCollectionByField($items, 'p95_latency_ms', $order)->values();
+            }
+
+            $total = $items->count();
+            $items = $items->forPage($page, $pageSize)->values();
+
+            return [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'total' => $total,
+                'items' => $items,
+            ];
+        }, 60);
+    }
+
+    /**
+     * Query Firebase VPN probe result detail rows with event and probe batch context.
+     */
+    public function probeResults(array $params): array
+    {
+        $page = max(1, (int) ($params['page'] ?? 1));
+        $pageSize = min(max(1, (int) ($params['page_size'] ?? 20)), 200);
+        $sortMap = [
+            'received_at' => 'c.received_at',
+            'result_index' => 'r.result_index',
+            'latency_ms' => 'r.latency_ms',
+            'tcp_connect_ms' => 'r.tcp_connect_ms',
+            'tls_hk_ms' => 'r.tls_hk_ms',
+            'proxy_hk_ms' => 'r.proxy_hk_ms',
+            'timeout_ms' => 'r.timeout_ms',
+            'id' => 'r.id',
+        ];
+        $sortBy = $params['sort_by'] ?? 'received_at';
+        $order = ($params['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $query = DB::table('firebase_event_vpn_probe_result as r')
+            ->join('firebase_event_vpn_probe as p', 'p.event_id', '=', 'r.event_id')
+            ->join('firebase_event_common as c', 'c.event_id', '=', 'r.event_id');
+
+        $query = $this->applyCommonFilters($query, $params, 'c');
+        $query = $this->applyTimeFilters($query, $params, 'c');
+        $this->applyProbeResultFilters($query, $params);
+
+        $total = (clone $query)->count();
+        $items = $query
+            ->orderBy($sortMap[$sortBy] ?? $sortMap['received_at'], $order)
+            ->orderBy('r.id', $order)
+            ->forPage($page, $pageSize)
+            ->get([
+                'r.id',
+                'r.event_id',
+                'c.received_at',
+                'c.event_time_ms',
+                'c.app_id',
+                'c.platform',
+                'c.app_version',
+                'c.device_id',
+                'c.user_id',
+                'c.user_country',
+                'c.network_type',
+                'p.probe_id',
+                'p.probe_type',
+                'p.probe_trigger',
+                'r.result_index',
+                'r.node_id',
+                'r.node_name',
+                'r.node_country',
+                'r.node_region',
+                'r.protocol',
+                'r.success',
+                'r.latency_ms',
+                'r.tcp_connect_ms',
+                'r.tls_hk_ms',
+                'r.proxy_hk_ms',
+                'r.error_code',
+                'r.error_message',
+                'r.timeout_ms',
+            ]);
+
+        return [
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+            'items' => $items,
+        ];
     }
 
     public function apiErrorSummary(array $params): array
@@ -1053,6 +1274,30 @@ class FirebaseAnalyticsService
         return $query;
     }
 
+    private function applyProbeResultFilters(Builder $query, array $params): void
+    {
+        $map = [
+            'event_id' => 'r.event_id',
+            'probe_id' => 'p.probe_id',
+            'node_id' => 'r.node_id',
+            'node_name' => 'r.node_name',
+            'node_country' => 'r.node_country',
+            'node_region' => 'r.node_region',
+            'protocol' => 'r.protocol',
+            'error_code' => 'r.error_code',
+        ];
+
+        foreach ($map as $param => $column) {
+            if (!empty($params[$param])) {
+                $query->where($column, $params[$param]);
+            }
+        }
+
+        if (array_key_exists('success', $params)) {
+            $query->where('r.success', (bool) $params['success']);
+        }
+    }
+
     private function applyCommonFilters(Builder $query, array $params, string $alias = 'c'): Builder
     {
         $prefix = $alias ? $alias . '.' : '';
@@ -1141,9 +1386,6 @@ class FirebaseAnalyticsService
     private function timeBucketExpression(array $params, string $interval): string
     {
         $timeField = $params['time_field'] ?? 'received_at';
-        $base = $timeField === 'event_time'
-            ? 'FROM_UNIXTIME(c.event_time_ms / 1000)'
-            : 'c.received_at';
 
         $seconds = match ($interval) {
             '5m' => 300,
@@ -1151,6 +1393,18 @@ class FirebaseAnalyticsService
             '1h' => 3600,
             default => 86400,
         };
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $base = $timeField === 'event_time'
+                ? '(c.event_time_ms / 1000)'
+                : "strftime('%s', c.received_at)";
+
+            return "datetime(CAST({$base} / {$seconds} AS INTEGER) * {$seconds}, 'unixepoch')";
+        }
+
+        $base = $timeField === 'event_time'
+            ? 'FROM_UNIXTIME(c.event_time_ms / 1000)'
+            : 'c.received_at';
 
         return "FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP({$base}) / {$seconds}) * {$seconds})";
     }
@@ -1248,6 +1502,108 @@ class FirebaseAnalyticsService
         return $value !== null ? (int) $value : null;
     }
 
+    /**
+     * Calculate exact P95 by time bucket in one query and group in PHP.
+     */
+    private function p95ValuesByBucket(string $table, string $column, array $params, string $interval): array
+    {
+        $timeExpr = $this->timeBucketExpression($params, $interval);
+        $query = DB::table("{$table} as t")
+            ->join('firebase_event_common as c', 'c.event_id', '=', 't.event_id');
+
+        $query = $this->applyCommonFilters($query, $params, 'c');
+        $query = $this->applyTimeFilters($query, $params, 'c');
+
+        $rows = $query
+            ->whereNotNull('t.' . $column)
+            ->selectRaw("{$timeExpr} as bucket")
+            ->selectRaw("t.{$column} as metric_value")
+            ->get();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[(string) $row->bucket][] = (int) $row->metric_value;
+        }
+
+        $result = [];
+        foreach ($grouped as $bucket => $values) {
+            $result[$bucket] = $this->percentile95($values);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Calculate exact P95 by a detail-table field in one query.
+     */
+    private function p95ValuesByField(string $table, string $column, string $field, array $values, array $params): array
+    {
+        $values = array_values(array_filter(array_unique($values), fn ($value) => $value !== null && $value !== ''));
+        if (empty($values)) {
+            return [];
+        }
+
+        $query = DB::table("{$table} as t")
+            ->join('firebase_event_common as c', 'c.event_id', '=', 't.event_id');
+
+        $query = $this->applyCommonFilters($query, $params, 'c');
+        $query = $this->applyTimeFilters($query, $params, 'c');
+
+        $rows = $query
+            ->whereIn('t.' . $field, $values)
+            ->whereNotNull('t.' . $column)
+            ->get([
+                't.' . $field . ' as group_key',
+                't.' . $column . ' as metric_value',
+            ]);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[(string) $row->group_key][] = (int) $row->metric_value;
+        }
+
+        $result = [];
+        foreach ($grouped as $groupKey => $metricValues) {
+            $result[$groupKey] = $this->percentile95($metricValues);
+        }
+
+        return $result;
+    }
+
+    private function percentile95(array $values): ?int
+    {
+        if (empty($values)) {
+            return null;
+        }
+
+        sort($values, SORT_NUMERIC);
+        $offset = (int) floor(count($values) * 0.95);
+        $offset = min($offset, count($values) - 1);
+
+        return (int) $values[$offset];
+    }
+
+    private function sortCollectionByField($items, string $field, string $order)
+    {
+        return $items->sort(function ($left, $right) use ($field, $order) {
+            $leftValue = $left->{$field} ?? null;
+            $rightValue = $right->{$field} ?? null;
+
+            if ($leftValue === null && $rightValue === null) {
+                return 0;
+            }
+            if ($leftValue === null) {
+                return 1;
+            }
+            if ($rightValue === null) {
+                return -1;
+            }
+
+            $compare = $leftValue <=> $rightValue;
+            return $order === 'asc' ? $compare : -$compare;
+        });
+    }
+
     private function bucketRange(string $bucket, string $interval): ?array
     {
         try {
@@ -1271,34 +1627,58 @@ class FirebaseAnalyticsService
         ];
     }
 
-    private function topErrorCodeByProtocol(array $params, ?string $protocol): ?string
+    private function topErrorCodesByProtocols(array $params, array $protocols): array
     {
-        if (!$protocol) {
-            return null;
+        $protocols = array_values(array_filter(array_unique($protocols), fn ($protocol) => $protocol !== null && $protocol !== ''));
+        if (empty($protocols)) {
+            return [];
         }
 
-        return $this->baseSessionQuery($params)
-            ->where('protocol', $protocol)
+        $rows = $this->baseSessionQuery($params)
+            ->whereIn('protocol', $protocols)
             ->whereNotNull('error_code')
-            ->selectRaw('error_code, COUNT(*) as count')
-            ->groupBy('error_code')
+            ->selectRaw('protocol, error_code, COUNT(*) as count')
+            ->groupBy('protocol', 'error_code')
+            ->orderBy('protocol')
             ->orderByDesc('count')
-            ->value('error_code');
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $protocol = (string) $row->protocol;
+            if (!array_key_exists($protocol, $result)) {
+                $result[$protocol] = $row->error_code;
+            }
+        }
+
+        return $result;
     }
 
-    private function topProbeErrorCode(array $params, ?string $nodeId): ?string
+    private function topProbeErrorCodesByNodeIds(array $params, array $nodeIds): array
     {
-        if (!$nodeId) {
-            return null;
+        $nodeIds = array_values(array_filter(array_unique($nodeIds), fn ($nodeId) => $nodeId !== null && $nodeId !== ''));
+        if (empty($nodeIds)) {
+            return [];
         }
 
-        return $this->baseProbeResultQuery($params)
-            ->where('node_id', $nodeId)
+        $rows = $this->baseProbeResultQuery($params)
+            ->whereIn('node_id', $nodeIds)
             ->whereNotNull('error_code')
-            ->selectRaw('error_code, COUNT(*) as count')
-            ->groupBy('error_code')
+            ->selectRaw('node_id, error_code, COUNT(*) as count')
+            ->groupBy('node_id', 'error_code')
+            ->orderBy('node_id')
             ->orderByDesc('count')
-            ->value('error_code');
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $nodeId = (string) $row->node_id;
+            if (!array_key_exists($nodeId, $result)) {
+                $result[$nodeId] = $row->error_code;
+            }
+        }
+
+        return $result;
     }
 
     private function eventNameLabel(string $eventName): string
