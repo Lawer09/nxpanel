@@ -62,6 +62,11 @@ class ProjectReportService
         if (($definition['includeLimitState'] ?? false) === true) {
             $this->applyDailyLimitState($rows);
         }
+        $this->applyTopRevenueCountries($rows, 'daily', [
+            'dateFrom' => $definition['dateFrom'],
+            'dateTo' => $definition['dateTo'],
+            'filters' => $definition['filters'] ?? [],
+        ]);
 
         $data = $rows->map(fn ($row) => $this->formatDailyRow($row));
 
@@ -344,6 +349,14 @@ class ProjectReportService
                 ->get();
         }
 
+        $this->applyTopRevenueCountries($rows, 'hourly', [
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'hourFrom' => $hourFrom,
+            'hourTo' => $hourTo,
+            'filters' => $filters,
+        ]);
+
         $data = $rows->map(fn ($row) => $this->formatHourlyRow($row));
 
         return [
@@ -377,7 +390,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v5:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v6:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -843,6 +856,202 @@ class ProjectReportService
     }
 
     /**
+     * Attach top revenue countries for each returned report row without changing the main list query.
+     */
+    private function applyTopRevenueCountries($rows, string $scope, array $context): void
+    {
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $table = $scope === 'hourly' ? 'project_report_hourly' : 'project_daily_aggregates';
+        $dateFrom = (string) ($context['dateFrom'] ?? now()->subDays(1)->toDateString());
+        $dateTo = (string) ($context['dateTo'] ?? now()->toDateString());
+        $filters = is_array($context['filters'] ?? null) ? $context['filters'] : [];
+
+        $hasReportDate = $this->rowsContainProperty($rows, 'report_date');
+        $hasProjectCode = $this->rowsContainProperty($rows, 'project_code');
+        $hasCountry = $this->rowsContainProperty($rows, 'country');
+        $hasHour = $scope === 'hourly' && $this->rowsContainProperty($rows, 'hour');
+
+        $reportDates = $hasReportDate ? $this->collectRowValues($rows, 'report_date') : [];
+        $projectCodes = $hasProjectCode ? $this->collectRowValues($rows, 'project_code') : [];
+        $rowCountries = $hasCountry
+            ? $this->collectRowValues($rows, 'country', static fn ($country) => strtoupper((string) $country))
+            : [];
+        $hours = $hasHour ? $this->collectRowValues($rows, 'hour', static fn ($hour) => (int) $hour) : [];
+
+        $countryExpression = $this->normalizedCountrySql($table . '.country');
+        $query = DB::table($table)
+            ->where($table . '.report_date', '>=', $dateFrom)
+            ->where($table . '.report_date', '<=', $dateTo);
+
+        if (!empty($reportDates)) {
+            $query->whereIn($table . '.report_date', $reportDates);
+        }
+
+        if ($scope === 'hourly') {
+            if (!empty($hours)) {
+                $query->whereIn($table . '.hour', $hours);
+            } else {
+                if (($context['hourFrom'] ?? null) !== null) {
+                    $query->where($table . '.hour', '>=', (int) $context['hourFrom']);
+                }
+                if (($context['hourTo'] ?? null) !== null) {
+                    $query->where($table . '.hour', '<=', (int) $context['hourTo']);
+                }
+            }
+        }
+
+        if (!empty($projectCodes)) {
+            $query->whereIn($table . '.project_code', $projectCodes);
+        } else {
+            $filterProjectCodes = $this->normalizeStringList($filters['projectCodes'] ?? null);
+            if (!empty($filterProjectCodes)) {
+                $query->whereIn($table . '.project_code', $filterProjectCodes);
+            }
+        }
+
+        if (!empty($rowCountries)) {
+            $query->whereIn(DB::raw($countryExpression), $rowCountries);
+        } else {
+            $countries = $this->normalizeStringList($filters['countries'] ?? null);
+            if (!empty($countries)) {
+                $query->whereIn(DB::raw($countryExpression), array_map(static fn ($country) => strtoupper($country), $countries));
+            }
+        }
+
+        $this->applyProjectAdStatusFilter($query, $table . '.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($query, $table . '.project_code', $filters);
+
+        $query->selectRaw($countryExpression . ' as country')
+            ->selectRaw('SUM(' . $table . '.ad_revenue) as ad_revenue');
+
+        if ($hasReportDate) {
+            $query->selectRaw($table . '.report_date as report_date')
+                ->groupBy($table . '.report_date');
+        }
+        if ($hasProjectCode) {
+            $query->selectRaw($table . '.project_code as project_code')
+                ->groupBy($table . '.project_code');
+        }
+        if ($hasHour) {
+            $query->selectRaw($table . '.hour as hour')
+                ->groupBy($table . '.hour');
+        }
+
+        $aggregateRows = $query
+            ->groupBy(DB::raw($countryExpression))
+            ->get();
+
+        $countryBuckets = [];
+        foreach ($aggregateRows as $aggregateRow) {
+            $key = $this->makeTopRevenueCountryScopeKey(
+                $hasReportDate ? ($aggregateRow->report_date ?? null) : null,
+                $hasProjectCode ? ($aggregateRow->project_code ?? null) : null,
+                $hasCountry ? ($aggregateRow->country ?? null) : null,
+                $hasHour ? ($aggregateRow->hour ?? null) : null
+            );
+            $country = (string) ($aggregateRow->country ?: 'XX');
+            $amount = (float) ($aggregateRow->ad_revenue ?? 0);
+
+            $countryBuckets[$key]['total'] = ($countryBuckets[$key]['total'] ?? 0.0) + $amount;
+            $countryBuckets[$key]['countries'][$country] = ($countryBuckets[$key]['countries'][$country] ?? 0.0) + $amount;
+        }
+
+        $formattedBuckets = [];
+        foreach ($countryBuckets as $key => $bucket) {
+            $formattedBuckets[$key] = $this->formatTopRevenueCountries(
+                $bucket['countries'] ?? [],
+                (float) ($bucket['total'] ?? 0)
+            );
+        }
+
+        foreach ($rows as $row) {
+            $key = $this->makeTopRevenueCountryScopeKey(
+                $hasReportDate ? ($row->report_date ?? null) : null,
+                $hasProjectCode ? ($row->project_code ?? null) : null,
+                $hasCountry ? ($row->country ?? null) : null,
+                $hasHour ? ($row->hour ?? null) : null
+            );
+            $row->top_revenue_countries = $formattedBuckets[$key] ?? [];
+        }
+    }
+
+    /**
+     * Check whether any returned row contains a selected dimension property.
+     */
+    private function rowsContainProperty($rows, string $property): bool
+    {
+        foreach ($rows as $row) {
+            if (property_exists($row, $property)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Collect unique non-empty dimension values from the current page rows.
+     */
+    private function collectRowValues($rows, string $property, ?callable $normalizer = null): array
+    {
+        $values = [];
+        foreach ($rows as $row) {
+            if (!property_exists($row, $property)) {
+                continue;
+            }
+
+            $value = $row->{$property};
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $value = $normalizer ? $normalizer($value) : (string) $value;
+            $values[(string) $value] = $value;
+        }
+
+        return array_values($values);
+    }
+
+    /**
+     * Build a stable key for row-level top-country lookup scopes.
+     */
+    private function makeTopRevenueCountryScopeKey($reportDate, $projectCode, $country, $hour): string
+    {
+        return implode("\t", [
+            $reportDate === null || $reportDate === '' ? '*' : (string) $reportDate,
+            $projectCode === null || $projectCode === '' ? '*' : (string) $projectCode,
+            $country === null || $country === '' ? '*' : strtoupper((string) $country),
+            $hour === null || $hour === '' ? '*' : (string) (int) $hour,
+        ]);
+    }
+
+    /**
+     * Format the top three revenue countries and each country's revenue ratio.
+     */
+    private function formatTopRevenueCountries(array $countries, float $totalRevenue): array
+    {
+        if ($totalRevenue <= 0.0 || empty($countries)) {
+            return [];
+        }
+
+        arsort($countries, SORT_NUMERIC);
+        $result = [];
+        foreach (array_slice($countries, 0, 3, true) as $country => $amount) {
+            $amount = (float) $amount;
+            $result[] = [
+                'country' => (string) $country,
+                'adRevenue' => $this->formatDecimal($amount),
+                'ratio' => $this->formatDecimal($amount / $totalRevenue),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Apply cached previous-hour limit state to grouped project rows.
      */
     private function applyDailyLimitState($rows): void
@@ -1185,6 +1394,10 @@ class ProjectReportService
         if (property_exists($row, 'ad_revenue_now')) {
             $data['adRevenueNow'] = $this->formatDecimal($row->ad_revenue_now);
             $data['adRevenueDiff'] = $this->formatDecimal($row->ad_revenue_diff ?? null);
+        }
+
+        if (property_exists($row, 'top_revenue_countries')) {
+            $data['topRevenueCountries'] = $row->top_revenue_countries;
         }
 
         return $data;

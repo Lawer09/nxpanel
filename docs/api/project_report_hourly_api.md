@@ -215,3 +215,12 @@ $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServ
 - 删除条件：`report_date < today - 30 days`。
 - 清理按 `id` 分批删除，默认每批 1000 行，可通过 `--chunk` 调整。
 - 可使用 `--dry-run` 只统计待删除行数，不执行删除。
+
+## Top3 收益国家说明
+
+- 项目小时报表 JSON 查询返回行新增 `topRevenueCountries` 字段，表示该行对应维度范围内广告收益最高的前 3 个国家。
+- 字段结构为数组：`country` 为国家代码，`adRevenue` 为该国家收益，`ratio` 为该国家收益占当前行维度范围总收益的比例，金额和比例均保留 6 位小数。
+- 计算来源为 `project_report_hourly.ad_revenue`，按当前返回行可确定的 `reportDate`、`hour`、`projectCode`、`country` 维度以及请求 `dateFrom/dateTo/hourFrom/hourTo`、筛选条件批量聚合；不对每一行单独查询。
+- 当返回行包含 `country` 维度时，该字段只返回当前国家及其占比；当不包含 `country` 维度时返回当前小时/日期/项目范围内收益 Top3 国家。
+- 无收益或总收益小于等于 0 时返回空数组 `[]`。
+- 该字段跟随项目小时 JSON 查询结果缓存 60 秒。

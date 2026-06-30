@@ -703,3 +703,11 @@
 - 影响范围：`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复日报同步中 `$row === null` 时累加 `$unmatchedRecords` 的逻辑即可。
+
+## 2026-06-30 项目报表 Top3 收益国家返回
+
+- 日期：2026-06-30
+- 变更摘要：项目日报和项目小时报表 JSON 查询返回行新增 `topRevenueCountries` 字段，按当前行可确定的日期、小时、项目、国家维度及请求筛选条件批量聚合收益 Top3 国家和占比；查询缓存 key 升级到 `v6`，避免旧缓存缺少新字段。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `topRevenueCountries` 批量聚合与格式化逻辑，并将项目报表查询缓存 key 恢复到上一版本即可。
