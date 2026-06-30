@@ -177,6 +177,37 @@ class AdSpendPlatformService
         }
     }
 
+    /**
+     * Stream hourly report pages from the ad spend platform.
+     */
+    public function fetchHourlyRecordPages(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): \Generator
+    {
+        $size = max(1, min(500, $size));
+        $current = 1;
+
+        while (true) {
+            if ($current > self::MAX_DAILY_REPORT_PAGES) {
+                throw new \RuntimeException(sprintf(
+                    '广告花费小时报表分页超出安全上限，已停止拉取。account_id=%d, start_date=%s, end_date=%s, max_pages=%d',
+                    $account->id,
+                    $startDate,
+                    $endDate,
+                    self::MAX_DAILY_REPORT_PAGES
+                ));
+            }
+
+            $body = $this->requestHourlyReportPage($account, $startDate, $endDate, $current, $size);
+            $pageRecords = $this->extractRecords($body);
+
+            if (empty($pageRecords)) {
+                break;
+            }
+
+            yield $pageRecords;
+            $current++;
+        }
+    }
+
     private function requestReportPage(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $current, int $size): array
     {
         $queryString = implode('&', [
@@ -213,6 +244,59 @@ class AdSpendPlatformService
         if($body['success'] == false) {
             throw new \RuntimeException('拉取报表失败:  ' . $url . ' 投放平台返回错误，' . ($body['errorMessage'] ?? '未知错误'));
         }
+        return $body;
+    }
+
+    /**
+     * Request one page of hourly ad spend records.
+     */
+    private function requestHourlyReportPage(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $current, int $size): array
+    {
+        $queryString = implode('&', [
+            'objectName=account',
+            'dims=date',
+            'dims=hour',
+            'dims=group_name',
+            'dims=group_id',
+            'dims=agency_id',
+            'dims=user_id',
+            'metrics=impressions',
+            'metrics=clicks',
+            'metrics=spend',
+            'metrics=ctr',
+            'metrics=cpm',
+            'metrics=cpc',
+            'metrics=roas',
+            'startDate=' . urlencode($startDate),
+            'endDate=' . urlencode($endDate),
+            'current=' . $current,
+            'size=' . $size,
+        ]);
+        $url = rtrim((string) $account->base_url, '/') . '/api/fb/report/hour/overall?' . $queryString;
+
+        $token = $this->login($account, false);
+        $response = Http::timeout(30)
+            ->acceptJson()
+            ->withToken($token)
+            ->get($url);
+
+        if ($response->status() === 401) {
+            $token = $this->login($account, true);
+            $response = Http::timeout(30)
+                ->acceptJson()
+                ->withToken($token)
+                ->get($url);
+        }
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('拉取小时报表失败: ' . $response->body());
+        }
+
+        $body = is_array($response->json()) ? $response->json() : [];
+        if (($body['success'] ?? false) == false) {
+            throw new \RuntimeException('拉取小时报表失败:  ' . $url . ' 投放平台返回错误，' . ($body['errorMessage'] ?? '未知错误'));
+        }
+
         return $body;
     }
 

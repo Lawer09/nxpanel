@@ -176,8 +176,9 @@ class AggregateProjectHourlyData extends Command
         $userMap = $this->filterHourlyMapByProjectCode($this->queryUserMetrics($date, $hours), $targetProjectCode);
         $firstReportMap = $this->filterHourlyMapByProjectCode($this->queryFirstReportUserMetrics($date, $hours), $targetProjectCode);
         $adRevenueMap = $this->filterHourlyMapByProjectCode($this->queryAdRevenueMetrics($date, $hours), $targetProjectCode);
+        $adSpendMap = $this->filterHourlyMapByProjectCode($this->queryAdSpendMetrics($date, $hours), $targetProjectCode);
 
-        $projectCodes = $this->buildProjectCodeSetFromHourlyMaps([$userMap, $firstReportMap, $adRevenueMap]);
+        $projectCodes = $this->buildProjectCodeSetFromHourlyMaps([$userMap, $firstReportMap, $adRevenueMap, $adSpendMap]);
 
         $trafficProjectCodeQuery = DB::table('project_traffic_platform_accounts')
             ->where('enabled', '=', 1)
@@ -209,7 +210,7 @@ class AggregateProjectHourlyData extends Command
         }
 
         $allKeys = [];
-        foreach ([$userMap, $firstReportMap, $adRevenueMap, $trafficMap] as $map) {
+        foreach ([$userMap, $firstReportMap, $adRevenueMap, $adSpendMap, $trafficMap] as $map) {
             foreach (array_keys($map) as $key) {
                 $allKeys[$key] = true;
             }
@@ -242,13 +243,20 @@ class AggregateProjectHourlyData extends Command
             $firstReportUsers = (int) ($firstReportMap[$key]['report_new_users'] ?? 0);
             $trafficUsageMb = $this->decimal($trafficMap[$key]['traffic_usage_mb'] ?? 0);
             $trafficCost = round($trafficUsageMb * $trafficCostPerMb, 6);
+            $adSpendCost = $this->decimal($adSpendMap[$key]['ad_spend_cost'] ?? 0);
+            $adSpendClicks = (int) ($adSpendMap[$key]['ad_spend_clicks'] ?? 0);
+            $adSpendImpressions = (int) ($adSpendMap[$key]['ad_spend_impressions'] ?? 0);
 
             $adEcpm = $this->safeRatio($adRevenue * 1000, $adImpressions);
             $adCtr = $this->safeRatio($adClicks * 100, $adImpressions);
             $adMatchRate = $this->safeRatio($adMatchedRequests * 100, $adRequests);
             $adShowRate = $this->safeRatio($adImpressions * 100, $adMatchedRequests);
-            $profit = round($adRevenue - $trafficCost, 6);
-            $roi = $this->safeRatio($adRevenue, $trafficCost);
+            $adSpendCpi = $this->safeRatio($adSpendCost, $firstReportUsers);
+            $adSpendCpc = $this->safeRatio($adSpendCost, $adSpendClicks);
+            $adSpendCpm = $this->safeRatio($adSpendCost * 1000, $adSpendImpressions);
+            $totalCost = round($adSpendCost + $trafficCost, 6);
+            $profit = round($adRevenue - $totalCost, 6);
+            $roi = $this->safeRatio($adRevenue, $totalCost);
 
             $rows[] = [
                 'report_date' => $reportDate,
@@ -269,10 +277,10 @@ class AggregateProjectHourlyData extends Command
                 'ad_ctr' => $adCtr,
                 'ad_match_rate' => $adMatchRate,
                 'ad_show_rate' => $adShowRate,
-                'ad_spend_cost' => 0,
-                'ad_spend_cpi' => null,
-                'ad_spend_cpc' => null,
-                'ad_spend_cpm' => null,
+                'ad_spend_cost' => round($adSpendCost, 6),
+                'ad_spend_cpi' => $adSpendCpi,
+                'ad_spend_cpc' => $adSpendCpc,
+                'ad_spend_cpm' => $adSpendCpm,
                 'traffic_usage_mb' => round($trafficUsageMb, 6),
                 'traffic_cost' => $trafficCost,
                 'profit' => $profit,
@@ -445,6 +453,40 @@ class AggregateProjectHourlyData extends Command
                 'ad_matched_requests' => $current['ad_matched_requests'] + (int) ($row->ad_matched_requests ?? 0),
                 'ad_impressions' => $current['ad_impressions'] + (int) ($row->ad_impressions ?? 0),
                 'ad_clicks' => $current['ad_clicks'] + (int) ($row->ad_clicks ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Query hourly ad spend metrics by project and country.
+     */
+    private function queryAdSpendMetrics(string $date, array $hours): array
+    {
+        $rows = DB::table('ad_spend_report_hourly')
+            ->where('report_date', '=', $date)
+            ->whereIn('hour', $hours)
+            ->select('report_date', 'hour', 'project_code', 'country')
+            ->selectRaw('SUM(spend) as ad_spend_cost')
+            ->selectRaw('SUM(clicks) as ad_spend_clicks')
+            ->selectRaw('SUM(impressions) as ad_spend_impressions')
+            ->groupBy('report_date', 'hour', 'project_code', 'country')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $country = $this->normalizeCountry((string) ($row->country ?? ''));
+            $key = $this->makeHourlyDimensionKey((string) $row->report_date, (int) ($row->hour ?? 0), (string) $row->project_code, $country);
+            $current = $result[$key] ?? [
+                'ad_spend_cost' => 0.0,
+                'ad_spend_clicks' => 0,
+                'ad_spend_impressions' => 0,
+            ];
+            $result[$key] = [
+                'ad_spend_cost' => $current['ad_spend_cost'] + $this->decimal($row->ad_spend_cost),
+                'ad_spend_clicks' => $current['ad_spend_clicks'] + (int) ($row->ad_spend_clicks ?? 0),
+                'ad_spend_impressions' => $current['ad_spend_impressions'] + (int) ($row->ad_spend_impressions ?? 0),
             ];
         }
 

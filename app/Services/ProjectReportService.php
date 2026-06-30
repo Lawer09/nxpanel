@@ -377,7 +377,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v4:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v5:%s', $scope, md5((string) $payload));
     }
 
     /**

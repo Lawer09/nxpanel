@@ -75,6 +75,8 @@ class Kernel extends ConsoleKernel
 
         // 投放日报同步（每 10 分钟，同步最近 2 天）
         $schedule->command('ad-spend:sync --lookback-days=2')->everyTenMinutes()->onOneServer()->withoutOverlapping(55);
+        $schedule->command('ad-spend:sync-hourly --lookback-days=2')->everyTenMinutes()->onOneServer()->withoutOverlapping(55);
+        $schedule->command('ad-spend:prune-hourly --days=30')->dailyAt('0:05')->onOneServer()->withoutOverlapping(10);
 
         // 应用客户端凭证同步到 Redis（每分钟）
         $schedule->command('app-client:sync-redis')->everyMinute()->onOneServer()->withoutOverlapping(2);

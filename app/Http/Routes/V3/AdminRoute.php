@@ -348,6 +348,7 @@ class AdminRoute
                 });
 
                 $router->post('/sync',               [AdSpendPlatformController::class, 'sync']);
+                $router->post('/sync-hourly',        [AdSpendPlatformController::class, 'syncHourly']);
                 $router->get('/sync-jobs',           [AdSpendPlatformController::class, 'fetchSyncJobs']);
                 $router->get('/sync-jobs/{id}',      [AdSpendPlatformController::class, 'detailSyncJob']);
 

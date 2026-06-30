@@ -679,3 +679,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除小时行 `isLimited` 格式化逻辑并恢复缓存键版本即可。
+## 2026-06-30 投放小时数据同步与项目小时聚合接入
+
+- 日期：2026-06-30
+- 变更摘要：新增 `ad_spend_report_hourly` 小时投放表，新增投放平台小时报表拉取、手动同步接口 `POST /ad-spend-platform/sync-hourly`、定时命令 `ad-spend:sync-hourly` 和 30 天清理命令 `ad-spend:prune-hourly`；项目小时聚合 `project:aggregate-hourly` 接入小时投放成本并重算 CPI、CPC、CPM、利润和 ROI。
+- 影响范围：`database/migrations/2026_06_30_120000_create_ad_spend_report_hourly_table.php`、`app/Models/AdSpendHourlyReport.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`app/Console/Commands/SyncAdSpendHourlyReports.php`、`app/Console/Commands/PruneAdSpendHourlyReport.php`、`app/Console/Commands/AggregateProjectHourlyData.php`、`app/Console/Kernel.php`、`app/Http/Controllers/V3/Admin/AdSpendPlatform/AdSpendPlatformController.php`、`app/Http/Requests/Admin/AdSpendPlatformHourlySyncRequest.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/ad_spend_sync_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration 创建 `ad_spend_report_hourly`。
+- 回滚说明：回滚新增 migration，并移除小时同步命令、清理命令、手动同步接口和项目小时聚合中的投放小时表读取逻辑。

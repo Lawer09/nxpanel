@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V3\Admin\AdSpendPlatform;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdSpendPlatformDailyQueryRequest;
+use App\Http\Requests\Admin\AdSpendPlatformHourlySyncRequest;
 use App\Http\Resources\CamelizeResource;
 use App\Models\AdSpendDailyReport;
 use App\Models\AdSpendPlatformAccount;
@@ -308,6 +309,38 @@ class AdSpendPlatformController extends Controller
             return $this->error([422, $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('AdSpendPlatform sync error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    public function syncHourly(
+        AdSpendPlatformHourlySyncRequest $request,
+        AdSpendPlatformService $platformService,
+        AdSpendSyncService $syncService
+    ): JsonResponse {
+        try {
+            $validated = $request->validated();
+            $account = AdSpendPlatformAccount::find((int) $validated['accountId']);
+            if (!$account) {
+                return $this->error([404, '账号不存在']);
+            }
+            if ((int) $account->enabled !== 1) {
+                return $this->error([422, '账号已禁用']);
+            }
+
+            $job = $syncService->syncHourlyAccount(
+                $account,
+                $validated['startDate'],
+                $validated['endDate'],
+                $platformService,
+                AdSpendSyncService::SOURCE_MANUAL
+            );
+
+            return $this->ok([
+                'jobId' => $job->id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AdSpendPlatform syncHourly error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

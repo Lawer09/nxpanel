@@ -75,7 +75,7 @@
 - 当返回行包含唯一 `projectCode` 时，会附带项目元数据字段，例如 `adStatus`、`appPlatform`、`appName`、`packageName` 等现有允许返回的项目字段。
 - 当 `groupBy` 不包含某个维度时，该维度字段返回 `null`。
 - `isLimited` 根据当前返回行自身的 `adMatchRate` 判断：`adMatchRate < 70` 返回 `true`，大于等于 `70` 返回 `false`；`adMatchRate` 为 `null` 时返回 `null`。
-- `adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm` 暂时固定为 `0/null`，后续接入 `ad_spend_platform_reports_hourly` 后再补真实投放小时数据。
+- `adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm` 来源于 `ad_spend_report_hourly` 小时投放表，按当前小时维度聚合后实时计算。
 
 ## 2. 表结构
 
@@ -98,7 +98,7 @@
 | dau_users | 小时活跃用户，来自 `v3_user_report_count` 去重用户数 |
 | fb_dau_users | Firebase 小时活跃，当前固定 0 |
 | ad_revenue/ad_requests/... | 小时广告收益与请求指标，来自 `ad_revenue_hourly` |
-| ad_spend_* | 小时投放字段，当前固定 0/null |
+| ad_spend_* | 小时投放字段，来自 `ad_spend_report_hourly` |
 | traffic_usage_mb | 小时流量用量，来自 `traffic_platform_usage_hourly` |
 | traffic_cost | `traffic_usage_mb * 0.16 / 1024` |
 | profit | `ad_revenue - ad_spend_cost - traffic_cost` |

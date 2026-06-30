@@ -4,7 +4,7 @@
 
 - 管理端前缀：`/api/v3/admin/{securePath}/ad-spend-platform`
 - 鉴权中间件：`admin`、`log`
-- 本文说明手动同步接口、同步任务查询接口，以及定时命令与 Octane 调度下的实际执行链路。
+- 本文说明日报/小时投放消耗手动同步接口、同步任务查询接口，以及定时命令与 Octane 调度下的实际执行链路。
 
 自 `2026-06-06` 起，手动同步接口与定时命令统一复用 `App\Services\AdSpendSyncService`，共享以下步骤：
 
@@ -59,6 +59,31 @@
   }
 }
 ```
+
+
+### 2.5 小时数据手动同步
+
+- 方法：`POST /sync-hourly`
+- 完整路径：`POST /api/v3/admin/{securePath}/ad-spend-platform/sync-hourly`
+
+请求参数与日报同步一致：
+
+```json
+{
+  "accountId": 1,
+  "startDate": "2026-06-30",
+  "endDate": "2026-06-30"
+}
+```
+
+处理规则：
+
+- 仅允许同步已启用账号。
+- 实际同步由 `AdSpendSyncService::syncHourlyAccount(..., source=manual)` 执行。
+- 拉取接口：`GET /api/fb/report/hour/overall`。
+- 请求维度：`date`、`hour`、`group_name`、`group_id`、`agency_id`、`user_id`。
+- 请求指标：`impressions`、`clicks`、`spend`、`ctr`、`cpm`、`cpc`、`roas`。
+- 成功响应同日报同步，返回 `jobId`。
 
 ## 3. 同步任务查询
 
@@ -137,7 +162,40 @@
 - `cpc`
 - `raw_group_name`
 
-### 4.3 任务状态
+
+### 4.3 小时写入
+
+- 写入表：`ad_spend_report_hourly`
+- 唯一更新维度：
+  - `platform_account_id`
+  - `project_code`
+  - `report_date`
+  - `hour`
+  - `country`
+  - `group_key`
+- `group_key` 优先使用 `groupName`，为空时回退 `groupId`，用于避免同一项目同一小时多个分组互相覆盖。
+- 接口未返回国家时，`country` 统一写入 `XX`。
+- 使用分批 `upsert()`，重复同步同一维度数据会更新而不是新增重复行。
+- 同一账号、项目、日期、小时、国家维度内返回多条记录时，服务端会先累加 `impressions`、`clicks`、`spend`，再重算 `ctr`、`cpm`、`cpc` 后写入。
+- `groupName` 为空时回退使用 `groupId` 参与项目代号匹配。
+
+会被更新的核心字段：
+
+- `object_id`
+- `group_id`
+- `raw_group_name`
+- `group_key`
+- `user_id`
+- `agency_id`
+- `impressions`
+- `clicks`
+- `spend`
+- `ctr`
+- `cpm`
+- `cpc`
+- `roas`
+
+### 4.4 任务状态
 
 同步任务表：`ad_spend_platform_sync_jobs`
 
@@ -153,10 +211,13 @@
 
 ### 5.1 命令入口
 
-- 命令：`php artisan ad-spend:sync --lookback-days=2`
+- 日报同步命令：`php artisan ad-spend:sync --lookback-days=2`
+- 小时同步命令：`php artisan ad-spend:sync-hourly --lookback-days=2`
+- 小时清理命令：`php artisan ad-spend:prune-hourly --days=30`
 - 调度定义：`app/Console/Kernel.php`
-- 当前配置：每 `10` 分钟执行一次，保留 `onOneServer()` 与 `withoutOverlapping(55)`；若上一轮同步仍在执行，下一轮会跳过，避免同一日期窗口并发重复同步
-- 大数据量处理：定时命令按账号 `50` 个一批遍历；单账号同步按投放平台分页流式处理，并将日报 `upsert` 控制在 `500` 条/批，降低内存峰值和单条 SQL 体积
+- 当前配置：日报和小时同步均每 `10` 分钟执行一次，保留 `onOneServer()` 与 `withoutOverlapping(55)`；若上一轮同步仍在执行，下一轮会跳过，避免同一日期窗口并发重复同步
+- 小时投放数据仅保留最近 `30` 天，清理任务每天 `00:05` 执行一次
+- 大数据量处理：定时命令按账号 `50` 个一批遍历；单账号同步按投放平台分页流式处理，并将日报/小时 `upsert` 控制在 `500` 条/批，降低内存峰值和单条 SQL 体积
 
 日期参数规则：
 
