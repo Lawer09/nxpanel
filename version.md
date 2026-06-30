@@ -1,4 +1,4 @@
-﻿# 版本日志
+# 版本日志
 
 - 说明，不可修改本说明，并严格遵守如下条件
 - 1. 日志内容只追加，不修改
@@ -663,3 +663,19 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`version.md`
 - 是否需要迁移：否；依赖本次 `project_report_hourly` 重建迁移。
 - 回滚说明：如回滚到旧小时表结构，需要同步恢复限流查询列名和缓存键。
+
+## 2026-06-30 项目小时表调度与保留周期调整
+
+- 日期：2026-06-30
+- 变更摘要：`project:aggregate-hourly` 调度从每 5 分钟调整为每小时第 5 分钟执行；新增 `project:prune-hourly` 清理命令，`project_report_hourly` 仅保留最近 30 天数据，并在每天 `00:30` 分批清理 30 天前数据。
+- 影响范围：`app/Console/Kernel.php`、`app/Console/Commands/PruneProjectHourlyReport.php`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `project:prune-hourly` 调度和命令，并将 `project:aggregate-hourly` 调度恢复为每 5 分钟即可。
+
+## 2026-06-30 项目小时报表返回限流标记
+
+- 日期：2026-06-30
+- 变更摘要：项目小时报表 JSON 返回行新增 `isLimited` 字段，直接根据当前行 `adMatchRate < 70` 判断是否限流；`adMatchRate` 为空时返回 `null`，并升级项目报表查询缓存键版本避免旧缓存短时间缺少新字段。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除小时行 `isLimited` 格式化逻辑并恢复缓存键版本即可。

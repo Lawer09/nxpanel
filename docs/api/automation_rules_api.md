@@ -1,4 +1,4 @@
-﻿# Automation Rules API
+# Automation Rules API
 
 ## 1. 基础信息
 

@@ -1,4 +1,4 @@
-﻿# 项目小时报表 API
+# 项目小时报表 API
 
 本文档说明 `project_report_hourly` 表的新字段、聚合来源、查询接口和手动同步接口。
 
@@ -52,6 +52,7 @@
   "adEcpm": "16.922222",
   "adCtr": "3.333333",
   "adMatchRate": "83.333333",
+  "isLimited": false,
   "adShowRate": "90.000000",
   "impressionsPerUser": "10.588235",
   "arpu": "0.179176",
@@ -73,6 +74,7 @@
 
 - 当返回行包含唯一 `projectCode` 时，会附带项目元数据字段，例如 `adStatus`、`appPlatform`、`appName`、`packageName` 等现有允许返回的项目字段。
 - 当 `groupBy` 不包含某个维度时，该维度字段返回 `null`。
+- `isLimited` 根据当前返回行自身的 `adMatchRate` 判断：`adMatchRate < 70` 返回 `true`，大于等于 `70` 返回 `false`；`adMatchRate` 为 `null` 时返回 `null`。
 - `adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm` 暂时固定为 `0/null`，后续接入 `ad_spend_platform_reports_hourly` 后再补真实投放小时数据。
 
 ## 2. 表结构
@@ -199,7 +201,17 @@ php artisan project:aggregate-hourly --start-date=2026-06-29 --end-date=2026-06-
 系统调度已增加：
 
 ```php
-$schedule->command('project:aggregate-hourly')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
+$schedule->command('project:aggregate-hourly')->hourlyAt(5)->onOneServer()->withoutOverlapping(55);
+$schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServer()->withoutOverlapping(10);
 ```
 
 该调度不依赖 `project:aggregate-daily`，小时表由独立命令维护。
+
+## 6. 数据保留
+
+- `project_report_hourly` 仅保留最近 30 天数据。
+- 清理命令：`php artisan project:prune-hourly --days=30`。
+- 调度时间：每天 `00:30` 执行一次。
+- 删除条件：`report_date < today - 30 days`。
+- 清理按 `id` 分批删除，默认每批 1000 行，可通过 `--chunk` 调整。
+- 可使用 `--dry-run` 只统计待删除行数，不执行删除。

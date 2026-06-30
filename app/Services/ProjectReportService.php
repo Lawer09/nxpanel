@@ -377,7 +377,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v3:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v4:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -1197,8 +1197,21 @@ class ProjectReportService
     {
         $data = $this->formatDailyRow($row);
         $data['hour'] = isset($row->hour) ? (int) $row->hour : null;
+        $data['isLimited'] = $this->isHourlyLimitedByMatchRate($row->ad_match_rate ?? null);
 
         return $data;
+    }
+
+    /**
+     * Determine whether an hourly report row is limited by its own ad match rate.
+     */
+    private function isHourlyLimitedByMatchRate($adMatchRate): ?bool
+    {
+        if ($adMatchRate === null || $adMatchRate === '') {
+            return null;
+        }
+
+        return (float) $adMatchRate < 70.0;
     }
 
     /**
