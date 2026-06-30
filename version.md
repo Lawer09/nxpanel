@@ -718,3 +718,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除小时查询返回中的 `summary` 和 `buildHourlySummary()`，并将项目报表查询缓存 key 恢复到上一版本即可。
+
+## 2026-06-30 项目昨日流量飞书日报定时任务
+
+- 日期：2026-06-30
+- 变更摘要：新增 `project:send-yesterday-traffic-report` 命令，按 active 项目汇总昨日 `project_daily_aggregates.traffic_usage_mb` 并以 GB 展示，通过现有 `SendWebhookJob` 发送到飞书机器人 webhook；新增飞书日报配置项并在 Kernel 中配置每日 `09:30` 调度。
+- 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`app/Console/Kernel.php`、`config/services.php`、`.env.example`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更；部署时需要在运行环境 `.env` 配置 `FEISHU_PROJECT_TRAFFIC_REPORT_WEBHOOK_URL`。
+- 回滚说明：移除新增命令、Kernel 调度、飞书配置项、命令文档和测试即可；无需 migration 回滚。

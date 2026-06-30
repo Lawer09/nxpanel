@@ -305,3 +305,44 @@ php artisan user:ban-inactive-zero-usage --days=7 --chunk=200
 调度说明：
 - 已在 `app/Console/Kernel.php` 中配置为每日 `01:30` 执行
 - 使用 `onOneServer()` 和 `withoutOverlapping()` 防止重复调度
+---
+
+## 8. 项目昨日流量飞书日报命令
+
+### 8.1 project:send-yesterday-traffic-report
+
+每天汇总 active 项目的昨日流量使用量，并通过飞书机器人 webhook 发送文本日报。
+
+配置项：
+
+```env
+FEISHU_PROJECT_TRAFFIC_REPORT_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-token
+FEISHU_PROJECT_TRAFFIC_REPORT_TIMEOUT_SECONDS=10
+```
+
+统计口径：
+
+- 项目范围：`project_projects.status = active`。
+- 数据来源：`project_daily_aggregates.traffic_usage_mb`。
+- 日期口径：默认应用时区 `Asia/Shanghai` 的昨日自然日。
+- 聚合方式：按 `project_code` 汇总 `SUM(traffic_usage_mb)`。
+- 展示单位：`traffic_usage_mb / 1024`，保留 2 位小数，单位 GB。
+- 无昨日聚合数据的 active 项目会展示 `0.00 GB`。
+
+```bash
+# 默认发送昨日项目流量日报
+php artisan project:send-yesterday-traffic-report
+
+# 指定日期补发
+php artisan project:send-yesterday-traffic-report --date=2026-06-29
+```
+
+调度说明：
+
+- 已在 `app/Console/Kernel.php` 配置为每日 `09:30` 执行。
+- 使用 `onOneServer()` 和 `withoutOverlapping(10)` 防止多实例重复发送。
+
+回滚说明：
+
+- 移除 `project:send-yesterday-traffic-report` 命令、Kernel 调度、飞书配置项和文档即可。
+- 无数据库结构变更，不需要执行 migration 回滚。

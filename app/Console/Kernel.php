@@ -72,6 +72,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('project:aggregate-daily')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
         $schedule->command('project:aggregate-hourly')->hourlyAt(5)->onOneServer()->withoutOverlapping(55);
         $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServer()->withoutOverlapping(10);
+        $schedule->command('project:send-yesterday-traffic-report')->dailyAt('9:30')->onOneServer()->withoutOverlapping(10);
 
         // 投放日报同步（每 10 分钟，同步最近 2 天）
         $schedule->command('ad-spend:sync --lookback-days=2')->everyTenMinutes()->onOneServer()->withoutOverlapping(55);

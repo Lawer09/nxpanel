@@ -35,4 +35,9 @@ return [
         'token' => env('DNS_TOOL_TOKEN', 'test'),
     ],
 
+    'feishu' => [
+        'project_traffic_report_webhook_url' => env('FEISHU_PROJECT_TRAFFIC_REPORT_WEBHOOK_URL', ''),
+        'project_traffic_report_timeout_seconds' => env('FEISHU_PROJECT_TRAFFIC_REPORT_TIMEOUT_SECONDS', 10),
+    ],
+
 ];
