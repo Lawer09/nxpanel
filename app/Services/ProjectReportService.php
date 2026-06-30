@@ -165,41 +165,60 @@ class ProjectReportService
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
         $dimensionMap = [
-            'reportDate' => 'date',
-            'hour' => 'hour',
-            'projectCode' => 'project_code',
-            'country' => 'country',
+            'reportDate' => 'project_report_hourly.report_date',
+            'hour' => 'project_report_hourly.hour',
+            'projectCode' => 'project_report_hourly.project_code',
+            'country' => 'project_report_hourly.country',
         ];
 
         $metricMap = [
-            'installUsers' => 'install_users',
+            'newUsers' => 'new_users',
+            'reportNewUsers' => 'report_new_users',
+            'fbNewUsers' => 'fb_new_users',
             'dauUsers' => 'dau_users',
+            'fbDauUsers' => 'fb_dau_users',
             'adRevenue' => 'ad_revenue',
+            'adRequests' => 'ad_requests',
+            'adMatchedRequests' => 'ad_matched_requests',
+            'adImpressions' => 'ad_impressions',
+            'adClicks' => 'ad_clicks',
+            'adEcpm' => 'ad_ecpm',
+            'adCtr' => 'ad_ctr',
+            'adMatchRate' => 'ad_match_rate',
+            'adShowRate' => 'ad_show_rate',
             'adSpendCost' => 'ad_spend_cost',
-            'ros' => 'ros',
+            'adSpendCpi' => 'ad_spend_cpi',
+            'adSpendCpc' => 'ad_spend_cpc',
+            'adSpendCpm' => 'ad_spend_cpm',
+            'trafficUsageMb' => 'traffic_usage_mb',
+            'trafficCost' => 'traffic_cost',
+            'totalCost' => 'total_cost',
+            'trafficCostRatio' => 'traffic_cost_ratio',
+            'profit' => 'profit',
+            'roi' => 'roi',
             'id' => 'id',
             'updatedAt' => 'updated_at',
         ];
 
         $query = DB::table('project_report_hourly')
-            ->where('date', '>=', $dateFrom)
-            ->where('date', '<=', $dateTo);
+            ->where('project_report_hourly.report_date', '>=', $dateFrom)
+            ->where('project_report_hourly.report_date', '<=', $dateTo);
 
         if ($hourFrom !== null) {
-            $query->where('hour', '>=', (int) $hourFrom);
+            $query->where('project_report_hourly.hour', '>=', (int) $hourFrom);
         }
         if ($hourTo !== null) {
-            $query->where('hour', '<=', (int) $hourTo);
+            $query->where('project_report_hourly.hour', '<=', (int) $hourTo);
         }
 
         $projectCodes = is_array($filters['projectCodes'] ?? null) ? $filters['projectCodes'] : [];
         if (!empty($projectCodes)) {
-            $query->whereIn('project_code', $projectCodes);
+            $query->whereIn('project_report_hourly.project_code', $projectCodes);
         }
 
         $countries = is_array($filters['countries'] ?? null) ? $filters['countries'] : [];
         if (!empty($countries)) {
-            $query->whereIn('country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
+            $query->whereIn('project_report_hourly.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
         }
         $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
@@ -207,19 +226,52 @@ class ProjectReportService
         if (empty($groupBy)) {
             $sortable = array_merge(array_keys($dimensionMap), array_keys($metricMap));
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'reportDate';
-            $orderColumn = $dimensionMap[$orderKey] ?? $metricMap[$orderKey] ?? 'date';
 
             $total = (clone $query)->count();
-            $rows = $query;
-            if ($orderKey === 'ros') {
-                $rows->orderByRaw(
-                    'CASE WHEN ad_spend_cost = 0 OR dau_users = 0 THEN NULL ELSE (ad_revenue * (install_users / dau_users)) / ad_spend_cost END ' . $orderDirection
-                );
+            $this->joinHourlyProjectMetadata($query);
+            $query->select([
+                'project_report_hourly.id',
+                'project_report_hourly.report_date',
+                'project_report_hourly.hour',
+                'project_report_hourly.project_code',
+                'project_report_hourly.country',
+                'project_report_hourly.new_users',
+                'project_report_hourly.report_new_users',
+                'project_report_hourly.fb_new_users',
+                'project_report_hourly.dau_users',
+                'project_report_hourly.fb_dau_users',
+                'project_report_hourly.ad_revenue',
+                'project_report_hourly.ad_requests',
+                'project_report_hourly.ad_matched_requests',
+                'project_report_hourly.ad_impressions',
+                'project_report_hourly.ad_clicks',
+                'project_report_hourly.ad_ecpm',
+                'project_report_hourly.ad_ctr',
+                'project_report_hourly.ad_match_rate',
+                'project_report_hourly.ad_show_rate',
+                'project_report_hourly.ad_spend_cost',
+                'project_report_hourly.ad_spend_cpi',
+                'project_report_hourly.ad_spend_cpc',
+                'project_report_hourly.ad_spend_cpm',
+                'project_report_hourly.traffic_usage_mb',
+                'project_report_hourly.traffic_cost',
+                'project_report_hourly.profit',
+                'project_report_hourly.roi',
+                'project_report_hourly.updated_at',
+            ]);
+            $this->selectProjectMetadata($query);
+            $query->selectRaw('(project_report_hourly.ad_spend_cost + project_report_hourly.traffic_cost) as total_cost')
+                ->selectRaw('CASE WHEN (COALESCE(project_report_hourly.ad_spend_cost, 0)+COALESCE(project_report_hourly.traffic_cost, 0))=0 THEN NULL ELSE ROUND(COALESCE(project_report_hourly.traffic_cost, 0)/(COALESCE(project_report_hourly.ad_spend_cost, 0)+COALESCE(project_report_hourly.traffic_cost, 0)),6) END as traffic_cost_ratio');
+
+            if ($orderKey === 'id') {
+                $query->orderBy('project_report_hourly.id', $orderDirection);
+            } elseif ($orderKey === 'updatedAt') {
+                $query->orderBy('project_report_hourly.updated_at', $orderDirection);
             } else {
-                $rows->orderBy($orderColumn, $orderDirection);
+                $this->applyDailyOrder($query, $orderKey, $orderDirection, $dimensionMap, $metricMap, 'project_report_hourly.report_date', true);
             }
 
-            $rows = $rows
+            $rows = $query
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
@@ -231,24 +283,52 @@ class ProjectReportService
 
             $groupColumns = array_map(static fn ($key) => $dimensionMap[$key], $groupDimensions);
             $groupQuery = clone $query;
+            if (in_array('projectCode', $groupDimensions, true)) {
+                $this->joinHourlyProjectMetadata($groupQuery);
+            }
             foreach ($groupColumns as $groupColumn) {
-                $groupQuery->selectRaw($groupColumn);
+                $groupQuery->selectRaw($groupColumn . ' as ' . $this->hourlyDimensionAlias(array_search($groupColumn, $dimensionMap, true) ?: ''));
                 $groupQuery->groupBy($groupColumn);
             }
 
-            $groupQuery->selectRaw('SUM(install_users) as install_users')
-                ->selectRaw('SUM(dau_users) as dau_users')
-                ->selectRaw('SUM(ad_revenue) as ad_revenue')
-                ->selectRaw('SUM(ad_spend_cost) as ad_spend_cost')
-                ->selectRaw('CASE WHEN SUM(ad_spend_cost)=0 OR SUM(dau_users)=0 THEN NULL ELSE ROUND((SUM(ad_revenue) * (SUM(install_users) / SUM(dau_users))) / SUM(ad_spend_cost),6) END as ros')
-                ->selectRaw('MAX(updated_at) as updated_at');
+            $groupQuery->selectRaw('SUM(project_report_hourly.new_users) as new_users')
+                ->selectRaw('SUM(project_report_hourly.report_new_users) as report_new_users')
+                ->selectRaw('SUM(project_report_hourly.fb_new_users) as fb_new_users')
+                ->selectRaw('SUM(project_report_hourly.dau_users) as dau_users')
+                ->selectRaw('SUM(project_report_hourly.fb_dau_users) as fb_dau_users')
+                ->selectRaw('SUM(project_report_hourly.ad_revenue) as ad_revenue')
+                ->selectRaw('SUM(project_report_hourly.ad_requests) as ad_requests')
+                ->selectRaw('SUM(project_report_hourly.ad_matched_requests) as ad_matched_requests')
+                ->selectRaw('SUM(project_report_hourly.ad_impressions) as ad_impressions')
+                ->selectRaw('SUM(project_report_hourly.ad_clicks) as ad_clicks')
+                ->selectRaw('SUM(project_report_hourly.ad_spend_cost) as ad_spend_cost')
+                ->selectRaw('SUM(project_report_hourly.traffic_usage_mb) as traffic_usage_mb')
+                ->selectRaw('SUM(project_report_hourly.traffic_cost) as traffic_cost')
+                ->selectRaw('(SUM(project_report_hourly.ad_spend_cost) + SUM(project_report_hourly.traffic_cost)) as total_cost')
+                ->selectRaw('CASE WHEN (COALESCE(SUM(project_report_hourly.ad_spend_cost), 0)+COALESCE(SUM(project_report_hourly.traffic_cost), 0))=0 THEN NULL ELSE ROUND(COALESCE(SUM(project_report_hourly.traffic_cost), 0)/(COALESCE(SUM(project_report_hourly.ad_spend_cost), 0)+COALESCE(SUM(project_report_hourly.traffic_cost), 0)),6) END as traffic_cost_ratio')
+                ->selectRaw('(SUM(project_report_hourly.ad_revenue) - SUM(project_report_hourly.ad_spend_cost) - SUM(project_report_hourly.traffic_cost)) as profit')
+                ->selectRaw('MAX(project_report_hourly.updated_at) as updated_at')
+                ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_revenue)/SUM(project_report_hourly.ad_impressions)*1000,6) END as ad_ecpm')
+                ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_clicks)/SUM(project_report_hourly.ad_impressions)*100,6) END as ad_ctr')
+                ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_requests)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_matched_requests)/SUM(project_report_hourly.ad_requests)*100,6) END as ad_match_rate')
+                ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_matched_requests)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_impressions)/SUM(project_report_hourly.ad_matched_requests)*100,6) END as ad_show_rate')
+                ->selectRaw('CASE WHEN SUM(project_report_hourly.new_users)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_spend_cost)/SUM(project_report_hourly.new_users),6) END as ad_spend_cpi')
+                ->selectRaw('NULL as ad_spend_cpc')
+                ->selectRaw('NULL as ad_spend_cpm')
+                ->selectRaw('CASE WHEN (SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost))=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_revenue)/(SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost)),6) END as roi');
+
+            if (in_array('projectCode', $groupDimensions, true)) {
+                $this->selectGroupedProjectMetadata($groupQuery);
+            }
 
             $sortable = array_values(array_unique(array_merge($groupDimensions, [
-                'installUsers', 'dauUsers', 'adRevenue', 'adSpendCost', 'ros', 'updatedAt',
+                'newUsers', 'reportNewUsers', 'fbNewUsers', 'dauUsers', 'fbDauUsers', 'adRevenue', 'adRequests', 'adMatchedRequests',
+                'adImpressions', 'adClicks', 'adEcpm', 'adCtr', 'adMatchRate', 'adShowRate',
+                'adSpendCost', 'adSpendCpi', 'adSpendCpc', 'adSpendCpm', 'trafficUsageMb',
+                'trafficCost', 'totalCost', 'trafficCostRatio', 'profit', 'roi', 'updatedAt',
             ])));
 
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'adRevenue';
-            $orderColumn = $dimensionMap[$orderKey] ?? $metricMap[$orderKey] ?? 'ad_revenue';
 
             $countQuery = DB::table(DB::raw("({$groupQuery->toSql()}) as t"))
                 ->mergeBindings($groupQuery)
@@ -256,33 +336,15 @@ class ProjectReportService
                 ->first();
             $total = (int) ($countQuery->cnt ?? 0);
 
+            $this->applyDailyOrder($groupQuery, $orderKey, $orderDirection, $dimensionMap, $metricMap, 'ad_revenue', true);
+
             $rows = $groupQuery
-                ->orderBy($orderColumn, $orderDirection)
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
         }
 
-        $data = $rows->map(function ($row) {
-            return [
-                'id' => isset($row->id) ? (int) $row->id : null,
-                'reportDate' => isset($row->date) ? (string) $row->date : null,
-                'hour' => isset($row->hour) ? (int) $row->hour : null,
-                'projectCode' => $row->project_code ?? null,
-                'country' => $row->country ?? null,
-                'installUsers' => (int) ($row->install_users ?? 0),
-                'dauUsers' => (int) ($row->dau_users ?? 0),
-                'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
-                'adSpendCost' => $this->formatDecimal($row->ad_spend_cost ?? null),
-                'ros' => $this->computeRos(
-                    (float) ($row->ad_revenue ?? 0),
-                    (int) ($row->install_users ?? 0),
-                    (int) ($row->dau_users ?? 0),
-                    (float) ($row->ad_spend_cost ?? 0)
-                ),
-                'updatedAt' => $row->updated_at ?? null,
-            ];
-        });
+        $data = $rows->map(fn ($row) => $this->formatHourlyRow($row));
 
         return [
             'data' => $data,
@@ -315,7 +377,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v2:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v3:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -730,6 +792,14 @@ class ProjectReportService
     }
 
     /**
+     * Join project metadata for hourly report rows.
+     */
+    private function joinHourlyProjectMetadata(Builder $query): void
+    {
+        $query->leftJoin('project_projects as report_projects', 'report_projects.project_code', '=', 'project_report_hourly.project_code');
+    }
+
+    /**
      * Attach current revenue and current-vs-report revenue diff to project report rows.
      */
     private function applyDailyNowRevenue($rows, array $definition): void
@@ -815,7 +885,7 @@ class ProjectReportService
         $previousHourDate = $previousHour->toDateString();
         $previousHourValue = (int) $previousHour->format('G');
         $previousHourString = $previousHour->toDateTimeString();
-        $cacheKey = 'project_report:is_limited_metrics:v4:' . $previousHourString;
+        $cacheKey = 'project_report:is_limited_metrics:v5:' . $previousHourString;
 
         return Cache::remember($cacheKey, 60, function () use ($previousHourString, $previousHourDate, $previousHourValue) {
             $dailyRows = DB::table('project_daily_aggregates')
@@ -829,12 +899,12 @@ class ProjectReportService
                 ->get();
 
             $hourlyRows = DB::table('project_report_hourly')
-                ->where('date', '=', $previousHourDate)
+                ->where('report_date', '=', $previousHourDate)
                 ->where('hour', '=', $previousHourValue)
                 ->whereNotNull('project_code')
                 ->where('project_code', '!=', '')
                 ->selectRaw('project_code')
-                ->selectRaw('SUM(install_users) as hourly_new_users')
+                ->selectRaw('SUM(new_users) as hourly_new_users')
                 ->groupBy('project_code')
                 ->get();
 
@@ -1050,6 +1120,20 @@ class ProjectReportService
         };
     }
 
+    /**
+     * Get the stable select alias for a grouped hourly dimension.
+     */
+    private function hourlyDimensionAlias(string $dimension): string
+    {
+        return match ($dimension) {
+            'reportDate' => 'report_date',
+            'projectCode' => 'project_code',
+            'country' => 'country',
+            'hour' => 'hour',
+            default => $dimension,
+        };
+    }
+
     private function formatDailyRow(object $row): array
     {
         $data = [
@@ -1102,6 +1186,17 @@ class ProjectReportService
             $data['adRevenueNow'] = $this->formatDecimal($row->ad_revenue_now);
             $data['adRevenueDiff'] = $this->formatDecimal($row->ad_revenue_diff ?? null);
         }
+
+        return $data;
+    }
+
+    /**
+     * Format hourly rows with the same metric fields as the daily report plus hour.
+     */
+    private function formatHourlyRow(object $row): array
+    {
+        $data = $this->formatDailyRow($row);
+        $data['hour'] = isset($row->hour) ? (int) $row->hour : null;
 
         return $data;
     }

@@ -639,3 +639,27 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `hourly_status` 计算与返回字段，并将限流缓存键恢复为上一版本即可。
+
+## 2026-06-29 项目小时报表重建与同步接口
+
+- 日期：2026-06-29
+- 变更摘要：重建 `project_report_hourly` 表结构，使其与 `project_daily_aggregates` 字段保持一致并额外增加 `hour` 字段；新增 `project:aggregate-hourly` 命令，从 `v3_user_report_count`、`traffic_platform_usage_hourly`、`ad_revenue_hourly` 聚合小时数据，投放小时数据暂置 0/null；新增管理端 `POST /projects/aggregate-hourly` 手动同步接口，并恢复每 5 分钟调度刷新当前小时和上一小时。
+- 影响范围：`database/migrations/2026_06_29_160000_rebuild_project_report_hourly_table.php`、`app/Console/Commands/AggregateProjectHourlyData.php`、`app/Console/Kernel.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectAggregateHourlyRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration；该迁移会删除并重建 `project_report_hourly`，旧小时表数据会被清空。
+- 回滚说明：回滚该 migration 会恢复旧 `date/install_users/ros` 结构；同时需移除新命令、调度、手动同步接口和小时查询字段映射调整。
+
+## 2026-06-29 日报命令小时逻辑兼容新小时表
+
+- 日期：2026-06-29
+- 变更摘要：`project:aggregate-daily` 中遗留的 `aggregateHourlyReportOneDate()` 明确改为 no-op，避免误调用旧的按日报分摊小时逻辑；遗留删除方法的日期列名同步为新小时表 `report_date`，防止后续误触发旧 `date` 字段错误。
+- 影响范围：`app/Console/Commands/AggregateProjectDailyData.php`、`docs/api/project_aggregates_api.md`、`version.md`
+- 是否需要迁移：否；依赖本次 `project_report_hourly` 重建迁移。
+- 回滚说明：如需恢复日报命令写小时表，需要重新实现为新字段口径，不建议回滚到旧 `date/install_users/ros` 逻辑。
+
+## 2026-06-29 项目日报限流兼容新小时表字段
+
+- 日期：2026-06-29
+- 变更摘要：项目日报 `isLimited/hourly_status` 辅助查询从 `project_report_hourly.date` 切换为新字段 `report_date`，并将限流指标缓存键升级到 `project_report:is_limited_metrics:v5:{hour}`，避免新旧小时表结构切换后读取旧缓存或旧字段报错。
+- 影响范围：`app/Services/ProjectReportService.php`、`version.md`
+- 是否需要迁移：否；依赖本次 `project_report_hourly` 重建迁移。
+- 回滚说明：如回滚到旧小时表结构，需要同步恢复限流查询列名和缓存键。

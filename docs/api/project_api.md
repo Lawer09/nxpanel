@@ -898,3 +898,53 @@
   ]
 }
 ```
+## 2026-06-29 项目小时报表手动同步
+
+- **方法/路径**：`POST /api/v3/admin/{securePath}/projects/aggregate-hourly`
+- **控制器**：`ProjectController::aggregateHourly`
+- **Request**：`ProjectAggregateHourlyRequest`
+- **说明**：同步调用 `project:aggregate-hourly`，按日期、小时和可选项目 ID 重建 `project_report_hourly` 数据。该接口只处理小时报表，不会触发 `project_daily_aggregates` 日报聚合。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| startDate | string | 是 | 开始日期，`YYYY-MM-DD` |
+| endDate | string | 是 | 结束日期，必须大于等于 `startDate` |
+| hourFrom | int | 否 | 开始小时，0-23；不传时命令默认按场景处理 |
+| hourTo | int | 否 | 结束小时，0-23，必须大于等于 `hourFrom` |
+| projectId | int | 否 | 项目 ID；传入后只重算该项目 |
+
+### 请求示例
+
+```json
+{
+  "startDate": "2026-06-29",
+  "endDate": "2026-06-29",
+  "hourFrom": 9,
+  "hourTo": 12,
+  "projectId": 12
+}
+```
+
+### 返回示例
+
+```json
+{
+  "success": true,
+  "startDate": "2026-06-29",
+  "endDate": "2026-06-29",
+  "hourFrom": 9,
+  "hourTo": 12,
+  "projectId": 12,
+  "exitCode": 0,
+  "output": "Start aggregating project hourly data..."
+}
+```
+
+### 数据来源
+
+- 用户小时数据：`v3_user_report_count`
+- 流量小时数据：`traffic_platform_usage_hourly`
+- 广告收益小时数据：`ad_revenue_hourly`
+- 投放小时数据：暂未接入，`adSpendCost` 固定为 `0.000000`，投放比率字段返回 `null`

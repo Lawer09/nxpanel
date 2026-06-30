@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\ProjectBatchUpdateAdStatusRequest;
 use App\Http\Requests\Admin\ProjectBatchUpdateAppPlatformRequest;
 use App\Http\Requests\Admin\ProjectBatchUpdateDepartmentRequest;
 use App\Http\Requests\Admin\ProjectFetchRequest;
+use App\Http\Requests\Admin\ProjectAggregateHourlyRequest;
 use App\Http\Requests\Admin\ProjectAggregateRequest;
 use App\Http\Requests\Admin\ProjectSaveRequest;
 use App\Http\Requests\Admin\ProjectUpdateRequest;
@@ -171,6 +172,48 @@ class ProjectController extends Controller
             return $this->error([422, $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('ProjectAggregate aggregate error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    public function aggregateHourly(ProjectAggregateHourlyRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            $startDate = (string) $params['startDate'];
+            $endDate = (string) $params['endDate'];
+            $projectId = isset($params['projectId']) ? (int) $params['projectId'] : null;
+
+            $arguments = [
+                '--start-date' => $startDate,
+                '--end-date' => $endDate,
+            ];
+            if ($projectId !== null) {
+                $arguments['--project-id'] = $projectId;
+            }
+            if (isset($params['hourFrom'])) {
+                $arguments['--hour-from'] = (int) $params['hourFrom'];
+            }
+            if (isset($params['hourTo'])) {
+                $arguments['--hour-to'] = (int) $params['hourTo'];
+            }
+
+            $exitCode = Artisan::call('project:aggregate-hourly', $arguments);
+
+            return $this->ok([
+                'success' => $exitCode === 0,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'hourFrom' => $params['hourFrom'] ?? null,
+                'hourTo' => $params['hourTo'] ?? null,
+                'projectId' => $projectId,
+                'exitCode' => $exitCode,
+                'output' => trim(Artisan::output()),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error([422, $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('ProjectAggregate aggregateHourly error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

@@ -663,6 +663,9 @@ class AggregateProjectDailyData extends Command
      */
     private function aggregateHourlyReportOneDate(string $date, ?string $targetProjectCode = null): void
     {
+        // Hourly project reports are maintained by project:aggregate-hourly.
+        return;
+
         $projectCodesByAppId = $this->filterProjectCodesByAppId($this->getProjectCodesByAppId(), $targetProjectCode);
         if ($projectCodesByAppId->isEmpty()) {
             $this->deleteHourlyReports($date, $targetProjectCode);
@@ -954,7 +957,7 @@ class AggregateProjectDailyData extends Command
     private function deleteHourlyReports(string $date, ?string $targetProjectCode): void
     {
         DB::table('project_report_hourly')
-            ->where('date', '=', $date)
+            ->where('report_date', '=', $date)
             ->when($targetProjectCode !== null, fn ($query) => $query->where('project_code', '=', $targetProjectCode))
             ->delete();
     }

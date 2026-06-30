@@ -31,7 +31,7 @@ class ProjectReportHourlyQueryRequest extends FormRequest
             'filters.appPlatforms.*' => 'string|max:50',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:400',
-            'orderBy' => 'nullable|string|in:reportDate,hour,projectCode,country,installUsers,dauUsers,adRevenue,adSpendCost,ros,id,updatedAt',
+            'orderBy' => 'nullable|string|in:reportDate,hour,projectCode,country,newUsers,reportNewUsers,fbNewUsers,dauUsers,fbDauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,trafficCostRatio,profit,roi,id,updatedAt',
             'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }

@@ -373,6 +373,7 @@ class AdminRoute
                 $router->post('/batch-update-department', [ProjectController::class, 'batchUpdateDepartment']);
                 $router->get('/departments', [ProjectController::class, 'departments']);
                 $router->post('/aggregate',       [ProjectController::class, 'aggregate']);
+                $router->post('/aggregate-hourly', [ProjectController::class, 'aggregateHourly']);
                 $router->post('/aggregate-async', [ProjectController::class, 'aggregateAsync']);
 
                 $router->get('/traffic-accounts',                    [ProjectTrafficAccountController::class, 'index']);
