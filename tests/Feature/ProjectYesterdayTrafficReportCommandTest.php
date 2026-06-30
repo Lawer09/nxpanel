@@ -51,9 +51,9 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
             ->andReturn(1);
         Redis::shouldReceive('expire')->once()->andReturn(true);
 
-        $this->insertProject('A001', 'Alpha');
-        $this->insertProject('A002', 'Beta');
-        $this->insertProject('X001', 'Inactive', 'inactive');
+        $this->insertProject('A001', 'Alpha', 'active', 'Alice', '技术部');
+        $this->insertProject('A002', 'Beta', 'active', 'Bob', '技术部');
+        $this->insertProject('X001', 'Inactive', 'inactive', 'Ivan', '运营部');
         $this->insertDailyAggregate('2026-06-29', 'A001', 'US', 2048);
         $this->insertDailyAggregate('2026-06-29', 'X001', 'US', 4096);
 
@@ -64,9 +64,10 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
         $this->assertStringContainsString('统计日期：2026-06-29', $message);
         $this->assertStringContainsString('项目数量：2', $message);
         $this->assertStringContainsString('总流量：2.00 GB', $message);
-        $this->assertStringContainsString('- Alpha（A001）：2.00 GB', $message);
-        $this->assertStringContainsString('- Beta（A002）：0.00 GB', $message);
+        $this->assertStringContainsString("技术部\n- Alpha（A001） Alice 2.00 GB", $message);
+        $this->assertStringContainsString('- Beta（A002） Bob 0.00 GB', $message);
         $this->assertStringNotContainsString('Inactive', $message);
+        $this->assertStringNotContainsString('负责人', $message);
 
         Queue::assertPushed(SendWebhookJob::class);
     }
@@ -89,8 +90,8 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
             ->andReturn(1);
         Redis::shouldReceive('expire')->once()->andReturn(true);
 
-        $this->insertProject('A001', 'Alpha');
-        $this->insertProject('A002', 'Beta');
+        $this->insertProject('A001', 'Alpha', 'active', 'Alice', '技术部');
+        $this->insertProject('A002', 'Beta', 'active', null, null);
         $this->insertDailyAggregate('2026-06-28', 'A001', 'US', 1536);
         $this->insertDailyAggregate('2026-06-28', 'A001', 'JP', 512);
         $this->insertDailyAggregate('2026-06-28', 'A002', 'US', 1);
@@ -100,8 +101,8 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
 
         $message = (string) ($capturedPayload['message'] ?? '');
         $this->assertStringContainsString('统计日期：2026-06-28', $message);
-        $this->assertStringContainsString('- Alpha（A001）：2.00 GB', $message);
-        $this->assertStringContainsString('- Beta（A002）：0.00 GB', $message);
+        $this->assertStringContainsString("技术部\n- Alpha（A001） Alice 2.00 GB", $message);
+        $this->assertStringContainsString("未分组\n- Beta（A002） - 0.00 GB", $message);
         $this->assertStringContainsString('总流量：2.00 GB', $message);
     }
 
@@ -140,11 +141,19 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
         $this->assertNotNull($matched);
     }
 
-    private function insertProject(string $code, string $name, string $status = 'active'): void
+    private function insertProject(
+        string $code,
+        string $name,
+        string $status = 'active',
+        ?string $ownerName = null,
+        ?string $department = null
+    ): void
     {
         DB::table('project_projects')->insert([
             'project_code' => $code,
             'project_name' => $name,
+            'owner_name' => $ownerName,
+            'department' => $department,
             'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),

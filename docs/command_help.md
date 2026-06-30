@@ -327,6 +327,7 @@ FEISHU_PROJECT_TRAFFIC_REPORT_TIMEOUT_SECONDS=10
 - 日期口径：默认应用时区 `Asia/Shanghai` 的昨日自然日。
 - 聚合方式：按 `project_code` 汇总 `SUM(traffic_usage_mb)`。
 - 展示单位：`traffic_usage_mb / 1024`，保留 2 位小数，单位 GB。
+- 明细格式：按 `department` 分组展示；项目行展示项目名称、项目代号、负责人和 GB 值，仅展示字段值。
 - 无昨日聚合数据的 active 项目会展示 `0.00 GB`。
 
 ```bash

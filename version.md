@@ -726,3 +726,11 @@
 - 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`app/Console/Kernel.php`、`config/services.php`、`.env.example`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更；部署时需要在运行环境 `.env` 配置 `FEISHU_PROJECT_TRAFFIC_REPORT_WEBHOOK_URL`。
 - 回滚说明：移除新增命令、Kernel 调度、飞书配置项、命令文档和测试即可；无需 migration 回滚。
+
+## 2026-06-30 项目昨日流量飞书日报分组展示
+
+- 日期：2026-06-30
+- 变更摘要：调整 `project:send-yesterday-traffic-report` 飞书消息明细，按 `project_projects.department` 分组展示，并在项目行增加 `owner_name` 负责人值；部门和负责人仅展示值，不额外增加描述标签。
+- 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
+- 是否需要迁移：否，复用既有 `department` 与 `owner_name` 字段。
+- 回滚说明：恢复日报明细为未分组项目列表，并移除负责人值展示即可；无需 migration 回滚。

@@ -84,6 +84,8 @@ class SendProjectYesterdayTrafficReport extends Command
             ->select([
                 'p.project_code',
                 'p.project_name',
+                'p.owner_name',
+                'p.department',
             ])
             ->selectRaw('COALESCE(traffic.traffic_usage_mb, 0) as traffic_usage_mb')
             ->orderBy('p.project_code')
@@ -91,6 +93,8 @@ class SendProjectYesterdayTrafficReport extends Command
             ->map(fn ($row) => [
                 'project_code' => (string) $row->project_code,
                 'project_name' => (string) $row->project_name,
+                'owner_name' => $this->normalizeDisplayValue($row->owner_name ?? null, '-'),
+                'department' => $this->normalizeDisplayValue($row->department ?? null, '未分组'),
                 'traffic_usage_mb' => (float) $row->traffic_usage_mb,
                 'traffic_usage_gb' => $this->mbToGb((float) $row->traffic_usage_mb),
             ])
@@ -117,17 +121,44 @@ class SendProjectYesterdayTrafficReport extends Command
         if (empty($rows)) {
             $lines[] = '- 无 active 项目';
         } else {
-            foreach ($rows as $row) {
+            $lines = array_merge($lines, $this->buildDepartmentProjectLines($rows));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Group project lines by department and append owner as a plain value.
+     */
+    private function buildDepartmentProjectLines(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            $department = (string) ($row['department'] ?? '未分组');
+            $grouped[$department][] = $row;
+        }
+
+        ksort($grouped, SORT_NATURAL);
+
+        $lines = [];
+        foreach ($grouped as $department => $departmentRows) {
+            if (!empty($lines)) {
+                $lines[] = '';
+            }
+
+            $lines[] = $department;
+            foreach ($departmentRows as $row) {
                 $lines[] = sprintf(
-                    '- %s（%s）：%s GB',
+                    '- %s（%s） %s %s GB',
                     $row['project_name'],
                     $row['project_code'],
+                    $row['owner_name'],
                     $this->formatGb((float) $row['traffic_usage_gb'])
                 );
             }
         }
 
-        return implode("\n", $lines);
+        return $lines;
     }
 
     /**
@@ -158,6 +189,16 @@ class SendProjectYesterdayTrafficReport extends Command
     private function mbToGb(float $mb): float
     {
         return round($mb / 1024, 2);
+    }
+
+    /**
+     * Normalize optional project metadata for compact message display.
+     */
+    private function normalizeDisplayValue($value, string $fallback): string
+    {
+        $value = trim((string) ($value ?? ''));
+
+        return $value === '' ? $fallback : $value;
     }
 
     /**
