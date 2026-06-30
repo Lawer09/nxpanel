@@ -228,6 +228,8 @@ class ProjectReportService
         $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
 
+        $summaryQuery = clone $query;
+
         if (empty($groupBy)) {
             $sortable = array_merge(array_keys($dimensionMap), array_keys($metricMap));
             $orderKey = is_string($orderBy) && in_array($orderBy, $sortable, true) ? $orderBy : 'reportDate';
@@ -361,6 +363,7 @@ class ProjectReportService
 
         return [
             'data' => $data,
+            'summary' => $this->buildHourlySummary($summaryQuery),
             'total' => $total,
             'page' => $page,
             'pageSize' => $pageSize,
@@ -369,6 +372,69 @@ class ProjectReportService
             'hourFrom' => $hourFrom,
             'hourTo' => $hourTo,
             'groupBy' => $groupBy,
+        ];
+    }
+
+    /**
+     * Build project hourly summary from the full filtered hourly query, independent of pagination.
+     */
+    private function buildHourlySummary(Builder $baseQuery): array
+    {
+        $row = (clone $baseQuery)
+            ->selectRaw('SUM(project_report_hourly.new_users) as new_users')
+            ->selectRaw('SUM(project_report_hourly.report_new_users) as report_new_users')
+            ->selectRaw('SUM(project_report_hourly.fb_new_users) as fb_new_users')
+            ->selectRaw('SUM(project_report_hourly.dau_users) as dau_users')
+            ->selectRaw('SUM(project_report_hourly.fb_dau_users) as fb_dau_users')
+            ->selectRaw('SUM(project_report_hourly.ad_revenue) as ad_revenue')
+            ->selectRaw('SUM(project_report_hourly.ad_requests) as ad_requests')
+            ->selectRaw('SUM(project_report_hourly.ad_matched_requests) as ad_matched_requests')
+            ->selectRaw('SUM(project_report_hourly.ad_impressions) as ad_impressions')
+            ->selectRaw('SUM(project_report_hourly.ad_clicks) as ad_clicks')
+            ->selectRaw('SUM(project_report_hourly.ad_spend_cost) as ad_spend_cost')
+            ->selectRaw('SUM(project_report_hourly.traffic_usage_mb) as traffic_usage_mb')
+            ->selectRaw('SUM(project_report_hourly.traffic_cost) as traffic_cost')
+            ->selectRaw('(SUM(project_report_hourly.ad_revenue) - SUM(project_report_hourly.ad_spend_cost) - SUM(project_report_hourly.traffic_cost)) as profit')
+            ->selectRaw('MAX(project_report_hourly.updated_at) as updated_at')
+            ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_revenue)/SUM(project_report_hourly.ad_impressions)*1000,6) END as ad_ecpm')
+            ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_clicks)/SUM(project_report_hourly.ad_impressions)*100,6) END as ad_ctr')
+            ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_requests)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_matched_requests)/SUM(project_report_hourly.ad_requests)*100,6) END as ad_match_rate')
+            ->selectRaw('CASE WHEN SUM(project_report_hourly.ad_matched_requests)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_impressions)/SUM(project_report_hourly.ad_matched_requests)*100,6) END as ad_show_rate')
+            ->selectRaw('CASE WHEN SUM(project_report_hourly.new_users)=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_spend_cost)/SUM(project_report_hourly.new_users),6) END as ad_spend_cpi')
+            ->selectRaw('NULL as ad_spend_cpc')
+            ->selectRaw('NULL as ad_spend_cpm')
+            ->selectRaw('CASE WHEN (COALESCE(SUM(project_report_hourly.ad_spend_cost), 0)+COALESCE(SUM(project_report_hourly.traffic_cost), 0))=0 THEN NULL ELSE ROUND(COALESCE(SUM(project_report_hourly.traffic_cost), 0)/(COALESCE(SUM(project_report_hourly.ad_spend_cost), 0)+COALESCE(SUM(project_report_hourly.traffic_cost), 0)),6) END as traffic_cost_ratio')
+            ->selectRaw('CASE WHEN (SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost))=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_revenue)/(SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost)),6) END as roi')
+            ->first();
+
+        return [
+            'newUsers' => (int) ($row->new_users ?? 0),
+            'reportNewUsers' => (int) ($row->report_new_users ?? 0),
+            'fbNewUsers' => (int) ($row->fb_new_users ?? 0),
+            'dauUsers' => (int) ($row->dau_users ?? 0),
+            'fbDauUsers' => (int) ($row->fb_dau_users ?? 0),
+            'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
+            'adRequests' => (int) ($row->ad_requests ?? 0),
+            'adMatchedRequests' => (int) ($row->ad_matched_requests ?? 0),
+            'adImpressions' => (int) ($row->ad_impressions ?? 0),
+            'adClicks' => (int) ($row->ad_clicks ?? 0),
+            'adEcpm' => $this->formatDecimal($row->ad_ecpm ?? null),
+            'adCtr' => $this->formatDecimal($row->ad_ctr ?? null),
+            'adMatchRate' => $this->formatDecimal($row->ad_match_rate ?? null),
+            'adShowRate' => $this->formatDecimal($row->ad_show_rate ?? null),
+            'impressionsPerUser' => $this->ratio((float) ($row->ad_impressions ?? 0), (float) ($row->dau_users ?? 0)),
+            'arpu' => $this->ratio((float) ($row->ad_revenue ?? 0), (float) ($row->dau_users ?? 0)),
+            'adSpendCost' => $this->formatDecimal($row->ad_spend_cost ?? null),
+            'adSpendCpi' => $this->formatDecimal($row->ad_spend_cpi ?? null),
+            'adSpendCpc' => $this->formatDecimal($row->ad_spend_cpc ?? null),
+            'adSpendCpm' => $this->formatDecimal($row->ad_spend_cpm ?? null),
+            'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb ?? null),
+            'trafficCost' => $this->formatDecimal($row->traffic_cost ?? null),
+            'totalCost' => $this->formatDecimal(($row->ad_spend_cost ?? 0) + ($row->traffic_cost ?? 0)),
+            'trafficCostRatio' => $this->formatDecimal($row->traffic_cost_ratio ?? null),
+            'profit' => $this->formatDecimal($row->profit ?? null),
+            'roi' => $this->formatDecimal($row->roi ?? null),
+            'updatedAt' => $row->updated_at ?? null,
         ];
     }
 
@@ -390,7 +456,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v6:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v7:%s', $scope, md5((string) $payload));
     }
 
     /**

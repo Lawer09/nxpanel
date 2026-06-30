@@ -224,3 +224,11 @@ $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServ
 - 当返回行包含 `country` 维度时，该字段只返回当前国家及其占比；当不包含 `country` 维度时返回当前小时/日期/项目范围内收益 Top3 国家。
 - 无收益或总收益小于等于 0 时返回空数组 `[]`。
 - 该字段跟随项目小时 JSON 查询结果缓存 60 秒。
+## 小时报表 Summary 说明
+
+- 项目小时报表 JSON 查询返回 `summary` 字段，位于返回数据中与 `data`、`total`、`page`、`pageSize` 同级。
+- `summary` 基于当前 `dateFrom/dateTo/hourFrom/hourTo/filters` 的全量筛选结果计算，不受分页和当前页数据影响。
+- 汇总字段与日报 summary 口径保持一致，包括 `newUsers`、`adRevenue`、`adRequests`、`adEcpm`、`adCtr`、`adMatchRate`、`adShowRate`、`adSpendCost`、`trafficCost`、`totalCost`、`trafficCostRatio`、`profit`、`roi` 等。
+- 由于 `project_report_hourly` 当前未保存投放点击数和投放展示数分母，小时 summary 中 `adSpendCpc`、`adSpendCpm` 暂返回 `null`，与小时分组行保持一致。
+- 小时 summary 不包含 `topRevenueCountries`，该字段仅在列表行返回。
+- 该字段跟随项目小时 JSON 查询结果缓存 60 秒。

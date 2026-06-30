@@ -711,3 +711,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `topRevenueCountries` 批量聚合与格式化逻辑，并将项目报表查询缓存 key 恢复到上一版本即可。
+## 2026-06-30 项目小时报表 Summary 返回
+
+- 日期：2026-06-30
+- 变更摘要：项目小时报表 JSON 查询新增 `summary` 返回，按当前小时查询筛选条件全量汇总，不受分页影响；汇总口径对齐小时列表聚合字段，并将项目报表查询缓存 key 升级到 `v7`。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除小时查询返回中的 `summary` 和 `buildHourlySummary()`，并将项目报表查询缓存 key 恢复到上一版本即可。
