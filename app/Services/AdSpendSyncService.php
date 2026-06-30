@@ -72,7 +72,6 @@ class AdSpendSyncService
 
                     $row = $this->buildReportRow($account, $record, $projectCodeLookup, $now);
                     if ($row === null) {
-                        $unmatchedRecords++;
                         continue;
                     }
 
@@ -180,8 +179,14 @@ class AdSpendSyncService
             $unmatchedRecords = 0;
             $reportRows = [];
             $now = now();
+            $remoteTotal = null;
+            $pageCount = 0;
 
-            foreach ($platformService->fetchHourlyRecordPages($account, $startDate, $endDate, self::FETCH_PAGE_SIZE) as $records) {
+            foreach ($platformService->fetchHourlyRecordPagePayloads($account, $startDate, $endDate, self::FETCH_PAGE_SIZE) as $page) {
+                $records = $page['records'] ?? [];
+                $remoteTotal = $page['total'] ?? $remoteTotal;
+                $pageCount = max($pageCount, (int) ($page['page'] ?? 0));
+
                 foreach ($records as $record) {
                     if (!is_array($record)) {
                         continue;
@@ -230,6 +235,8 @@ class AdSpendSyncService
                 'total_records' => $totalRecords,
                 'matched_records' => $matchedRecords,
                 'unmatched_records' => $unmatchedRecords,
+                'remote_total' => $remoteTotal,
+                'pages' => $pageCount,
             ]);
 
             return $job->fresh();

@@ -81,6 +81,7 @@
 - 仅允许同步已启用账号。
 - 实际同步由 `AdSpendSyncService::syncHourlyAccount(..., source=manual)` 执行。
 - 拉取接口：`GET /api/fb/report/hour/overall`。
+- 分页完整性：服务端读取远程 `data.total`、`data.current`、`data.size`，持续分页直到 `current * size >= total`；如果提前空页、页码异常或超过页数安全上限，本次同步任务标记为 `failed`。
 - 请求维度：`date`、`hour`、`group_name`、`group_id`、`agency_id`、`user_id`。
 - 请求指标：`impressions`、`clicks`、`spend`、`ctr`、`cpm`、`cpc`、`roas`。
 - 成功响应同日报同步，返回 `jobId`。
@@ -117,7 +118,7 @@
 | status | string | 任务状态 |
 | totalRecords | int | 拉取到并参与处理的总记录数 |
 | matchedRecords | int | 成功匹配项目并落库的记录数 |
-| unmatchedRecords | int | 无法匹配项目或缺少关键字段的记录数 |
+| unmatchedRecords | int | 未匹配统计；日报同步固定不累计，小时同步会累计无法匹配项目或缺少关键字段的记录数 |
 | errorMessage | string/null | 失败原因 |
 | createdAt | string | 创建时间 |
 | updatedAt | string | 更新时间 |
@@ -140,7 +141,7 @@
 - 使用 `project_projects.project_code` 作为候选项目编码集合
 - 优先取 `groupName`，若为空则回退 `group_name`、`groupId`、`group_id`
 - 当分组名称中存在完整项目编码片段时，判定为匹配成功
-- 未匹配到项目编码时，不写入日报表，但会计入 `unmatched_records`
+- 未匹配到项目编码时，不写入日报表或小时表，也不写入未匹配明细表。日报同步直接忽略且不累计 `unmatched_records`；小时同步仅累计 `unmatched_records` 用于观察匹配失败比例
 
 ### 4.2 日报写入
 
@@ -217,7 +218,7 @@
 - 调度定义：`app/Console/Kernel.php`
 - 当前配置：日报和小时同步均每 `10` 分钟执行一次，保留 `onOneServer()` 与 `withoutOverlapping(55)`；若上一轮同步仍在执行，下一轮会跳过，避免同一日期窗口并发重复同步
 - 小时投放数据仅保留最近 `30` 天，清理任务每天 `00:05` 执行一次
-- 大数据量处理：定时命令按账号 `50` 个一批遍历；单账号同步按投放平台分页流式处理，并将日报/小时 `upsert` 控制在 `500` 条/批，降低内存峰值和单条 SQL 体积
+- 大数据量处理：定时命令按账号 `50` 个一批遍历；单账号同步按投放平台分页流式处理，并将日报/小时 `upsert` 控制在 `500` 条/批，降低内存峰值和单条 SQL 体积。小时同步会校验远程分页 `total/current/size`，确保未提前结束
 
 日期参数规则：
 
@@ -242,7 +243,7 @@
 统一同步 Service 会输出以下日志：
 
 - 开始日志：账号、平台、日期范围、触发来源（`manual` / `scheduled`）
-- 结束日志：`total_records`、`matched_records`、`unmatched_records`
+- 结束日志：`total_records`、`matched_records`、`unmatched_records`；小时同步额外记录远程 `total` 和实际页数
 - 失败日志：账号、日期范围、异常信息
 
 日志仅用于排查链路执行阶段，不新增对外 API 返回字段。

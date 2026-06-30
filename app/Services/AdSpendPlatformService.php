@@ -182,8 +182,21 @@ class AdSpendPlatformService
      */
     public function fetchHourlyRecordPages(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): \Generator
     {
+        foreach ($this->fetchHourlyRecordPagePayloads($account, $startDate, $endDate, $size) as $page) {
+            yield $page['records'];
+        }
+    }
+
+    /**
+     * Stream hourly report page payloads and verify remote pagination metadata.
+     */
+    public function fetchHourlyRecordPagePayloads(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $size = 200): \Generator
+    {
         $size = max(1, min(500, $size));
         $current = 1;
+        $fetchedRecords = 0;
+        $remoteTotal = null;
+        $lastRemoteCurrent = 0;
 
         while (true) {
             if ($current > self::MAX_DAILY_REPORT_PAGES) {
@@ -198,12 +211,52 @@ class AdSpendPlatformService
 
             $body = $this->requestHourlyReportPage($account, $startDate, $endDate, $current, $size);
             $pageRecords = $this->extractRecords($body);
+            $pageMeta = $this->extractPageMeta($body, $current, $size);
+            $remoteCurrent = $pageMeta['current'];
+            $remoteSize = $pageMeta['size'];
+            $remoteTotal = $remoteTotal ?? $pageMeta['total'];
 
             if (empty($pageRecords)) {
+                if ($remoteTotal !== null && $fetchedRecords < $remoteTotal) {
+                    throw new \RuntimeException(sprintf(
+                        '广告花费小时报表分页提前结束，累计记录数小于远程total。account_id=%d, start_date=%s, end_date=%s, fetched=%d, total=%d, page=%d',
+                        $account->id,
+                        $startDate,
+                        $endDate,
+                        $fetchedRecords,
+                        $remoteTotal,
+                        $current
+                    ));
+                }
                 break;
             }
 
-            yield $pageRecords;
+            if ($remoteCurrent <= $lastRemoteCurrent) {
+                throw new \RuntimeException(sprintf(
+                    '广告花费小时报表页码异常。account_id=%d, start_date=%s, end_date=%s, current=%d, last_current=%d',
+                    $account->id,
+                    $startDate,
+                    $endDate,
+                    $remoteCurrent,
+                    $lastRemoteCurrent
+                ));
+            }
+
+            $fetchedRecords += count($pageRecords);
+            yield [
+                'records' => $pageRecords,
+                'total' => $remoteTotal,
+                'current' => $remoteCurrent,
+                'size' => $remoteSize,
+                'page' => $current,
+                'fetched' => $fetchedRecords,
+            ];
+
+            if ($remoteTotal !== null && $remoteCurrent * $remoteSize >= $remoteTotal) {
+                break;
+            }
+
+            $lastRemoteCurrent = $remoteCurrent;
             $current++;
         }
     }
@@ -361,6 +414,39 @@ class AdSpendPlatformService
         }
 
         return [];
+    }
+
+    /**
+     * Extract pagination metadata from supported response shapes.
+     */
+    private function extractPageMeta(array $body, int $fallbackCurrent, int $fallbackSize): array
+    {
+        $total = $this->extractNumericMeta($body, 'total');
+        $current = $this->extractNumericMeta($body, 'current') ?? $fallbackCurrent;
+        $size = $this->extractNumericMeta($body, 'size') ?? $fallbackSize;
+
+        return [
+            'total' => $total,
+            'current' => max(1, (int) $current),
+            'size' => max(1, (int) $size),
+        ];
+    }
+
+    private function extractNumericMeta(array $body, string $key): ?int
+    {
+        $candidates = [
+            $body[$key] ?? null,
+            $body['data'][$key] ?? null,
+            $body['result'][$key] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_numeric($candidate)) {
+                return (int) $candidate;
+            }
+        }
+
+        return null;
     }
 
     private function extractPages(array $body): int

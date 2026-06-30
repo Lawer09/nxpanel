@@ -679,6 +679,7 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除小时行 `isLimited` 格式化逻辑并恢复缓存键版本即可。
+
 ## 2026-06-30 投放小时数据同步与项目小时聚合接入
 
 - 日期：2026-06-30
@@ -686,3 +687,19 @@
 - 影响范围：`database/migrations/2026_06_30_120000_create_ad_spend_report_hourly_table.php`、`app/Models/AdSpendHourlyReport.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`app/Console/Commands/SyncAdSpendHourlyReports.php`、`app/Console/Commands/PruneAdSpendHourlyReport.php`、`app/Console/Commands/AggregateProjectHourlyData.php`、`app/Console/Kernel.php`、`app/Http/Controllers/V3/Admin/AdSpendPlatform/AdSpendPlatformController.php`、`app/Http/Requests/Admin/AdSpendPlatformHourlySyncRequest.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/ad_spend_sync_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：是，需要执行新增 migration 创建 `ad_spend_report_hourly`。
 - 回滚说明：回滚新增 migration，并移除小时同步命令、清理命令、手动同步接口和项目小时聚合中的投放小时表读取逻辑。
+
+## 2026-06-30 投放小时同步分页完整性补强
+
+- 日期：2026-06-30
+- 变更摘要：小时投放同步新增远程分页完整性校验，读取 `total/current/size` 判断是否拉全；提前空页、页码异常或超出页数上限时任务失败并记录错误。未匹配项目代号的数据继续不落未匹配明细表，仅累计 `unmatched_records`。
+- 影响范围：`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复小时分页按空页结束的旧逻辑即可。
+
+## 2026-06-30 投放日报未匹配统计策略调整
+
+- 日期：2026-06-30
+- 变更摘要：投放日报同步匹配不到项目代号的数据不再累计 `unmatched_records`，也不写入未匹配明细表，直接跳过；小时同步保持仅累计 `unmatched_records` 的策略。
+- 影响范围：`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复日报同步中 `$row === null` 时累加 `$unmatchedRecords` 的逻辑即可。
