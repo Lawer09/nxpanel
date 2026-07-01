@@ -742,3 +742,11 @@
 - 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
 - 是否需要迁移：否，复用既有 `project_traffic_platform_accounts` 绑定关系表。
 - 回滚说明：移除命令中的绑定关系查询和 PHP 层过滤逻辑，并恢复文档与测试断言即可；无需 migration 回滚。
+
+## 2026-07-01 项目小时聚合默认刷新当天当前范围
+
+- 日期：2026-07-01
+- 变更摘要：`project:aggregate-hourly` 在不传日期和小时参数的默认调度路径下，从刷新“当前小时 + 上一小时”调整为刷新当天 `0` 点到当前小时，覆盖投放小时数据后续回刷造成的当日历史小时变化；同时在删除 `project_report_hourly` 前先确认存在可重建数据，降低源数据临时为空时误清空聚合数据的风险。
+- 影响范围：`app/Console/Commands/AggregateProjectHourlyData.php`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将默认小时桶恢复为当前小时和上一小时，并恢复原文档说明即可。

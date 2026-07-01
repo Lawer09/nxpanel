@@ -26,8 +26,8 @@ class AggregateProjectHourlyData extends Command
             $targetProjectCode = $this->resolveTargetProjectCode();
 
             if ($this->isDefaultRecentHourRun()) {
-                $this->info('Start aggregating project hourly data: current and previous hour');
-                foreach ($this->recentHourBuckets() as $date => $hours) {
+                $this->info('Start aggregating project hourly data: today through current hour');
+                foreach ($this->currentDayHourBuckets() as $date => $hours) {
                     $this->aggregateOneDate((string) $date, $hours, $targetProjectCode);
                 }
                 $this->info('Project hourly aggregate completed.');
@@ -127,24 +127,16 @@ class AggregateProjectHourlyData extends Command
     }
 
     /**
-     * Build exact date-hour buckets for the scheduler default path.
+     * Build current-day hour buckets for the scheduler default path.
      */
-    private function recentHourBuckets(): array
+    private function currentDayHourBuckets(): array
     {
-        $currentHour = now()->startOfHour();
-        $previousHour = (clone $currentHour)->subHour();
-        $buckets = [];
+        $now = now();
+        $currentHour = (int) $now->format('G');
 
-        foreach ([$previousHour, $currentHour] as $hour) {
-            $date = $hour->toDateString();
-            $buckets[$date][] = (int) $hour->format('G');
-        }
-
-        foreach ($buckets as $date => $hours) {
-            $buckets[$date] = array_values(array_unique($hours));
-        }
-
-        return $buckets;
+        return [
+            $now->toDateString() => range(0, $currentHour),
+        ];
     }
 
     private function resolveTargetProjectCode(): ?string
@@ -171,6 +163,12 @@ class AggregateProjectHourlyData extends Command
      */
     private function aggregateOneDate(string $date, array $hours, ?string $targetProjectCode): void
     {
+        $hours = $this->normalizeHourList($hours);
+        if (empty($hours)) {
+            $this->info("No valid hourly aggregate hours for {$date}");
+            return;
+        }
+
         $this->info("Aggregating hourly {$date}...");
 
         $userMap = $this->filterHourlyMapByProjectCode($this->queryUserMetrics($date, $hours), $targetProjectCode);
@@ -216,12 +214,12 @@ class AggregateProjectHourlyData extends Command
             }
         }
 
-        $this->deleteHourlyReports($date, $hours, $targetProjectCode);
-
         if (empty($allKeys)) {
             $this->info("No hourly aggregate rows for {$date}");
             return;
         }
+
+        $this->deleteHourlyReports($date, $hours, $targetProjectCode);
 
         $rows = [];
         $now = now();
@@ -350,6 +348,30 @@ class AggregateProjectHourlyData extends Command
         }
 
         return $result;
+    }
+
+    /**
+     * Normalize command-provided hour lists before delete/rebuild operations.
+     */
+    private function normalizeHourList(array $hours): array
+    {
+        $normalized = [];
+        foreach ($hours as $hour) {
+            if (!is_numeric($hour)) {
+                continue;
+            }
+
+            $hour = (int) $hour;
+            if ($hour < 0 || $hour > 23) {
+                continue;
+            }
+
+            $normalized[$hour] = $hour;
+        }
+
+        ksort($normalized);
+
+        return array_values($normalized);
     }
 
     private function queryFirstReportUserMetrics(string $date, array $hours): array
