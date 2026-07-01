@@ -76,7 +76,7 @@ class SendProjectYesterdayTrafficReport extends Command
             ->selectRaw('SUM(traffic_usage_mb) as traffic_usage_mb')
             ->groupBy('project_code');
 
-        return DB::table('project_projects as p')
+        $rows = DB::table('project_projects as p')
             ->leftJoinSub($trafficSubquery, 'traffic', function ($join) {
                 $join->on('traffic.project_code', '=', 'p.project_code');
             })
@@ -100,6 +100,43 @@ class SendProjectYesterdayTrafficReport extends Command
             ])
             ->values()
             ->all();
+
+        return $this->filterRowsWithTrafficAccountBindings($rows);
+    }
+
+    /**
+     * Keep only projects that have enabled proxy traffic account bindings.
+     */
+    private function filterRowsWithTrafficAccountBindings(array $rows): array
+    {
+        if (empty($rows)) {
+            return [];
+        }
+
+        $projectCodes = array_values(array_unique(array_filter(array_map(
+            static fn (array $row): string => trim((string) ($row['project_code'] ?? '')),
+            $rows
+        ))));
+
+        if (empty($projectCodes)) {
+            return [];
+        }
+
+        $boundProjectCodes = DB::table('project_traffic_platform_accounts')
+            ->where('enabled', '=', 1)
+            ->whereIn('project_code', $projectCodes)
+            ->whereNotNull('traffic_platform_account_id')
+            ->pluck('project_code')
+            ->map(static fn ($code): string => trim((string) $code))
+            ->filter(static fn (string $code): bool => $code !== '')
+            ->unique()
+            ->flip()
+            ->all();
+
+        return array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => array_key_exists((string) $row['project_code'], $boundProjectCodes)
+        ));
     }
 
     /**

@@ -323,6 +323,7 @@ FEISHU_PROJECT_TRAFFIC_REPORT_TIMEOUT_SECONDS=10
 统计口径：
 
 - 项目范围：`project_projects.status = active`。
+- 绑定过滤：仅保留 `project_traffic_platform_accounts.enabled = 1` 且已绑定代理流量账户的项目；绑定关系单独查询后在 PHP 中过滤，不通过 SQL 联表处理。
 - 数据来源：`project_daily_aggregates.traffic_usage_mb`。
 - 日期口径：默认应用时区 `Asia/Shanghai` 的昨日自然日。
 - 聚合方式：按 `project_code` 汇总 `SUM(traffic_usage_mb)`。

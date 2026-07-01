@@ -734,3 +734,11 @@
 - 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
 - 是否需要迁移：否，复用既有 `department` 与 `owner_name` 字段。
 - 回滚说明：恢复日报明细为未分组项目列表，并移除负责人值展示即可；无需 migration 回滚。
+
+## 2026-07-01 项目昨日流量飞书日报过滤未绑定流量账户项目
+
+- 日期：2026-07-01
+- 变更摘要：调整 `project:send-yesterday-traffic-report` 项目范围，先查询 active 项目日报数据，再单独查询 `project_traffic_platform_accounts` 中启用的代理流量账户绑定关系，并在 PHP 层过滤掉未绑定代理流量账户的项目；避免在 SQL 中联表过滤绑定关系。
+- 影响范围：`app/Console/Commands/SendProjectYesterdayTrafficReport.php`、`docs/command_help.md`、`tests/Feature/ProjectYesterdayTrafficReportCommandTest.php`、`version.md`
+- 是否需要迁移：否，复用既有 `project_traffic_platform_accounts` 绑定关系表。
+- 回滚说明：移除命令中的绑定关系查询和 PHP 层过滤逻辑，并恢复文档与测试断言即可；无需 migration 回滚。

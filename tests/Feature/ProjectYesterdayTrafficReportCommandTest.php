@@ -53,8 +53,13 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
 
         $this->insertProject('A001', 'Alpha', 'active', 'Alice', '技术部');
         $this->insertProject('A002', 'Beta', 'active', 'Bob', '技术部');
+        $this->insertProject('A003', 'NoTrafficAccount', 'active', 'Nina', '技术部');
         $this->insertProject('X001', 'Inactive', 'inactive', 'Ivan', '运营部');
+        $this->insertTrafficAccountBinding('A001');
+        $this->insertTrafficAccountBinding('A002');
+        $this->insertTrafficAccountBinding('X001');
         $this->insertDailyAggregate('2026-06-29', 'A001', 'US', 2048);
+        $this->insertDailyAggregate('2026-06-29', 'A003', 'US', 1024);
         $this->insertDailyAggregate('2026-06-29', 'X001', 'US', 4096);
 
         $this->artisan('project:send-yesterday-traffic-report')
@@ -67,6 +72,7 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
         $this->assertStringContainsString("技术部\n- Alpha（A001） Alice 2.00 GB", $message);
         $this->assertStringContainsString('- Beta（A002） Bob 0.00 GB', $message);
         $this->assertStringNotContainsString('Inactive', $message);
+        $this->assertStringNotContainsString('NoTrafficAccount', $message);
         $this->assertStringNotContainsString('负责人', $message);
 
         Queue::assertPushed(SendWebhookJob::class);
@@ -92,6 +98,8 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
 
         $this->insertProject('A001', 'Alpha', 'active', 'Alice', '技术部');
         $this->insertProject('A002', 'Beta', 'active', null, null);
+        $this->insertTrafficAccountBinding('A001');
+        $this->insertTrafficAccountBinding('A002');
         $this->insertDailyAggregate('2026-06-28', 'A001', 'US', 1536);
         $this->insertDailyAggregate('2026-06-28', 'A001', 'JP', 512);
         $this->insertDailyAggregate('2026-06-28', 'A002', 'US', 1);
@@ -155,6 +163,21 @@ class ProjectYesterdayTrafficReportCommandTest extends TestCase
             'owner_name' => $ownerName,
             'department' => $department,
             'status' => $status,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function insertTrafficAccountBinding(string $projectCode, int $enabled = 1): void
+    {
+        DB::table('project_traffic_platform_accounts')->insert([
+            'project_code' => $projectCode,
+            'traffic_platform_account_id' => random_int(1, 100000),
+            'platform_code' => 'test',
+            'external_uid' => null,
+            'external_username' => null,
+            'bind_type' => 'account',
+            'enabled' => $enabled,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
