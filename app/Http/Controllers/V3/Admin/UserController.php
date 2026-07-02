@@ -371,7 +371,7 @@ class UserController extends V2UserController
         );
 
         if (!$record) {
-            return $this->error([400202, '灏佺IP璁板綍涓嶅瓨鍦?]);
+            return $this->error([400202, '封禁IP记录不存在']);
         }
 
         return $this->ok([
