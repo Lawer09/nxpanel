@@ -787,3 +787,11 @@
 - 影响范围：`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
 - 是否需要迁移：否，复用既有 `project_projects.department` 字段。
 - 回滚说明：移除 Request 中 `filters.departments` 校验、Service 部门过滤逻辑和文档说明，并将项目报表查询缓存 key 恢复到上一版本即可。
+
+## 2026-07-02 项目部门枚举缓存
+
+- 日期：2026-07-02
+- 变更摘要：项目管理部门列表接口 `GET /api/v3/admin/{securePath}/projects/departments` 改为读取缓存后的部门枚举列表，缓存 300 秒；创建/编辑项目、批量保存项目、批量更新部门时自动清理部门缓存，保证后续查询刷新。
+- 影响范围：`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ProjectService::departments()` 的缓存读取和部门写入后的缓存清理逻辑，并恢复项目 API 文档中的缓存说明即可。

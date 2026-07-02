@@ -821,7 +821,7 @@
 
 - **方法/路径**：`GET /api/v3/admin/{securePath}/projects/departments`
 - **控制器**：`ProjectController::departments`
-- **说明**：从现有 `project_projects.department` 数据中查询非空部门，去重后按部门名称升序返回；不新增独立部门配置表。
+- **说明**：从现有 `project_projects.department` 数据中查询非空部门，去重后按部门名称升序返回；结果缓存 300 秒，创建/编辑项目、批量保存项目、批量更新部门时会自动失效缓存；不新增独立部门配置表。
 
 #### 返回示例
 

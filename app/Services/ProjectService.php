@@ -4,11 +4,16 @@ namespace App\Services;
 
 use App\Models\Project;
 use App\Exceptions\BusinessException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ProjectService
 {
     private const BATCH_SAVE_CHUNK_SIZE = 100;
+
+    private const DEPARTMENT_CACHE_KEY = 'project:departments';
+
+    private const DEPARTMENT_CACHE_TTL = 300;
 
     private const PROJECT_BASE_FIELD_MAP = [
         'projectName' => 'project_name',
@@ -118,7 +123,13 @@ class ProjectService
             'remark'       => $params['remark'] ?? null,
         ];
 
-        return Project::create(array_merge($attributes, $this->extractMetadataAttributes($params)));
+        $project = Project::create(array_merge($attributes, $this->extractMetadataAttributes($params)));
+
+        if ($this->hasDisplayDepartment($project->department)) {
+            $this->forgetDepartmentCache();
+        }
+
+        return $project;
     }
 
     public function update(int $id, array $params): Project
@@ -148,8 +159,12 @@ class ProjectService
             $project->{$column} = $value;
         }
 
+        $departmentChanged = $project->isDirty('department');
         if ($project->isDirty()) {
             $project->save();
+        }
+        if ($departmentChanged) {
+            $this->forgetDepartmentCache();
         }
 
         return $project;
@@ -235,6 +250,10 @@ class ProjectService
             $results = array_merge($results, $chunkResult['items']);
         }
 
+        if ($this->itemsMayChangeDepartments($items)) {
+            $this->forgetDepartmentCache();
+        }
+
         return [
             'created' => $created,
             'updated' => $updated,
@@ -288,7 +307,12 @@ class ProjectService
             $department = null;
         }
 
-        return $this->batchUpdateProjectColumn($ids, 'department', $department);
+        $result = $this->batchUpdateProjectColumn($ids, 'department', $department);
+        if ($result['updated'] > 0) {
+            $this->forgetDepartmentCache();
+        }
+
+        return $result;
     }
 
     /**
@@ -298,16 +322,18 @@ class ProjectService
      */
     public function departments(): array
     {
-        return Project::query()
-            ->whereNotNull('department')
-            ->whereRaw("TRIM(department) <> ''")
-            ->distinct()
-            ->selectRaw('TRIM(department) as department')
-            ->orderBy('department')
-            ->pluck('department')
-            ->map(fn ($department) => (string) $department)
-            ->values()
-            ->all();
+        return Cache::remember(self::DEPARTMENT_CACHE_KEY, self::DEPARTMENT_CACHE_TTL, function () {
+            return Project::query()
+                ->whereNotNull('department')
+                ->whereRaw("TRIM(department) <> ''")
+                ->distinct()
+                ->selectRaw('TRIM(department) as department')
+                ->orderBy('department')
+                ->pluck('department')
+                ->map(fn ($department) => (string) $department)
+                ->values()
+                ->all();
+        });
     }
 
     /**
@@ -396,5 +422,35 @@ class ProjectService
         }
 
         return array_merge($attributes, $this->extractMetadataAttributes($params));
+    }
+
+    /**
+     * Determine whether batch-save input can affect cached department options.
+     */
+    private function itemsMayChangeDepartments(array $items): bool
+    {
+        foreach ($items as $item) {
+            if (is_array($item) && array_key_exists('department', $item)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check whether a department should appear in the enum list.
+     */
+    private function hasDisplayDepartment(mixed $department): bool
+    {
+        return is_string($department) && trim($department) !== '';
+    }
+
+    /**
+     * Clear cached department options after project department changes.
+     */
+    private function forgetDepartmentCache(): void
+    {
+        Cache::forget(self::DEPARTMENT_CACHE_KEY);
     }
 }
