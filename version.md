@@ -795,3 +795,11 @@
 - 影响范围：`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `ProjectService::departments()` 的缓存读取和部门写入后的缓存清理逻辑，并恢复项目 API 文档中的缓存说明即可。
+
+## 2026-07-02 项目代号枚举缓存
+
+- 日期：2026-07-02
+- 变更摘要：项目管理新增 `GET /api/v3/admin/{securePath}/projects/project-codes` 项目代号枚举接口，从 `project_projects.project_code` 查询非空项目代号并缓存 300 秒；创建项目、批量保存新增项目时自动清理项目代号缓存。
+- 影响范围：`app/Services/ProjectService.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 `ProjectController::projectCodes()`、路由、`ProjectService::projectCodes()` 及项目代号缓存清理逻辑，并恢复项目 API 文档即可。

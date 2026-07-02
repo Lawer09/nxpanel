@@ -133,6 +133,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function projectCodes(): JsonResponse
+    {
+        return $this->ok([
+            'data' => $this->projectService->projectCodes(),
+        ]);
+    }
+
     public function batchSave(ProjectBatchSaveRequest $request): JsonResponse
     {
         try {

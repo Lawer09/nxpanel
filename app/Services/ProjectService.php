@@ -15,6 +15,10 @@ class ProjectService
 
     private const DEPARTMENT_CACHE_TTL = 300;
 
+    private const PROJECT_CODE_CACHE_KEY = 'project:project_codes';
+
+    private const PROJECT_CODE_CACHE_TTL = 300;
+
     private const PROJECT_BASE_FIELD_MAP = [
         'projectName' => 'project_name',
         'ownerName' => 'owner_name',
@@ -125,6 +129,7 @@ class ProjectService
 
         $project = Project::create(array_merge($attributes, $this->extractMetadataAttributes($params)));
 
+        $this->forgetProjectCodeCache();
         if ($this->hasDisplayDepartment($project->department)) {
             $this->forgetDepartmentCache();
         }
@@ -253,6 +258,9 @@ class ProjectService
         if ($this->itemsMayChangeDepartments($items)) {
             $this->forgetDepartmentCache();
         }
+        if ($created > 0) {
+            $this->forgetProjectCodeCache();
+        }
 
         return [
             'created' => $created,
@@ -331,6 +339,27 @@ class ProjectService
                 ->orderBy('department')
                 ->pluck('department')
                 ->map(fn ($department) => (string) $department)
+                ->values()
+                ->all();
+        });
+    }
+
+    /**
+     * List distinct non-empty project codes from existing projects.
+     *
+     * @return array<int, string>
+     */
+    public function projectCodes(): array
+    {
+        return Cache::remember(self::PROJECT_CODE_CACHE_KEY, self::PROJECT_CODE_CACHE_TTL, function () {
+            return Project::query()
+                ->whereNotNull('project_code')
+                ->whereRaw("TRIM(project_code) <> ''")
+                ->distinct()
+                ->selectRaw('TRIM(project_code) as project_code')
+                ->orderBy('project_code')
+                ->pluck('project_code')
+                ->map(fn ($projectCode) => (string) $projectCode)
                 ->values()
                 ->all();
         });
@@ -452,5 +481,13 @@ class ProjectService
     private function forgetDepartmentCache(): void
     {
         Cache::forget(self::DEPARTMENT_CACHE_KEY);
+    }
+
+    /**
+     * Clear cached project code options after projects are created.
+     */
+    private function forgetProjectCodeCache(): void
+    {
+        Cache::forget(self::PROJECT_CODE_CACHE_KEY);
     }
 }

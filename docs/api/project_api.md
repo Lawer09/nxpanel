@@ -15,6 +15,7 @@
 | POST | `/projects/update-status` | 更新项目状态 | `ProjectController::updateStatus` |
 | POST | `/projects/batch-update-ad-status` | 批量更新项目投放状态 | `ProjectController::batchUpdateAdStatus` |
 | POST | `/projects/batch-update-app-platform` | 批量更新项目应用平台 | `ProjectController::batchUpdateAppPlatform` |
+| GET | `/projects/project-codes` | 项目代号列表 | `ProjectController::projectCodes` |
 | POST | `/projects/aggregate` | 手动聚合（同步） | `ProjectController::aggregate` |
 | POST | `/projects/aggregate-async` | 手动聚合（异步） | `ProjectController::aggregateAsync` |
 | GET | `/projects/traffic-accounts` | 流量账号列表 | `ProjectTrafficAccountController::index` |
@@ -830,7 +831,21 @@
   "data": ["产品部", "技术部", "运营部"]
 }
 ```
-### 5.8 批量保存项目
+### 5.8 项目代号列表
+
+- **方法/路径**：`GET /api/v3/admin/{securePath}/projects/project-codes`
+- **控制器**：`ProjectController::projectCodes`
+- **说明**：从现有 `project_projects.project_code` 数据中查询非空项目代号，去重后按项目代号升序返回；结果缓存 300 秒，创建项目、批量保存新增项目时会自动失效缓存。
+
+#### 返回示例
+
+```json
+{
+  "data": ["A001", "A002", "P001"]
+}
+```
+
+### 5.9 批量保存项目
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-save`
 - **控制器**：`ProjectController::batchSave`
