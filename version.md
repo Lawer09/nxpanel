@@ -758,3 +758,11 @@
 - 影响范围：`database/migrations/2026_07_02_120000_create_aid_channel_type_update_queues_table.php`、`app/Models/AidChannelTypeUpdateQueue.php`、`app/Services/AidChannelTypeUpdateQueueService.php`、`app/Services/Auth/LoginService.php`、`app/Console/Commands/FlushAidChannelTypeUpdates.php`、`app/Console/Kernel.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移 `2026_07_02_120000_create_aid_channel_type_update_queues_table.php`。
 - 回滚说明：回滚新增迁移并移除队列模型、Service、命令、Kernel 调度、`loginByAid` 入队调用、测试和文档说明即可；如需恢复旧行为，可将已存在 AID 用户登录时的完整 `register_metadata` 直接合并写回逻辑恢复。
+
+## 2026-07-02 项目报表排除筛选
+
+- 日期：2026-07-02
+- 变更摘要：项目日报查询、项目日报 CSV 导出和项目小时报表查询新增 `filters.exclude.projectCodes`、`filters.exclude.countries` 排除筛选；正向筛选与排除筛选同时存在时按先包含再排除处理；日报投放子查询、Top3 收益国家和小时 summary 同步使用该口径，并将项目报表查询缓存 key 升级到 `v8`。
+- 影响范围：`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 Request 中 `filters.exclude.*` 校验、Service 排除过滤逻辑和文档说明，并将项目报表查询缓存 key 恢复到上一版本即可。

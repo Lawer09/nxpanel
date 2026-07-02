@@ -23,7 +23,11 @@
     "projectCodes": ["A003"],
     "countries": ["US"],
     "adStatuses": ["running"],
-    "appPlatforms": ["android"]
+    "appPlatforms": ["android"],
+    "exclude": {
+      "projectCodes": ["A002"],
+      "countries": ["BR", "IN"]
+    }
   },
   "page": 1,
   "pageSize": 50,
@@ -41,6 +45,8 @@
 | groupBy | array | 否 | 聚合维度，支持 `reportDate`、`projectCode`、`country` |
 | filters.projectCodes | array | 否 | 项目编码过滤 |
 | filters.countries | array | 否 | 国家过滤，内部会转为大写 |
+| filters.exclude.projectCodes | array | 否 | 排除项目编码过滤；与 `filters.projectCodes` 同时存在时先包含再排除 |
+| filters.exclude.countries | array | 否 | 排除国家过滤，内部会转为大写；summary、Top3 收益国家和 CSV 导出使用同一口径 |
 | filters.adStatuses | array | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
 | filters.appPlatforms | array | 否 | 项目应用平台过滤，匹配 `project_projects.app_platform` |
 | page | integer | 否 | 页码，默认 `1` |
@@ -214,7 +220,11 @@
     "projectCodes": ["A003"],
     "countries": ["US"],
     "adStatuses": ["running"],
-    "appPlatforms": ["android"]
+    "appPlatforms": ["android"],
+    "exclude": {
+      "projectCodes": ["A002"],
+      "countries": ["BR", "IN"]
+    }
   },
   "orderBy": "adRevenue",
   "orderDirection": "desc"
@@ -310,3 +320,8 @@ axios.post(url, payload, { responseType: 'blob' })
 - 当返回行包含 `country` 维度时，该字段只返回当前国家及其占比；当不包含 `country` 维度时返回当前日期/项目范围内收益 Top3 国家。
 - 无收益或总收益小于等于 0 时返回空数组 `[]`。
 - 该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
+## 排除筛选说明
+
+- `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前筛选范围中排除指定项目或国家。
+- 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
+- 日报 JSON、`summary`、`topRevenueCountries` 和 CSV 导出均使用相同排除筛选口径。

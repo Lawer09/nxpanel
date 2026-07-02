@@ -216,15 +216,7 @@ class ProjectReportService
             $query->where('project_report_hourly.hour', '<=', (int) $hourTo);
         }
 
-        $projectCodes = is_array($filters['projectCodes'] ?? null) ? $filters['projectCodes'] : [];
-        if (!empty($projectCodes)) {
-            $query->whereIn('project_report_hourly.project_code', $projectCodes);
-        }
-
-        $countries = is_array($filters['countries'] ?? null) ? $filters['countries'] : [];
-        if (!empty($countries)) {
-            $query->whereIn('project_report_hourly.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
-        }
+        $this->applyProjectCodeCountryFilters($query, 'project_report_hourly.project_code', 'project_report_hourly.country', $filters);
         $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
 
@@ -456,7 +448,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v7:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v8:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -495,6 +487,18 @@ class ProjectReportService
                     $filters[$key] = array_map(static fn ($country) => strtoupper($country), $filters[$key]);
                 }
                 sort($filters[$key], SORT_STRING);
+            }
+        }
+
+        if (isset($filters['exclude']) && is_array($filters['exclude'])) {
+            foreach (['projectCodes', 'countries'] as $key) {
+                if (array_key_exists($key, $filters['exclude'])) {
+                    $filters['exclude'][$key] = $this->normalizeStringList($filters['exclude'][$key]);
+                    if ($key === 'countries') {
+                        $filters['exclude'][$key] = array_map(static fn ($country) => strtoupper($country), $filters['exclude'][$key]);
+                    }
+                    sort($filters['exclude'][$key], SORT_STRING);
+                }
             }
         }
 
@@ -574,15 +578,7 @@ class ProjectReportService
             ->where('project_daily_aggregates.report_date', '>=', $dateFrom)
             ->where('project_daily_aggregates.report_date', '<=', $dateTo);
 
-        $projectCodes = is_array($filters['projectCodes'] ?? null) ? $filters['projectCodes'] : [];
-        if (!empty($projectCodes)) {
-            $baseQuery->whereIn('project_daily_aggregates.project_code', $projectCodes);
-        }
-
-        $countries = is_array($filters['countries'] ?? null) ? $filters['countries'] : [];
-        if (!empty($countries)) {
-            $baseQuery->whereIn('project_daily_aggregates.country', array_map(static fn ($country) => strtoupper((string) $country), $countries));
-        }
+        $this->applyProjectCodeCountryFilters($baseQuery, 'project_daily_aggregates.project_code', 'project_daily_aggregates.country', $filters);
         $this->applyProjectAdStatusFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
         $this->applyProjectAppPlatformFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
 
@@ -969,23 +965,14 @@ class ProjectReportService
             }
         }
 
+        $effectiveFilters = $filters;
         if (!empty($projectCodes)) {
-            $query->whereIn($table . '.project_code', $projectCodes);
-        } else {
-            $filterProjectCodes = $this->normalizeStringList($filters['projectCodes'] ?? null);
-            if (!empty($filterProjectCodes)) {
-                $query->whereIn($table . '.project_code', $filterProjectCodes);
-            }
+            $effectiveFilters['projectCodes'] = $projectCodes;
         }
-
         if (!empty($rowCountries)) {
-            $query->whereIn(DB::raw($countryExpression), $rowCountries);
-        } else {
-            $countries = $this->normalizeStringList($filters['countries'] ?? null);
-            if (!empty($countries)) {
-                $query->whereIn(DB::raw($countryExpression), array_map(static fn ($country) => strtoupper($country), $countries));
-            }
+            $effectiveFilters['countries'] = $rowCountries;
         }
+        $this->applyProjectCodeCountryFilters($query, $table . '.project_code', DB::raw($countryExpression), $effectiveFilters);
 
         $this->applyProjectAdStatusFilter($query, $table . '.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, $table . '.project_code', $filters);
@@ -1302,16 +1289,7 @@ class ProjectReportService
             ->where('report_date', '>=', $dateFrom)
             ->where('report_date', '<=', $dateTo);
 
-        $projectCodes = is_array($filters['projectCodes'] ?? null) ? $filters['projectCodes'] : [];
-        if (!empty($projectCodes)) {
-            $query->whereIn('project_code', $projectCodes);
-        }
-
-        $countries = is_array($filters['countries'] ?? null) ? $filters['countries'] : [];
-        if (!empty($countries)) {
-            $normalizedCountries = array_map(static fn ($country) => strtoupper((string) $country), $countries);
-            $query->whereIn(DB::raw($countryExpression), $normalizedCountries);
-        }
+        $this->applyProjectCodeCountryFilters($query, 'project_code', DB::raw($countryExpression), $filters);
 
         return $query
             ->selectRaw('report_date')
@@ -1357,6 +1335,39 @@ class ProjectReportService
                 ->whereColumn('project_projects.project_code', $projectCodeColumn)
                 ->whereIn('project_projects.app_platform', $appPlatforms);
         });
+    }
+
+    /**
+     * Apply include and exclude filters for project code and country dimensions.
+     */
+    private function applyProjectCodeCountryFilters(Builder $query, string $projectCodeColumn, $countryColumn, array $filters): void
+    {
+        $projectCodes = $this->normalizeStringList($filters['projectCodes'] ?? null);
+        if (!empty($projectCodes)) {
+            $query->whereIn($projectCodeColumn, $projectCodes);
+        }
+
+        $countries = array_map(
+            static fn ($country) => strtoupper($country),
+            $this->normalizeStringList($filters['countries'] ?? null)
+        );
+        if (!empty($countries)) {
+            $query->whereIn($countryColumn, $countries);
+        }
+
+        $exclude = is_array($filters['exclude'] ?? null) ? $filters['exclude'] : [];
+        $excludeProjectCodes = $this->normalizeStringList($exclude['projectCodes'] ?? null);
+        if (!empty($excludeProjectCodes)) {
+            $query->whereNotIn($projectCodeColumn, $excludeProjectCodes);
+        }
+
+        $excludeCountries = array_map(
+            static fn ($country) => strtoupper($country),
+            $this->normalizeStringList($exclude['countries'] ?? null)
+        );
+        if (!empty($excludeCountries)) {
+            $query->whereNotIn($countryColumn, $excludeCountries);
+        }
     }
 
     /**

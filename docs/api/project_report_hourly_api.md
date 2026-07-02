@@ -21,6 +21,8 @@
 | groupBy | string[] | 否 | 分组维度：`reportDate`、`hour`、`projectCode`、`country` |
 | filters.projectCodes | string[] | 否 | 项目代号筛选 |
 | filters.countries | string[] | 否 | 国家筛选，服务端统一转大写 |
+| filters.exclude.projectCodes | string[] | 否 | 排除项目代号筛选；与 `filters.projectCodes` 同时存在时先包含再排除 |
+| filters.exclude.countries | string[] | 否 | 排除国家筛选，服务端统一转大写；列表、summary 和 Top3 收益国家使用同一口径 |
 | filters.adStatuses | string[] | 否 | 投放状态筛选，匹配 `project_projects.ad_status`，仅过滤不返回 |
 | filters.appPlatforms | string[] | 否 | 应用平台筛选，匹配 `project_projects.app_platform`，仅过滤不返回 |
 | page | int | 否 | 默认 1 |
@@ -233,3 +235,9 @@ $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServ
 - 由于 `project_report_hourly` 当前未保存投放点击数和投放展示数分母，小时 summary 中 `adSpendCpc`、`adSpendCpm` 暂返回 `null`，与小时分组行保持一致。
 - 小时 summary 不包含 `topRevenueCountries`，该字段仅在列表行返回。
 - 该字段跟随项目小时 JSON 查询结果缓存 60 秒。
+
+## 排除筛选说明
+
+- `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前小时报表筛选范围中排除指定项目或国家。
+- 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
+- 小时报表列表、summary 和 `topRevenueCountries` 均使用相同排除筛选口径。

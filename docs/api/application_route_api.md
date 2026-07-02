@@ -42,6 +42,8 @@
 | groupBy | string[] | 否 | 维度分组：`reportDate`/`hour`/`projectCode`/`country` |
 | filters.projectCodes | string[] | 否 | 项目代号过滤 |
 | filters.countries | string[] | 否 | 国家过滤 |
+| filters.exclude.projectCodes | string[] | 否 | 排除项目代号过滤；与 `filters.projectCodes` 同时存在时先包含再排除 |
+| filters.exclude.countries | string[] | 否 | 排除国家过滤，服务端统一转大写 |
 | filters.adStatuses | string[] | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
 | filters.appPlatforms | string[] | 否 | 项目应用平台过滤，匹配 `project_projects.app_platform`；仅用于筛选，不在报表返回字段中输出 |
 | page | int | 否 | 默认 1 |
