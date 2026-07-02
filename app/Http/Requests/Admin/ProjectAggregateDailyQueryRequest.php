@@ -32,6 +32,8 @@ class ProjectAggregateDailyQueryRequest extends FormRequest
             'filters.adStatuses.*' => 'string|max:50',
             'filters.appPlatforms' => 'nullable|array',
             'filters.appPlatforms.*' => 'string|max:50',
+            'filters.departments' => 'nullable|array',
+            'filters.departments.*' => 'string|max:100',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:400',
             'orderBy' => 'nullable|string|in:reportDate,projectCode,country,newUsers,reportNewUsers,fbNewUsers,dauUsers,fbDauUsers,adRevenue,adRequests,adMatchedRequests,adImpressions,adClicks,adEcpm,adCtr,adMatchRate,adShowRate,adSpendCost,adSpendCpi,adSpendCpc,adSpendCpm,trafficUsageMb,trafficCost,totalCost,trafficCostRatio,profit,roi,id,updatedAt',

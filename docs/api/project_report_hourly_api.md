@@ -25,6 +25,7 @@
 | filters.exclude.countries | string[] | 否 | 排除国家筛选，服务端统一转大写；列表、summary 和 Top3 收益国家使用同一口径 |
 | filters.adStatuses | string[] | 否 | 投放状态筛选，匹配 `project_projects.ad_status`，仅过滤不返回 |
 | filters.appPlatforms | string[] | 否 | 应用平台筛选，匹配 `project_projects.app_platform`，仅过滤不返回 |
+| filters.departments | string[] | 否 | 部门筛选，匹配 `project_projects.department`，仅过滤不返回 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 50，最大 400 |
 | orderBy | string | 否 | 支持维度字段和日报同款指标字段，例如 `adRevenue`、`adRequests`、`trafficCost`、`profit`、`roi` |

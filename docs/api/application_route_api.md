@@ -46,6 +46,7 @@
 | filters.exclude.countries | string[] | 否 | 排除国家过滤，服务端统一转大写 |
 | filters.adStatuses | string[] | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
 | filters.appPlatforms | string[] | 否 | 项目应用平台过滤，匹配 `project_projects.app_platform`；仅用于筛选，不在报表返回字段中输出 |
+| filters.departments | string[] | 否 | 项目部门过滤，匹配 `project_projects.department`；仅用于筛选，不在报表返回字段中输出 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 50，最大 200 |
 | orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`dauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |

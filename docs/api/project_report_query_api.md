@@ -24,6 +24,7 @@
     "countries": ["US"],
     "adStatuses": ["running"],
     "appPlatforms": ["android"],
+    "departments": ["Marketing"],
     "exclude": {
       "projectCodes": ["A002"],
       "countries": ["BR", "IN"]
@@ -49,6 +50,7 @@
 | filters.exclude.countries | array | 否 | 排除国家过滤，内部会转为大写；summary、Top3 收益国家和 CSV 导出使用同一口径 |
 | filters.adStatuses | array | 否 | 项目投放状态过滤，匹配 `project_projects.ad_status`；仅用于筛选，不在报表返回字段中输出 |
 | filters.appPlatforms | array | 否 | 项目应用平台过滤，匹配 `project_projects.app_platform` |
+| filters.departments | array | 否 | 项目部门过滤，匹配 `project_projects.department`；仅用于筛选，不在报表中新增返回字段 |
 | page | integer | 否 | 页码，默认 `1` |
 | pageSize | integer | 否 | 每页条数，默认 `50`，最大 `200` |
 | orderBy | string | 否 | 排序字段 |
@@ -221,6 +223,7 @@
     "countries": ["US"],
     "adStatuses": ["running"],
     "appPlatforms": ["android"],
+    "departments": ["Marketing"],
     "exclude": {
       "projectCodes": ["A002"],
       "countries": ["BR", "IN"]

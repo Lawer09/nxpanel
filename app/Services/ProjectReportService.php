@@ -219,6 +219,7 @@ class ProjectReportService
         $this->applyProjectCodeCountryFilters($query, 'project_report_hourly.project_code', 'project_report_hourly.country', $filters);
         $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
+        $this->applyProjectDepartmentFilter($query, 'project_report_hourly.project_code', $filters);
 
         $summaryQuery = clone $query;
 
@@ -448,7 +449,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v8:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v9:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -480,7 +481,7 @@ class ProjectReportService
      */
     private function normalizeCacheFilters(array $filters): array
     {
-        foreach (['projectCodes', 'countries', 'adStatuses', 'appPlatforms'] as $key) {
+        foreach (['projectCodes', 'countries', 'adStatuses', 'appPlatforms', 'departments'] as $key) {
             if (array_key_exists($key, $filters)) {
                 $filters[$key] = $this->normalizeStringList($filters[$key]);
                 if ($key === 'countries') {
@@ -581,6 +582,7 @@ class ProjectReportService
         $this->applyProjectCodeCountryFilters($baseQuery, 'project_daily_aggregates.project_code', 'project_daily_aggregates.country', $filters);
         $this->applyProjectAdStatusFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
         $this->applyProjectAppPlatformFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
+        $this->applyProjectDepartmentFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
 
         $spendMetricsQuery = $this->buildDailySpendMetricSubquery($dateFrom, $dateTo, $filters);
 
@@ -976,6 +978,7 @@ class ProjectReportService
 
         $this->applyProjectAdStatusFilter($query, $table . '.project_code', $filters);
         $this->applyProjectAppPlatformFilter($query, $table . '.project_code', $filters);
+        $this->applyProjectDepartmentFilter($query, $table . '.project_code', $filters);
 
         $query->selectRaw($countryExpression . ' as country')
             ->selectRaw('SUM(' . $table . '.ad_revenue) as ad_revenue');
@@ -1334,6 +1337,24 @@ class ProjectReportService
                 ->from('project_projects')
                 ->whereColumn('project_projects.project_code', $projectCodeColumn)
                 ->whereIn('project_projects.app_platform', $appPlatforms);
+        });
+    }
+
+    /**
+     * Filter report rows by the department stored on project_projects.
+     */
+    private function applyProjectDepartmentFilter(Builder $query, string $projectCodeColumn, array $filters): void
+    {
+        $departments = $this->normalizeStringList($filters['departments'] ?? null);
+        if (empty($departments)) {
+            return;
+        }
+
+        $query->whereExists(function (Builder $subQuery) use ($projectCodeColumn, $departments) {
+            $subQuery->selectRaw('1')
+                ->from('project_projects')
+                ->whereColumn('project_projects.project_code', $projectCodeColumn)
+                ->whereIn('project_projects.department', $departments);
         });
     }
 

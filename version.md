@@ -779,3 +779,11 @@
 - 影响范围：`app/Http/Requests/Admin/BlockedUserIpUpdateTypeRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，复用 `blocked_user_ips.type` 字段；依赖上一条封禁 IP 类型迁移。
 - 回滚说明：移除新增 Request、Service 方法、Controller 方法、路由、测试和文档说明即可。
+
+## 2026-07-02 项目报表部门筛选
+
+- 日期：2026-07-02
+- 变更摘要：项目日报查询、项目日报 CSV 导出和项目小时报表查询新增 `filters.departments` 筛选，按 `project_projects.department` 过滤项目范围；查询缓存 key 升级到 `v9`，避免旧缓存缺少部门筛选口径。
+- 影响范围：`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
+- 是否需要迁移：否，复用既有 `project_projects.department` 字段。
+- 回滚说明：移除 Request 中 `filters.departments` 校验、Service 部门过滤逻辑和文档说明，并将项目报表查询缓存 key 恢复到上一版本即可。
