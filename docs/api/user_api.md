@@ -254,6 +254,18 @@ POST /api/v3/passport/auth/loginByAid
 
 ---
 
+
+### AID 已有用户 channel_type 异步更新
+
+`loginByAid` 对已存在 AID 用户登录时，不再直接合并写入完整 `register_metadata`。仅当当前用户已保存的 `register_metadata.channel_type` 统一转大写后等于 `UNKNOWN`，且本次登录传入的新 `channel_type` 统一转大写后不是 `UNKNOWN` 时，系统会记录一条待更新任务。
+
+- 新注册 AID 用户仍会实时保存完整 `register_metadata`，不受该异步策略影响。
+- 当前值只读取 `register_metadata.channel_type`，不读取 `channel` 或 `channelType`。
+- 新值来源为 V3 `channel.channel_type` / `channel.channelType`，以及 V1 `metadata.channel_type` / `metadata.channelType`。
+- 判断和保存时统一转大写，例如 `paid` 会保存为 `PAID`。
+- 批量任务只更新 `register_metadata.channel_type` 一个字段，不更新 `utm_source`、`utm_medium`、`utm_campaign`、`raw_referrer` 等其他 metadata。
+- 后台命令 `aid-channel-type:flush` 每 5 分钟执行一次，通常 5 分钟内落库。
+
 ## AID 自定义封禁检测规则
 
 用于在 `loginByAid` 自动创建新用户后，根据后台配置的规则自动封禁用户，并记录该用户注册 IP，避免同类注册继续放量。

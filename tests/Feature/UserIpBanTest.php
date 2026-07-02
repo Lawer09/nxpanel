@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BlockedUserIp;
+use App\Models\AidChannelTypeUpdateQueue;
 use App\Models\AidLoginBanRule;
 use App\Models\Plan;
 use App\Models\ProjectUserAppMap;
@@ -484,6 +485,149 @@ class UserIpBanTest extends TestCase
         $this->assertFalse((bool) $user->refresh()->banned);
         $this->assertDatabaseMissing('blocked_user_ips', [
             'ip' => '203.0.113.71',
+        ]);
+    }
+
+    public function test_existing_aid_user_with_unknown_channel_type_queues_channel_type_update(): void
+    {
+        $user = $this->createAidUser('existing-unknown-channel', [
+            'register_metadata' => [
+                'channel_type' => 'unknown',
+                'utm_source' => 'old-source',
+            ],
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-unknown-channel',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+            'channel' => [
+                'channel_type' => 'paid',
+                'utm_source' => 'new-source',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertSame('unknown', $user->refresh()->register_metadata['channel_type'] ?? null);
+        $this->assertSame('old-source', $user->register_metadata['utm_source'] ?? null);
+
+        $this->assertDatabaseHas('aid_channel_type_update_queues', [
+            'user_id' => $user->id,
+            'channel_type' => 'PAID',
+        ]);
+    }
+
+    public function test_existing_aid_user_channel_type_queue_uses_v1_flat_channel_type(): void
+    {
+        $user = $this->createAidUser('existing-v1-unknown-channel', [
+            'register_metadata' => [
+                'channel_type' => 'UNKNOWN',
+            ],
+        ]);
+
+        $this->postJson('/api/v1/passport/auth/loginByAid', [
+            'aid' => 'existing-v1-unknown-channel',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+                'channel_type' => 'organic',
+            ],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('aid_channel_type_update_queues', [
+            'user_id' => $user->id,
+            'channel_type' => 'ORGANIC',
+        ]);
+    }
+
+    public function test_existing_aid_user_channel_type_queue_ignores_non_unknown_or_missing_values(): void
+    {
+        $knownUser = $this->createAidUser('existing-known-channel', [
+            'register_metadata' => [
+                'channel_type' => 'PAID',
+            ],
+        ]);
+        $missingUser = $this->createAidUser('existing-missing-channel', [
+            'register_metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ]);
+        $stillUnknownUser = $this->createAidUser('existing-still-unknown-channel', [
+            'register_metadata' => [
+                'channel_type' => 'UNKNOWN',
+            ],
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-known-channel',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+            'channel' => [
+                'channel_type' => 'organic',
+            ],
+        ])->assertOk();
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-missing-channel',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+            'channel' => [
+                'channel_type' => 'paid',
+            ],
+        ])->assertOk();
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'existing-still-unknown-channel',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+            'channel' => [
+                'channel_type' => 'unknown',
+            ],
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('aid_channel_type_update_queues', [
+            'user_id' => $knownUser->id,
+        ]);
+        $this->assertDatabaseMissing('aid_channel_type_update_queues', [
+            'user_id' => $missingUser->id,
+        ]);
+        $this->assertDatabaseMissing('aid_channel_type_update_queues', [
+            'user_id' => $stillUnknownUser->id,
+        ]);
+    }
+
+    public function test_aid_channel_type_flush_updates_only_channel_type(): void
+    {
+        $user = $this->createAidUser('flush-channel-type', [
+            'last_login_at' => 100,
+            'register_metadata' => [
+                'channel_type' => 'UNKNOWN',
+                'utm_source' => 'old-source',
+                'raw_referrer' => 'old-referrer',
+            ],
+        ]);
+
+        AidChannelTypeUpdateQueue::create([
+            'user_id' => $user->id,
+            'channel_type' => 'ORGANIC',
+            'last_login_at' => 200,
+        ]);
+
+        $this->artisan('aid-channel-type:flush')
+            ->expectsOutput('AID channel_type updates scanned=1 updated=1 failed=0')
+            ->assertExitCode(0);
+
+        $user->refresh();
+
+        $this->assertSame('ORGANIC', $user->register_metadata['channel_type'] ?? null);
+        $this->assertSame('old-source', $user->register_metadata['utm_source'] ?? null);
+        $this->assertSame('old-referrer', $user->register_metadata['raw_referrer'] ?? null);
+        $this->assertSame(200, (int) $user->last_login_at);
+        $this->assertDatabaseMissing('aid_channel_type_update_queues', [
+            'user_id' => $user->id,
         ]);
     }
 

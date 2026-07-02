@@ -348,3 +348,25 @@ php artisan project:send-yesterday-traffic-report --date=2026-06-29
 
 - 移除 `project:send-yesterday-traffic-report` 命令、Kernel 调度、飞书配置项和文档即可。
 - 无数据库结构变更，不需要执行 migration 回滚。
+
+---
+
+## 9. AID channel_type 异步刷新命令
+
+### 9.1 aid-channel-type:flush
+
+将 `loginByAid` 产生的待更新 `channel_type` 队列批量写回 `v2_user.register_metadata.channel_type`。
+
+```bash
+# 默认最多处理 1000 条
+php artisan aid-channel-type:flush
+
+# 指定单次处理上限
+php artisan aid-channel-type:flush --limit=500
+```
+
+说明：
+- 仅处理 `aid_channel_type_update_queues` 队列中的记录。
+- 只更新 `register_metadata.channel_type` 一个字段，不修改其他 metadata。
+- 成功后删除队列记录；失败记录会保留并增加 `attempts`，写入 `error_message`。
+- 已在 `app/Console/Kernel.php` 配置为每 5 分钟执行一次，使用 `onOneServer()` 和 `withoutOverlapping(4)` 防止重复调度。

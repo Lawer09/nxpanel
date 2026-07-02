@@ -750,3 +750,11 @@
 - 影响范围：`app/Console/Commands/AggregateProjectHourlyData.php`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将默认小时桶恢复为当前小时和上一小时，并恢复原文档说明即可。
+
+## 2026-07-02 AID 已有用户 channel_type 异步补更新
+
+- 日期：2026-07-02
+- 变更摘要：新增 `aid_channel_type_update_queues` 队列表；`loginByAid` 对已存在 AID 用户仅在当前 `register_metadata.channel_type` 转大写为 `UNKNOWN` 且本次传入的新 `channel_type` 非 `UNKNOWN` 时入队，后台命令 `aid-channel-type:flush` 每 5 分钟批量只更新 `register_metadata.channel_type` 字段，不覆盖其他 metadata。
+- 影响范围：`database/migrations/2026_07_02_120000_create_aid_channel_type_update_queues_table.php`、`app/Models/AidChannelTypeUpdateQueue.php`、`app/Services/AidChannelTypeUpdateQueueService.php`、`app/Services/Auth/LoginService.php`、`app/Console/Commands/FlushAidChannelTypeUpdates.php`、`app/Console/Kernel.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移 `2026_07_02_120000_create_aid_channel_type_update_queues_table.php`。
+- 回滚说明：回滚新增迁移并移除队列模型、Service、命令、Kernel 调度、`loginByAid` 入队调用、测试和文档说明即可；如需恢复旧行为，可将已存在 AID 用户登录时的完整 `register_metadata` 直接合并写回逻辑恢复。

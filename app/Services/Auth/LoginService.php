@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\InviteCode;
 use App\Models\User;
+use App\Services\AidChannelTypeUpdateQueueService;
 use App\Services\AidLoginBanRuleService;
 use App\Services\BlockedUserIpService;
 use App\Services\NodeSyncService;
@@ -92,6 +93,7 @@ class LoginService
         $email = $aid . '@apple.com';
         $password = $aid;
         $normalizedMetadata = $this->normalizeAidMetadata($metadata);
+        $loginAt = time();
 
         $user = User::where('email', $email)->first();
         $created = false;
@@ -175,14 +177,15 @@ class LoginService
                 return [false, [400, __('Your account has been suspended')]];
             }
 
-            if (!empty($normalizedMetadata)) {
-                $currentMetadata = is_array($user->register_metadata) ? $user->register_metadata : [];
-                $user->register_metadata = array_merge($currentMetadata, $normalizedMetadata);
-            }
+            app(AidChannelTypeUpdateQueueService::class)->enqueueIfNeeded(
+                $user,
+                $normalizedMetadata['channel_type'] ?? null,
+                $loginAt
+            );
         }
 
         // 更新最后登录时间
-        $user->last_login_at = time();
+        $user->last_login_at = $loginAt;
         $user->save();
 
         return [true, $user];
@@ -219,6 +222,8 @@ class LoginService
             'app_id',
             'package_name',
             'packageName',
+            'channel_type',
+            'channelType',
             'app_version',
             'platform',
             'brand',
@@ -251,6 +256,10 @@ class LoginService
             if ($key === 'country') {
                 $normalized = strtoupper($normalized);
             }
+            if ($key === 'channel_type' || $key === 'channelType') {
+                $result['channel_type'] = strtoupper($normalized);
+                continue;
+            }
             $result[$key] = $normalized;
         }
 
@@ -266,7 +275,7 @@ class LoginService
         if (is_array($channel)) {
             $nestedChannelType = $channel['channel_type'] ?? ($channel['channelType'] ?? null);
             if (is_string($nestedChannelType) && trim($nestedChannelType) !== '') {
-                $result['channel_type'] = trim($nestedChannelType);
+                $result['channel_type'] = strtoupper(trim($nestedChannelType));
             }
 
             foreach (['utm_source', 'utm_medium', 'utm_campaign', 'raw_referrer'] as $key) {
