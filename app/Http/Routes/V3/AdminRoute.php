@@ -96,6 +96,7 @@ class AdminRoute
                 $router->any('/blockedIp/fetch',    [UserController::class, 'fetchBlockedIps']);
                 $router->post('/blockedIp/delete',  [UserController::class, 'deleteBlockedIp']);
                 $router->post('/blockedIp/batchDelete', [UserController::class, 'batchDeleteBlockedIps']);
+                $router->post('/blockedIp/updateType', [UserController::class, 'updateBlockedIpType']);
                 $router->any('/aidLoginBanRule/fetch',   [UserController::class, 'fetchAidLoginBanRules']);
                 $router->post('/aidLoginBanRule/save',   [UserController::class, 'saveAidLoginBanRule']);
                 $router->post('/aidLoginBanRule/update', [UserController::class, 'updateAidLoginBanRule']);

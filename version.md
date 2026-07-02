@@ -766,3 +766,16 @@
 - 影响范围：`app/Http/Requests/Admin/ProjectAggregateDailyQueryRequest.php`、`app/Http/Requests/Admin/ProjectAggregateDailyExportRequest.php`、`app/Http/Requests/Admin/ProjectReportHourlyQueryRequest.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 Request 中 `filters.exclude.*` 校验、Service 排除过滤逻辑和文档说明，并将项目报表查询缓存 key 恢复到上一版本即可。
+## 2026-07-02 邀请码安全解封与封禁 IP 类型
+- 日期：2026-07-02
+- 变更摘要：`blocked_user_ips` 新增 `type` 字段，支持 `normal` / `dangerous` 两类封禁 IP；V3 管理端批量封禁可指定封禁 IP 类型，封禁 IP 查询可按类型筛选并返回类型；用户使用邀请码绑定邀请人后，如果当前用户处于封禁状态且邀请人与当前用户注册 IP 都未命中 `dangerous` 类型封禁列表，则自动解除当前用户封禁并同步节点。
+- 影响范围：`database/migrations/2026_07_02_130000_add_type_to_blocked_user_ips_table.php`、`app/Models/BlockedUserIp.php`、`app/Services/BlockedUserIpService.php`、`app/Services/InviteService.php`、`app/Http/Requests/Admin/UserBatchBanRequest.php`、`app/Http/Requests/Admin/BlockedUserIpFetchRequest.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration，为历史 `blocked_user_ips` 记录补充默认 `type=normal`。
+- 回滚说明：回滚新增 migration 移除 `blocked_user_ips.type` 字段，并移除 Service、Request、Controller、测试和文档中的类型参数及邀请码自动解封逻辑即可。
+
+## 2026-07-02 封禁 IP 类型更新接口
+- 日期：2026-07-02
+- 变更摘要：V3 管理端新增 `POST /user/blockedIp/updateType`，支持按封禁 IP 记录 ID 将类型更新为 `normal` 或 `dangerous`，并返回更新后的 `id/ip/type`。
+- 影响范围：`app/Http/Requests/Admin/BlockedUserIpUpdateTypeRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，复用 `blocked_user_ips.type` 字段；依赖上一条封禁 IP 类型迁移。
+- 回滚说明：移除新增 Request、Service 方法、Controller 方法、路由、测试和文档说明即可。

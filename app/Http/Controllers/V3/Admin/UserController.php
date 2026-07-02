@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\AidLoginBanRuleUpdateRequest;
 use App\Http\Requests\Admin\BlockedUserIpBatchDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
+use App\Http\Requests\Admin\BlockedUserIpUpdateTypeRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
 use App\Models\AidLoginBanRule;
 use App\Http\Requests\Admin\UserUpdate;
@@ -211,12 +212,13 @@ class UserController extends V2UserController
             ->values();
         $reason = $request->validated('reason') ?? null;
         $operatorUserId = Auth::guard('sanctum')->id();
+        $type = $request->validated('type') ?? BlockedUserIp::TYPE_NORMAL;
 
         try {
             $users = User::query()->whereIn('id', $userIds->all())->get();
             $result = $blockedUserIpService->banUsersAndBlockIps($users, $operatorUserId, $reason, [
                 'source' => 'admin_batch_ban',
-            ]);
+            ], $type);
         } catch (\Exception $e) {
             Log::error('Batch ban users failed', ['error' => $e->getMessage()]);
             return $this->error([500, 'Batch ban failed']);
@@ -308,6 +310,7 @@ class UserController extends V2UserController
                 return [
                     'id' => (int) $record->id,
                     'ip' => (string) $record->ip,
+                    'type' => $record->type ?: BlockedUserIp::TYPE_NORMAL,
                     'reason' => $record->reason,
                     'metadata' => $record->metadata,
                     'banned_user_id' => $record->banned_user_id,
@@ -353,6 +356,29 @@ class UserController extends V2UserController
         return $this->ok(
             $blockedUserIpService->batchDeleteByIds($request->validated('ids'))
         );
+    }
+
+    /**
+     * Update a blocked registration IP record type.
+     */
+    public function updateBlockedIpType(
+        BlockedUserIpUpdateTypeRequest $request,
+        BlockedUserIpService $blockedUserIpService
+    ): JsonResponse {
+        $record = $blockedUserIpService->updateTypeById(
+            (int) $request->validated('id'),
+            (string) $request->validated('type')
+        );
+
+        if (!$record) {
+            return $this->error([400202, '灏佺IP璁板綍涓嶅瓨鍦?]);
+        }
+
+        return $this->ok([
+            'id' => (int) $record->id,
+            'ip' => (string) $record->ip,
+            'type' => $record->type ?: BlockedUserIp::TYPE_NORMAL,
+        ]);
     }
 
     /**

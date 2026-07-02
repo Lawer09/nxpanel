@@ -118,7 +118,9 @@ class InviteService
     public function useCode(int $userId, string $inviteCode): array
     {
         $inviteCode = 'MU-' . $inviteCode;
-        return DB::transaction(function () use ($userId, $inviteCode) {
+        $shouldNotifyUserChanged = false;
+
+        $result = DB::transaction(function () use ($userId, $inviteCode, &$shouldNotifyUserChanged) {
             $user = User::query()->lockForUpdate()->find($userId);
             if (!$user) {
                 return [
@@ -166,14 +168,28 @@ class InviteService
                 $inviteCodeModel->save();
             }
 
+            $unbanned = false;
+            $inviter = User::query()->find((int) $inviteCodeModel->user_id);
+            if ($inviter) {
+                $unbanned = app(BlockedUserIpService::class)->unbanUserIfInviteTrusted($user, $inviter);
+                $shouldNotifyUserChanged = $unbanned;
+            }
+
             return [
                 'ok' => true,
                 'data' => [
                     'bound' => true,
                     'inviterUserId' => (int) $user->invite_user_id,
+                    'unbanned' => $unbanned,
                 ],
             ];
         });
+
+        if ($shouldNotifyUserChanged) {
+            NodeSyncService::notifyUsersUpdated();
+        }
+
+        return $result;
     }
 
     /**

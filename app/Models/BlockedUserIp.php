@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BlockedUserIp extends Model
 {
+    public const TYPE_NORMAL = 'normal';
+    public const TYPE_DANGEROUS = 'dangerous';
+
     protected $table = 'blocked_user_ips';
     protected $dateFormat = 'U';
     protected $guarded = ['id'];

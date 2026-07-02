@@ -21,6 +21,7 @@ class BlockedUserIpFetchRequest extends FormRequest
     {
         return [
             'ip' => 'nullable|string|max:45',
+            'type' => 'nullable|string|in:normal,dangerous',
             'bannedUserId' => 'nullable|integer|min:1',
             'operatorUserId' => 'nullable|integer|min:1',
             'current' => 'nullable|integer|min:1',

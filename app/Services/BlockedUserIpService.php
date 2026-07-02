@@ -25,21 +25,50 @@ class BlockedUserIpService
     }
 
     /**
+     * Check whether a client IP is marked as dangerous.
+     */
+    public function isDangerous(?string $ip): bool
+    {
+        $ip = $this->normalizeIp($ip);
+        if ($ip === null) {
+            return false;
+        }
+
+        return BlockedUserIp::query()
+            ->where('ip', $ip)
+            ->where('type', BlockedUserIp::TYPE_DANGEROUS)
+            ->exists();
+    }
+
+    /**
      * Block the registration IPs recorded on the given users.
      */
-    public function blockIpsForUsers(Collection $users, ?int $operatorUserId = null, ?string $reason = null): array
+    public function blockIpsForUsers(
+        Collection $users,
+        ?int $operatorUserId = null,
+        ?string $reason = null,
+        string $type = BlockedUserIp::TYPE_NORMAL
+    ): array
     {
         return $this->blockIpsForUsersWithMetadata($users, $operatorUserId, $reason, [
             'source' => 'admin_batch_ban',
-        ]);
+        ], $type);
     }
 
     /**
      * Ban users, clear their sessions, and block their registration IPs.
      */
-    public function banUsersAndBlockIps(Collection $users, ?int $operatorUserId = null, ?string $reason = null, array $metadata = []): array
+    public function banUsersAndBlockIps(
+        Collection $users,
+        ?int $operatorUserId = null,
+        ?string $reason = null,
+        array $metadata = [],
+        string $type = BlockedUserIp::TYPE_NORMAL
+    ): array
     {
-        return DB::transaction(function () use ($users, $operatorUserId, $reason, $metadata): array {
+        $type = $this->normalizeType($type);
+
+        return DB::transaction(function () use ($users, $operatorUserId, $reason, $metadata, $type): array {
             $ids = $users->filter(fn($user) => $user instanceof User)
                 ->pluck('id')
                 ->filter()
@@ -56,7 +85,7 @@ class BlockedUserIpService
                 (new AuthService($user))->removeAllSessions();
             }
 
-            $ipResult = $this->blockIpsForUsersWithMetadata($lockedUsers, $operatorUserId, $reason, $metadata);
+            $ipResult = $this->blockIpsForUsersWithMetadata($lockedUsers, $operatorUserId, $reason, $metadata, $type);
 
             return [
                 'bannedUserCount' => $lockedUsers->count(),
@@ -96,8 +125,15 @@ class BlockedUserIpService
     /**
      * Block registration IPs with a caller-provided metadata payload.
      */
-    public function blockIpsForUsersWithMetadata(Collection $users, ?int $operatorUserId = null, ?string $reason = null, array $metadata = []): array
+    public function blockIpsForUsersWithMetadata(
+        Collection $users,
+        ?int $operatorUserId = null,
+        ?string $reason = null,
+        array $metadata = [],
+        string $type = BlockedUserIp::TYPE_NORMAL
+    ): array
     {
+        $type = $this->normalizeType($type);
         $blockedIps = [];
         $skippedUsers = [];
 
@@ -115,6 +151,7 @@ class BlockedUserIpService
             BlockedUserIp::query()->updateOrCreate(
                 ['ip' => $ip],
                 [
+                    'type' => $type,
                     'banned_user_id' => $user->id,
                     'operator_user_id' => $operatorUserId,
                     'reason' => $reason,
@@ -150,6 +187,10 @@ class BlockedUserIpService
 
         if (!empty($filters['ip'])) {
             $query->where('ip', $filters['ip']);
+        }
+
+        if (!empty($filters['type'])) {
+            $query->where('type', $this->normalizeType((string) $filters['type']));
         }
 
         if (!empty($filters['bannedUserId'])) {
@@ -218,11 +259,57 @@ class BlockedUserIpService
         });
     }
 
+    /**
+     * Update a blocked registration IP record type by id.
+     */
+    public function updateTypeById(int $id, string $type): ?BlockedUserIp
+    {
+        $type = $this->normalizeType($type);
+
+        return DB::transaction(function () use ($id, $type): ?BlockedUserIp {
+            $record = BlockedUserIp::query()
+                ->where('id', $id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$record) {
+                return null;
+            }
+
+            $record->type = $type;
+            $record->save();
+
+            return $record->refresh();
+        });
+    }
+
     public function extractRegisterIp(User $user): ?string
     {
         $metadata = is_array($user->register_metadata) ? $user->register_metadata : [];
 
         return $this->normalizeIp($metadata['ip'] ?? null);
+    }
+
+    /**
+     * Unban an invited user when neither side has a dangerous registration IP.
+     */
+    public function unbanUserIfInviteTrusted(User $user, User $inviter): bool
+    {
+        if (!$user->banned) {
+            return false;
+        }
+
+        if ($this->isDangerous($this->extractRegisterIp($user))) {
+            return false;
+        }
+
+        if ($this->isDangerous($this->extractRegisterIp($inviter))) {
+            return false;
+        }
+
+        $user->banned = 0;
+
+        return (bool) $user->save();
     }
 
     public function normalizeIp(mixed $ip): ?string
@@ -237,5 +324,14 @@ class BlockedUserIpService
         }
 
         return $normalized;
+    }
+
+    public function normalizeType(?string $type): string
+    {
+        $type = strtolower(trim((string) $type));
+
+        return in_array($type, [BlockedUserIp::TYPE_NORMAL, BlockedUserIp::TYPE_DANGEROUS], true)
+            ? $type
+            : BlockedUserIp::TYPE_NORMAL;
     }
 }

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BlockedUserIp;
 use App\Models\AidChannelTypeUpdateQueue;
 use App\Models\AidLoginBanRule;
+use App\Models\InviteCode;
 use App\Models\Plan;
 use App\Models\ProjectUserAppMap;
 use App\Models\Setting;
@@ -113,9 +114,32 @@ class UserIpBanTest extends TestCase
         ]);
         $this->assertDatabaseHas('blocked_user_ips', [
             'ip' => '203.0.113.30',
+            'type' => BlockedUserIp::TYPE_NORMAL,
             'banned_user_id' => $userWithIp->id,
             'operator_user_id' => $admin->id,
             'reason' => 'fraud batch',
+        ]);
+    }
+
+    public function test_admin_batch_ban_can_mark_registration_ip_as_dangerous(): void
+    {
+        $admin = $this->createUser('admin-danger@example.com', ['is_admin' => 1]);
+        $userWithIp = $this->createUser('danger-ip@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.31', 'app_id' => 'com.example.app'],
+        ]);
+
+        $this->postJson($this->adminUserUri('batchBan'), [
+            'user_ids' => [$userWithIp->id],
+            'reason' => 'danger batch',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.bannedUserCount', 1)
+            ->assertJsonPath('data.blockedIpCount', 1);
+
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.31',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'banned_user_id' => $userWithIp->id,
         ]);
     }
 
@@ -190,8 +214,129 @@ class UserIpBanTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.data.0.id', $targetRecord->id)
             ->assertJsonPath('data.data.0.ip', '203.0.113.50')
+            ->assertJsonPath('data.data.0.type', BlockedUserIp::TYPE_NORMAL)
             ->assertJsonPath('data.data.0.banned_user.id', $bannedUser->id)
             ->assertJsonPath('data.data.0.operator_user.id', $admin->id);
+    }
+
+    public function test_admin_can_filter_blocked_ip_records_by_type(): void
+    {
+        $admin = $this->createUser('admin-filter-type@example.com', ['is_admin' => 1]);
+
+        $dangerousRecord = BlockedUserIp::create([
+            'ip' => '203.0.113.52',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'reason' => 'dangerous record',
+        ]);
+        BlockedUserIp::create([
+            'ip' => '203.0.113.53',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'reason' => 'normal record',
+        ]);
+
+        $this->postJson($this->adminUserUri('blockedIp/fetch'), [
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $dangerousRecord->id)
+            ->assertJsonPath('data.data.0.type', BlockedUserIp::TYPE_DANGEROUS);
+    }
+
+    public function test_banned_user_is_unbanned_after_using_trusted_invite_code(): void
+    {
+        $inviter = $this->createUser('trusted-inviter@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.80'],
+        ]);
+        $invitee = $this->createUser('trusted-invitee@example.com', [
+            'banned' => 1,
+            'register_metadata' => ['ip' => '203.0.113.81'],
+        ]);
+        $this->createReusableInviteCode($inviter, 'TRUST1');
+        BlockedUserIp::create([
+            'ip' => '203.0.113.81',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'banned_user_id' => $invitee->id,
+            'reason' => 'normal risk',
+        ]);
+
+        $this->postJson('/api/v3/user/invite-codes/use', [
+            'inviteCode' => 'TRUST1',
+        ], $this->userHeaders($invitee))->assertOk()
+            ->assertJsonPath('data.bound', true)
+            ->assertJsonPath('data.inviterUserId', $inviter->id)
+            ->assertJsonPath('data.unbanned', true);
+
+        $this->assertFalse((bool) $invitee->refresh()->banned);
+    }
+
+    public function test_banned_user_is_not_unbanned_when_invitee_ip_is_dangerous(): void
+    {
+        $inviter = $this->createUser('safe-inviter@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.82'],
+        ]);
+        $invitee = $this->createUser('danger-invitee@example.com', [
+            'banned' => 1,
+            'register_metadata' => ['ip' => '203.0.113.83'],
+        ]);
+        $this->createReusableInviteCode($inviter, 'DANGER1');
+        BlockedUserIp::create([
+            'ip' => '203.0.113.83',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'banned_user_id' => $invitee->id,
+            'reason' => 'dangerous invitee',
+        ]);
+
+        $this->postJson('/api/v3/user/invite-codes/use', [
+            'inviteCode' => 'DANGER1',
+        ], $this->userHeaders($invitee))->assertOk()
+            ->assertJsonPath('data.bound', true)
+            ->assertJsonPath('data.unbanned', false);
+
+        $this->assertTrue((bool) $invitee->refresh()->banned);
+    }
+
+    public function test_banned_user_is_not_unbanned_when_inviter_ip_is_dangerous(): void
+    {
+        $inviter = $this->createUser('danger-inviter@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.84'],
+        ]);
+        $invitee = $this->createUser('normal-invitee@example.com', [
+            'banned' => 1,
+            'register_metadata' => ['ip' => '203.0.113.85'],
+        ]);
+        $this->createReusableInviteCode($inviter, 'DANGER2');
+        BlockedUserIp::create([
+            'ip' => '203.0.113.84',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'banned_user_id' => $inviter->id,
+            'reason' => 'dangerous inviter',
+        ]);
+
+        $this->postJson('/api/v3/user/invite-codes/use', [
+            'inviteCode' => 'DANGER2',
+        ], $this->userHeaders($invitee))->assertOk()
+            ->assertJsonPath('data.bound', true)
+            ->assertJsonPath('data.unbanned', false);
+
+        $this->assertTrue((bool) $invitee->refresh()->banned);
+    }
+
+    public function test_unbanned_user_using_invite_code_returns_unbanned_false(): void
+    {
+        $inviter = $this->createUser('already-ok-inviter@example.com');
+        $invitee = $this->createUser('already-ok-invitee@example.com', [
+            'banned' => 0,
+        ]);
+        $this->createReusableInviteCode($inviter, 'NORMAL1');
+
+        $this->postJson('/api/v3/user/invite-codes/use', [
+            'inviteCode' => 'NORMAL1',
+        ], $this->userHeaders($invitee))->assertOk()
+            ->assertJsonPath('data.bound', true)
+            ->assertJsonPath('data.unbanned', false);
+
+        $this->assertFalse((bool) $invitee->refresh()->banned);
     }
 
     public function test_admin_can_delete_blocked_ip_record(): void
@@ -262,6 +407,44 @@ class UserIpBanTest extends TestCase
         $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
             'ids' => [0, -1, 'invalid'],
         ], $this->adminHeaders($admin))->assertStatus(422);
+    }
+
+    public function test_admin_can_update_blocked_ip_type(): void
+    {
+        $admin = $this->createUser('admin-update-type@example.com', ['is_admin' => 1]);
+        $record = BlockedUserIp::create([
+            'ip' => '203.0.113.64',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'reason' => 'manual review',
+        ]);
+
+        $this->postJson($this->adminUserUri('blockedIp/updateType'), [
+            'id' => $record->id,
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.id', $record->id)
+            ->assertJsonPath('data.ip', '203.0.113.64')
+            ->assertJsonPath('data.type', BlockedUserIp::TYPE_DANGEROUS);
+
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'id' => $record->id,
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+        ]);
+    }
+
+    public function test_admin_update_blocked_ip_type_validates_type_and_missing_record(): void
+    {
+        $admin = $this->createUser('admin-update-type-invalid@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('blockedIp/updateType'), [
+            'id' => 1,
+            'type' => 'invalid',
+        ], $this->adminHeaders($admin))->assertStatus(422);
+
+        $this->postJson($this->adminUserUri('blockedIp/updateType'), [
+            'id' => 999999,
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+        ], $this->adminHeaders($admin))->assertStatus(400);
     }
 
     public function test_login_by_aid_bans_new_user_when_custom_rule_matches(): void
@@ -964,6 +1147,24 @@ class UserIpBanTest extends TestCase
         return [
             'Authorization' => (new AuthService($admin))->generateAuthData()['auth_data'],
         ];
+    }
+
+    private function userHeaders(User $user): array
+    {
+        return [
+            'Authorization' => (new AuthService($user))->generateAuthData()['auth_data'],
+        ];
+    }
+
+    private function createReusableInviteCode(User $user, string $code): InviteCode
+    {
+        $inviteCode = new InviteCode();
+        $inviteCode->user_id = $user->id;
+        $inviteCode->code = 'MU-' . $code;
+        $inviteCode->status = InviteCode::STATUS_UNUSED;
+        $inviteCode->save();
+
+        return $inviteCode;
     }
 
     private function adminUserUri(string $action): string

@@ -836,3 +836,112 @@ POST /api/v3/admin/user/blockedIp/batchDelete
     }
 }
 ```
+
+---
+
+## 2026-07-02 补充：封禁 IP 类型与邀请码安全解封
+
+### 封禁 IP 类型
+
+`blocked_user_ips` 增加 `type` 字段：
+
+| 类型 | 含义 |
+|------|------|
+| `normal` | 普通封禁 IP，默认值；可被邀请码信任关系覆盖 |
+| `dangerous` | 高风险封禁 IP；用户使用邀请码时，只要邀请人或被邀请人的注册 IP 命中该类型，就不会自动解封 |
+
+### 批量封禁用户
+
+`POST /api/v3/{secure_path}/user/batchBan`
+
+新增可选参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `string` | 否 | 封禁 IP 类型，可选 `normal` / `dangerous`，默认 `normal` |
+
+请求示例：
+
+```json
+{
+  "user_ids": [1, 2],
+  "reason": "risk user",
+  "type": "dangerous"
+}
+```
+
+### 封禁 IP 列表查询
+
+`POST /api/v3/{secure_path}/user/blockedIp/fetch`
+
+新增可选筛选参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `string` | 否 | 按封禁 IP 类型筛选，可选 `normal` / `dangerous` |
+
+返回列表每条记录增加 `type` 字段：
+
+```json
+{
+  "id": 1,
+  "ip": "203.0.113.30",
+  "type": "dangerous",
+  "reason": "risk user"
+}
+```
+
+### 使用邀请码后的自动解封
+
+`POST /api/v3/user/invite-codes/use`
+
+绑定邀请码成功后，如果当前用户处于 `banned=1`，系统会检查：
+
+- 当前用户 `register_metadata.ip` 是否在 `type=dangerous` 的封禁 IP 列表中。
+- 邀请人 `register_metadata.ip` 是否在 `type=dangerous` 的封禁 IP 列表中。
+
+双方注册 IP 都未命中危险列表时，系统会将当前用户 `banned` 更新为 `0`，并通知节点同步；任一方命中危险列表时不解封。缺少合法注册 IP 按“不命中危险 IP”处理。
+
+返回数据增加 `unbanned`：
+
+```json
+{
+  "bound": true,
+  "inviterUserId": 10001,
+  "unbanned": true
+}
+```
+
+说明：自动解封只修改当前用户 `banned` 状态，不删除 `blocked_user_ips` 记录；删除封禁 IP 记录也不会自动解除已有用户封禁。
+
+### 更新封禁 IP 类型
+
+`POST /api/v3/{secure_path}/user/blockedIp/updateType`
+
+用于将已有封禁 IP 记录在 `normal` 与 `dangerous` 之间切换。该接口只更新 `blocked_user_ips.type`，不会自动封禁或解封用户。
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 封禁 IP 记录 ID |
+| `type` | `string` | 是 | 目标类型，可选 `normal` / `dangerous` |
+
+请求示例：
+
+```json
+{
+  "id": 1,
+  "type": "dangerous"
+}
+```
+
+返回示例：
+
+```json
+{
+  "id": 1,
+  "ip": "203.0.113.30",
+  "type": "dangerous"
+}
+```

@@ -15,6 +15,7 @@ class UserBatchBanRequest extends FormRequest
             'user_ids' => ['required', 'array', 'min:1'],
             'user_ids.*' => ['required', 'integer', 'distinct', 'exists:v2_user,id'],
             'reason' => ['nullable', 'string', 'max:500'],
+            'type' => ['nullable', 'string', 'in:normal,dangerous'],
         ];
     }
 }
