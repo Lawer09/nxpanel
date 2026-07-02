@@ -24,13 +24,20 @@ class PlanService
      */
     public function getAvailablePlans(): Collection
     {
-        return Plan::where('show', true)
+        $plans = Plan::where('show', true)
             ->where('sell', true)
             ->orderBy('sort')
-            ->get()
-            ->filter(function ($plan) {
-                return $this->hasCapacity($plan);
-            });
+            ->get();
+
+        if ($plans->isEmpty()) {
+            return $plans;
+        }
+
+        $activeUserCounts = $this->getActiveUserCountsByPlan($plans);
+
+        return $plans
+            ->filter(fn(Plan $plan) => $this->hasCapacityWithActiveCount($plan, $activeUserCounts[(int) $plan->id] ?? 0))
+            ->values();
     }
 
     /**
@@ -176,6 +183,49 @@ class PlanService
             ->count();
 
         return ($plan->capacity_limit - $activeUserCount) > 0;
+    }
+
+    /**
+     * Count active users for all capacity-limited plans in one query.
+     *
+     * @param Collection<int, Plan> $plans
+     * @return array<int, int>
+     */
+    private function getActiveUserCountsByPlan(Collection $plans): array
+    {
+        $limitedPlanIds = $plans
+            ->filter(fn(Plan $plan) => $plan->capacity_limit !== null)
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->values();
+
+        if ($limitedPlanIds->isEmpty()) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('plan_id', $limitedPlanIds->all())
+            ->where(function ($query) {
+                $query->where('expired_at', '>=', time())
+                    ->orWhereNull('expired_at');
+            })
+            ->selectRaw('plan_id, COUNT(*) as active_user_count')
+            ->groupBy('plan_id')
+            ->pluck('active_user_count', 'plan_id')
+            ->mapWithKeys(fn($count, $planId) => [(int) $planId => (int) $count])
+            ->all();
+    }
+
+    /**
+     * Check capacity using a preloaded active user count.
+     */
+    private function hasCapacityWithActiveCount(Plan $plan, int $activeUserCount): bool
+    {
+        if ($plan->capacity_limit === null) {
+            return true;
+        }
+
+        return ((int) $plan->capacity_limit - $activeUserCount) > 0;
     }
 
     public function getAvailablePeriods(Plan $plan): array

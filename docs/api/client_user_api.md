@@ -206,3 +206,33 @@ GET /api/v3/user/getSubscribe?auth_data=xxxxxx
   }
 }
 ```
+---
+
+## 用户套餐列表
+
+### 基本说明
+
+- 请求方法：`GET`
+- 接口路径：`/api/v3/user/plan/fetch`
+- 鉴权方式：用户登录鉴权，支持 `Authorization` 请求头，也兼容 `auth_data` / `authorization` 请求参数。
+- 接口用途：查询当前可购买套餐；传 `id` 时查询单个套餐。
+
+### 容量过滤说明
+
+- `capacity_limit = null` 表示不限容量，套餐正常参与返回。
+- `capacity_limit = 0` 表示售罄，不返回。
+- 设置了容量限制的套餐会按当前有效用户数过滤，有效用户包括 `expired_at >= 当前时间` 或 `expired_at IS NULL` 的用户。
+- 已过期用户不计入容量。
+- 列表查询会批量聚合容量统计，避免按套餐逐条统计用户数。
+
+### 请求示例
+
+```http
+GET /api/v3/user/plan/fetch
+Authorization: Bearer xxxxxx
+```
+
+```http
+GET /api/v3/user/plan/fetch?id=2
+Authorization: Bearer xxxxxx
+```

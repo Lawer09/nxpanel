@@ -4,7 +4,6 @@ namespace App\Http\Controllers\V3\User;
 
 use App\Http\Resources\PlanResource;
 use App\Models\Plan;
-use App\Models\User;
 use Illuminate\Http\Request;
 use App\Http\Controllers\V1\User\PlanController as V1PlanController;
 
@@ -13,7 +12,7 @@ class PlanController extends V1PlanController
 {
     public function fetch(Request $request)
     {
-        $user = User::find($request->user()->id);
+        $user = $request->user();
         if ($request->input('id')) {
             $plan = Plan::where('id', $request->input('id'))->first();
             if (!$plan) {

@@ -803,3 +803,11 @@
 - 影响范围：`app/Services/ProjectService.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 `ProjectController::projectCodes()`、路由、`ProjectService::projectCodes()` 及项目代号缓存清理逻辑，并恢复项目 API 文档即可。
+
+## 2026-07-02 套餐列表容量统计查询优化
+
+- 日期：2026-07-02
+- 变更摘要：优化 `/plan/fetch` 套餐列表容量检查，将按套餐逐个统计有效用户数收敛为一次按 `plan_id` 聚合查询；V3 用户套餐查询复用当前认证用户，避免重复读取用户；新增 `v2_user(plan_id, expired_at)` 组合索引加速容量统计。
+- 影响范围：`app/Services/PlanService.php`、`app/Http/Controllers/V3/User/PlanController.php`、`database/migrations/2026_07_02_140000_add_plan_expired_index_to_v2_user_table.php`、`tests/Feature/PlanFetchPerformanceTest.php`、`docs/api/client_user_api.md`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration，为 `v2_user` 增加 `idx_v2_user_plan_expired` 索引。
+- 回滚说明：回滚新增 migration 移除索引，并恢复套餐列表为逐套餐容量检查逻辑即可。
