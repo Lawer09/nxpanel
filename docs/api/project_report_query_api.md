@@ -102,12 +102,6 @@
         "isLimited": false,
         "adStatus": "running",
         "appPlatform": "android",
-        "adspowerEnv": "env-placeholder",
-        "developerGmail": "developer@example.com",
-        "appName": "Example VPN",
-        "packageName": "com.example.vpn",
-        "domainInfoStatus": "completed",
-        "domainUrl": "https://example.com",
         "country": "US",
         "newUsers": 120,
         "reportNewUsers": 80,
@@ -210,7 +204,7 @@
 - `isLimited` 来源于 `ad_revenue_hourly` 上一完整小时数据，通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code`，不额外限定 `platform_code`、`source_platform` 或 `report_type`，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.7` 为 `true`，大于等于 `0.7` 为 `false`
 - 当上一完整小时 `SUM(ad_requests)=0` 时，如果上一完整小时项目聚合 `install_users > 0` 且上一完整小时所属日期、同项目代号在 `project_daily_aggregates` 中聚合后的当日 `ad_requests > 0`，`isLimited` 返回 `true`；否则返回 `null`
 - `isLimited` 使用上一完整小时项目广告请求聚合结果计算，该聚合结果缓存 1 分钟
-- 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`appPlatform`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainInfoStatus`、`domainUrl` 等
+- 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段：`adStatus`、`appPlatform`
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
 - CSV 导出保持固定列格式，不附加 `isLimited`、`recentHourlyAdMatchRates` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合

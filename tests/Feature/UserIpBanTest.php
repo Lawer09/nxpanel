@@ -188,6 +188,70 @@ class UserIpBanTest extends TestCase
         $this->assertEqualsCanonicalizing([$insideFirst->id, $insideSecond->id], $ids);
     }
 
+    public function test_admin_user_fetch_can_filter_by_country_and_ip_metadata(): void
+    {
+        $admin = $this->createUser('admin-country-ip@example.com', ['is_admin' => 1]);
+        $matched = $this->createUser('country-ip-match@example.com', [
+            'register_metadata' => [
+                'app_id' => 'com.example.app',
+                'country' => 'US',
+                'ip' => '203.0.113.90',
+            ],
+        ]);
+        $this->createUser('country-ip-other-country@example.com', [
+            'register_metadata' => [
+                'app_id' => 'com.example.app',
+                'country' => 'CA',
+                'ip' => '203.0.113.90',
+            ],
+        ]);
+        $this->createUser('country-ip-other-ip@example.com', [
+            'register_metadata' => [
+                'app_id' => 'com.example.app',
+                'country' => 'US',
+                'ip' => '203.0.113.91',
+            ],
+        ]);
+
+        $this->postJson($this->adminUserUri('fetch'), [
+            'country' => 'us',
+            'ip' => '203.0.113.90',
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $matched->id);
+    }
+
+    public function test_admin_user_fetch_can_filter_metadata_fields_from_table_filters(): void
+    {
+        $admin = $this->createUser('admin-filter-metadata@example.com', ['is_admin' => 1]);
+        $matched = $this->createUser('filter-metadata-match@example.com', [
+            'register_metadata' => [
+                'app_id' => 'com.example.app',
+                'country' => 'US',
+                'ip' => '203.0.113.92',
+            ],
+        ]);
+        $this->createUser('filter-metadata-other@example.com', [
+            'register_metadata' => [
+                'app_id' => 'com.example.other',
+                'country' => 'US',
+                'ip' => '203.0.113.92',
+            ],
+        ]);
+
+        $this->postJson($this->adminUserUri('fetch'), [
+            'filter' => [
+                ['id' => 'app_id', 'value' => 'com.example.app'],
+                ['id' => 'country', 'value' => 'us'],
+                ['id' => 'ip', 'value' => '203.0.113.92'],
+            ],
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $matched->id);
+    }
+
     public function test_admin_can_fetch_blocked_ip_records(): void
     {
         $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);

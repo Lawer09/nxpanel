@@ -38,14 +38,7 @@ class UserController extends V2UserController
         $userModel = User::with(['plan:id,name', 'invite_user:id,email', 'group:id,name'])
             ->select(DB::raw('*, (u+d) as total_used'));
 
-        $metadataFilters = $request->input('meta') ?? $request->input('register_metadata');
-        if (is_array($metadataFilters)) {
-            foreach ($metadataFilters as $key => $value) {
-                if (is_string($value) || is_numeric($value)) {
-                    $userModel->where("register_metadata->{$key}", $value);
-                }
-            }
-        }
+        $this->applyRegisterMetadataFilters($request, $userModel);
 
         if ($request->filled('id')) {
             $ids = is_array($id = $request->input('id')) ? $id : explode(',', $id);
@@ -608,6 +601,15 @@ class UserController extends V2UserController
 
     protected function applyFiltersAndSortsPublic(Request $request, Builder $builder): void
     {
+        if ($request->has('filter')) {
+            $filters = collect((array) $request->input('filter'))
+                ->reject(fn($filter) => $this->isRegisterMetadataFilter($filter))
+                ->values()
+                ->all();
+
+            $request->merge(['filter' => $filters]);
+        }
+
         $ref = new \ReflectionMethod(V2UserController::class, 'applyFiltersAndSorts');
         $ref->setAccessible(true);
         $ref->invoke($this, $request, $builder);
@@ -618,5 +620,60 @@ class UserController extends V2UserController
         $ref = new \ReflectionMethod(V2UserController::class, 'applyFilters');
         $ref->setAccessible(true);
         $ref->invoke($this, $request, $builder);
+    }
+
+    /**
+     * Apply exact filters for user registration metadata.
+     */
+    protected function applyRegisterMetadataFilters(Request $request, Builder $builder): void
+    {
+        $metadataFilters = $request->input('meta') ?? $request->input('register_metadata');
+        $metadataFilters = is_array($metadataFilters) ? $metadataFilters : [];
+
+        foreach (['app_id', 'country', 'ip'] as $key) {
+            if ($request->filled($key) && !array_key_exists($key, $metadataFilters)) {
+                $metadataFilters[$key] = $request->input($key);
+            }
+        }
+
+        foreach ((array) $request->input('filter', []) as $filter) {
+            if (!is_array($filter) || !isset($filter['id']) || !array_key_exists('value', $filter)) {
+                continue;
+            }
+
+            $key = (string) $filter['id'];
+            if (in_array($key, ['app_id', 'country', 'ip'], true) && !array_key_exists($key, $metadataFilters)) {
+                $metadataFilters[$key] = $filter['value'];
+            }
+        }
+
+        foreach ($metadataFilters as $key => $value) {
+            if (!is_string($key) || (!is_string($value) && !is_numeric($value))) {
+                continue;
+            }
+
+            $value = trim((string) $value);
+            if ($value === '') {
+                continue;
+            }
+
+            if ($key === 'country') {
+                $value = strtoupper($value);
+            }
+
+            $builder->where("register_metadata->{$key}", $value);
+        }
+    }
+
+    /**
+     * Determine whether a table filter targets registration metadata.
+     */
+    protected function isRegisterMetadataFilter(mixed $filter): bool
+    {
+        if (!is_array($filter) || !isset($filter['id'])) {
+            return false;
+        }
+
+        return in_array((string) $filter['id'], ['app_id', 'country', 'ip'], true);
     }
 }

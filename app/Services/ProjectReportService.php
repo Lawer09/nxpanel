@@ -15,12 +15,6 @@ class ProjectReportService
     private const PROJECT_METADATA_COLUMNS = [
         'ad_status' => 'adStatus',
         'app_platform' => 'appPlatform',
-        'adspower_env' => 'adspowerEnv',
-        'developer_gmail' => 'developerGmail',
-        'app_name' => 'appName',
-        'package_name' => 'packageName',
-        'domain_info_status' => 'domainInfoStatus',
-        'domain_url' => 'domainUrl',
     ];
 
     public function __construct(

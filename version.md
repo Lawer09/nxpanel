@@ -819,3 +819,19 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `ProjectReportService` 中最近小时匹配率加载和格式化逻辑、恢复项目报表查询缓存 key 版本，并删除文档说明即可。
+
+## 2026-07-03 项目报表项目元数据返回精简
+
+- 日期：2026-07-03
+- 变更摘要：项目日报和项目小时报表返回的项目元数据精简为 `adStatus`、`appPlatform`，移除报表返回中的 `adspowerEnv`、`appName`、`developerGmail`、`domainInfoStatus`、`domainUrl`、`packageName`；不影响项目管理接口和项目表字段。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `ProjectReportService::PROJECT_METADATA_COLUMNS` 中被移除的报表元数据字段，并恢复对应文档说明即可。
+
+## 2026-07-03 用户管理国家与 IP 筛选
+
+- 日期：2026-07-03
+- 变更摘要：V3 管理端用户列表 `POST /api/v3/{secure_path}/user/fetch` 新增按注册元数据 `country`、`ip` 精确筛选，支持顶层参数、`meta/register_metadata` 参数和表格 `filter` 传参；`country` 按现有 AID 注册口径统一转大写后匹配，并保留原 `app_id` 元数据筛选兼容。
+- 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 V3 用户列表元数据筛选扩展、对应测试和文档说明即可。

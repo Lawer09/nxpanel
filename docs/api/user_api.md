@@ -14,6 +14,8 @@
 | `current` | `int` | 否 | 页码，默认 `1` |
 | `pageSize` | `int` | 否 | 每页条数，默认 `10` |
 | `meta` | `object` | 否 | 按 `register_metadata` JSON 字段筛选，key 为元数据字段名 |
+| `country` | `string` | 否 | 按注册元数据 `register_metadata.country` 精确筛选，服务端会统一转大写，例如 `us` 转为 `US` |
+| `ip` | `string` | 否 | 按注册元数据 `register_metadata.ip` 精确筛选 |
 | `filter` | `array` | 否 | 通用字段筛选，格式 `[{id, value}]` |
 | `sort` | `array` | 否 | 排序，格式 `[{id, desc: bool}]` |
 | `onlyBanned` | `bool` | 否 | 只查询已封禁用户 |
@@ -27,8 +29,12 @@ POST /api/v3/admin/user/fetch
 {
     "meta": {
         "app_id": "com.example.app",
-        "channel": "telegram"
+        "channel": "telegram",
+        "country": "US",
+        "ip": "203.0.113.30"
     },
+    "country": "US",
+    "ip": "203.0.113.30",
     "current": 1,
     "pageSize": 20,
     "createdAtFrom": "2026-06-10",
