@@ -10,6 +10,8 @@ class ProjectReportService
 {
     private const QUERY_CACHE_TTL = 60;
 
+    private const RECENT_HOURLY_AD_MATCH_RATE_CACHE_TTL = 120;
+
     private const PROJECT_METADATA_COLUMNS = [
         'ad_status' => 'adStatus',
         'app_platform' => 'appPlatform',
@@ -61,6 +63,9 @@ class ProjectReportService
         $this->applyDailyNowRevenue($rows, $definition);
         if (($definition['includeLimitState'] ?? false) === true) {
             $this->applyDailyLimitState($rows);
+        }
+        if (($definition['includeRecentHourlyAdMatchRates'] ?? false) === true) {
+            $this->applyRecentHourlyAdMatchRates($rows);
         }
         $this->applyTopRevenueCountries($rows, 'daily', [
             'dateFrom' => $definition['dateFrom'],
@@ -449,7 +454,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v9:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v10:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -709,6 +714,7 @@ class ProjectReportService
             'filters' => $filters,
             'requestedGroupBy' => $requestedGroupBy,
             'includeLimitState' => in_array('projectCode', $groupDimensions, true),
+            'includeRecentHourlyAdMatchRates' => in_array('projectCode', $groupDimensions, true),
         ];
     }
 
@@ -1262,6 +1268,117 @@ class ProjectReportService
     }
 
     /**
+     * Attach recent project-level hourly ad match rates to project grouped daily rows.
+     */
+    private function applyRecentHourlyAdMatchRates($rows): void
+    {
+        $projectCodes = [];
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode !== '') {
+                $projectCodes[] = $projectCode;
+            }
+        }
+
+        $ratesByProject = $this->loadRecentHourlyAdMatchRates($projectCodes);
+
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode === '') {
+                continue;
+            }
+
+            $row->recent_hourly_ad_match_rates = $ratesByProject[$projectCode] ?? [];
+        }
+    }
+
+    /**
+     * Load the latest 12 Asia/Shanghai hour buckets from project_report_hourly by project.
+     */
+    private function loadRecentHourlyAdMatchRates(array $projectCodes): array
+    {
+        $projectCodes = $this->normalizeStringList($projectCodes);
+        sort($projectCodes, SORT_STRING);
+        if (empty($projectCodes)) {
+            return [];
+        }
+
+        $endHour = now('Asia/Shanghai')->startOfHour();
+        $startHour = (clone $endHour)->subHours(11);
+        $cacheKey = sprintf(
+            'project_report:recent_hourly_ad_match_rates:v1:%s:%s:%s',
+            $startHour->format('YmdH'),
+            $endHour->format('YmdH'),
+            md5(implode('|', $projectCodes))
+        );
+
+        return Cache::remember($cacheKey, self::RECENT_HOURLY_AD_MATCH_RATE_CACHE_TTL, function () use ($projectCodes, $startHour, $endHour) {
+            $startDate = $startHour->toDateString();
+            $endDate = $endHour->toDateString();
+            $startHourValue = (int) $startHour->format('G');
+            $endHourValue = (int) $endHour->format('G');
+
+            $rows = DB::table('project_report_hourly')
+                ->whereIn('project_code', $projectCodes)
+                ->where(function (Builder $query) use ($startDate, $endDate, $startHourValue, $endHourValue) {
+                    if ($startDate === $endDate) {
+                        $query->where('report_date', '=', $startDate)
+                            ->whereBetween('hour', [$startHourValue, $endHourValue]);
+
+                        return;
+                    }
+
+                    // Keep predicates index-friendly instead of wrapping report_date/hour in SQL functions.
+                    $query->where(function (Builder $subQuery) use ($startDate, $startHourValue) {
+                        $subQuery->where('report_date', '=', $startDate)
+                            ->where('hour', '>=', $startHourValue);
+                    })->orWhere(function (Builder $subQuery) use ($startDate, $endDate) {
+                        $subQuery->where('report_date', '>', $startDate)
+                            ->where('report_date', '<', $endDate);
+                    })->orWhere(function (Builder $subQuery) use ($endDate, $endHourValue) {
+                        $subQuery->where('report_date', '=', $endDate)
+                            ->where('hour', '<=', $endHourValue);
+                    });
+                })
+                ->selectRaw('project_code')
+                ->selectRaw('report_date')
+                ->selectRaw('hour')
+                ->selectRaw('SUM(ad_requests) as ad_requests')
+                ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
+                ->groupBy('project_code', 'report_date', 'hour')
+                ->orderBy('report_date')
+                ->orderBy('hour')
+                ->get();
+
+            $result = array_fill_keys($projectCodes, []);
+            foreach ($rows as $row) {
+                $projectCode = trim((string) ($row->project_code ?? ''));
+                if ($projectCode === '') {
+                    continue;
+                }
+
+                $adRequests = (int) ($row->ad_requests ?? 0);
+                $adMatchedRequests = (int) ($row->ad_matched_requests ?? 0);
+                $reportDate = (string) ($row->report_date ?? '');
+                $hour = (int) ($row->hour ?? 0);
+
+                $result[$projectCode][] = [
+                    'reportDate' => $reportDate,
+                    'hour' => $hour,
+                    'hourStart' => sprintf('%s %02d:00:00', $reportDate, $hour),
+                    'adRequests' => $adRequests,
+                    'adMatchedRequests' => $adMatchedRequests,
+                    'adMatchRate' => $adRequests === 0
+                        ? null
+                        : $this->formatDecimal($adMatchedRequests / $adRequests * 100),
+                ];
+            }
+
+            return $result;
+        });
+    }
+
+    /**
      * Select project metadata fields for non-grouped report rows.
      */
     private function selectProjectMetadata(Builder $query): void
@@ -1496,6 +1613,10 @@ class ProjectReportService
 
         if (property_exists($row, 'top_revenue_countries')) {
             $data['topRevenueCountries'] = $row->top_revenue_countries;
+        }
+
+        if (property_exists($row, 'recent_hourly_ad_match_rates')) {
+            $data['recentHourlyAdMatchRates'] = $row->recent_hourly_ad_match_rates;
         }
 
         return $data;

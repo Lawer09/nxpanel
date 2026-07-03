@@ -117,6 +117,16 @@
         "adRevenue": "320.500000",
         "adRevenueNow": "323.456000",
         "adRevenueDiff": "2.956000",
+        "recentHourlyAdMatchRates": [
+          {
+            "reportDate": "2026-07-03",
+            "hour": 13,
+            "hourStart": "2026-07-03 13:00:00",
+            "adRequests": 1000,
+            "adMatchedRequests": 820,
+            "adMatchRate": "82.000000"
+          }
+        ],
         "adRequests": 100000,
         "adMatchedRequests": 91000,
         "adImpressions": 86000,
@@ -192,13 +202,17 @@
 - `adRevenueDiff = adRevenueNow - adRevenue`，结果保留 6 位小数
 - 当返回行同时包含 `reportDate` 和 `projectCode` 时，`adRevenueNow` 按 `reportDate + projectCode` 匹配；当返回行只有 `projectCode` 且不含 `reportDate` 时，按本次请求 `dateFrom ~ dateTo` 范围内的该项目当前收益合计
 - 当前收益不按 `country` 拆分；如果报表行包含国家维度，同一 `projectCode + reportDate` 下不同国家行会使用同一份 `adRevenueNow`，并分别与各行 `adRevenue` 计算 `adRevenueDiff`
+- 当 `groupBy` 包含 `projectCode` 且返回行能确定唯一项目代号时，会附带 `recentHourlyAdMatchRates`，表示该项目最近 12 个 Asia/Shanghai 小时桶的广告匹配率明细；不包含 `projectCode` 时不返回该字段
+- `recentHourlyAdMatchRates` 来源于 `project_report_hourly`，按 `project_code + report_date + hour` 聚合 `SUM(ad_requests)` 和 `SUM(ad_matched_requests)`，并计算 `adMatchRate = SUM(ad_matched_requests) / SUM(ad_requests) * 100`
+- `recentHourlyAdMatchRates` 的时间范围为当前 Asia/Shanghai 小时向前 11 个小时，共 12 个小时桶，包含当前小时；返回按 `hourStart` 升序排列，某小时 `adRequests=0` 时 `adMatchRate=null`，无数据时返回空数组 `[]`
+- `recentHourlyAdMatchRates` 的项目维度小时匹配率查询缓存 120 秒；项目日报 JSON 查询整体仍使用 60 秒缓存，因此该字段最多受两层短缓存影响
 - 当 `groupBy` 包含 `projectCode` 时，返回行会附带 `isLimited` 字段，表示上一完整 Asia/Shanghai 小时项目广告匹配率是否低于 `0.7`
 - `isLimited` 来源于 `ad_revenue_hourly` 上一完整小时数据，通过 `project_ad_platform_accounts.ad_platform_account_id = ad_revenue_hourly.account_id` 映射到 `project_code`，不额外限定 `platform_code`、`source_platform` 或 `report_type`，并以 `SUM(matched_requests) / SUM(ad_requests)` 聚合判断；低于 `0.7` 为 `true`，大于等于 `0.7` 为 `false`
 - 当上一完整小时 `SUM(ad_requests)=0` 时，如果上一完整小时项目聚合 `install_users > 0` 且上一完整小时所属日期、同项目代号在 `project_daily_aggregates` 中聚合后的当日 `ad_requests > 0`，`isLimited` 返回 `true`；否则返回 `null`
 - `isLimited` 使用上一完整小时项目广告请求聚合结果计算，该聚合结果缓存 1 分钟
 - 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段，例如 `adStatus`、`appPlatform`、`adspowerEnv`、`developerGmail`、`appName`、`packageName`、`domainInfoStatus`、`domainUrl` 等
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
-- CSV 导出保持固定列格式，不附加 `isLimited` 或项目表元数据字段
+- CSV 导出保持固定列格式，不附加 `isLimited`、`recentHourlyAdMatchRates` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
 - `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
 - `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`

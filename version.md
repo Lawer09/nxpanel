@@ -811,3 +811,11 @@
 - 影响范围：`app/Services/PlanService.php`、`app/Http/Controllers/V3/User/PlanController.php`、`database/migrations/2026_07_02_140000_add_plan_expired_index_to_v2_user_table.php`、`tests/Feature/PlanFetchPerformanceTest.php`、`docs/api/client_user_api.md`、`version.md`
 - 是否需要迁移：是，需要执行新增 migration，为 `v2_user` 增加 `idx_v2_user_plan_expired` 索引。
 - 回滚说明：回滚新增 migration 移除索引，并恢复套餐列表为逐套餐容量检查逻辑即可。
+
+## 2026-07-03 项目日报最近 12 小时广告匹配率
+
+- 日期：2026-07-03
+- 变更摘要：项目日报 JSON 查询在 `groupBy` 包含 `projectCode` 且行数据可确定唯一项目代号时，新增 `recentHourlyAdMatchRates` 字段；该字段从 `project_report_hourly` 聚合最近 12 个 Asia/Shanghai 小时桶的广告请求、匹配请求和匹配率，并增加 120 秒项目维度缓存；项目报表查询缓存 key 升级到 `v10`，避免旧缓存缺少新字段。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ProjectReportService` 中最近小时匹配率加载和格式化逻辑、恢复项目报表查询缓存 key 版本，并删除文档说明即可。
