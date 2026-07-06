@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Project;
+use App\Services\ProjectAppInfoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -86,6 +87,9 @@ class ProjectResource extends JsonResource
                     'createdAt'  => $ua->created_at,
                     'updatedAt'  => $ua->updated_at,
                 ])
+            ),
+            'appInfos'        => $this->whenLoaded('appInfos', fn() =>
+                $this->appInfos->map(fn($appInfo) => ProjectAppInfoService::format($appInfo))->values()
             ),
         ];
     }

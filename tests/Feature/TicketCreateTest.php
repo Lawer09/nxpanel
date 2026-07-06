@@ -82,10 +82,16 @@ class TicketCreateTest extends TestCase
             'level' => 0,
             'personal_email' => 'fetch-personal@example.com',
         ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'message' => 'Detail latest message',
+        ]);
 
         $this->getJson('/api/v1/user/ticket/fetch?id=' . $ticket->id)
             ->assertOk()
-            ->assertJsonPath('data.personal_email', 'fetch-personal@example.com');
+            ->assertJsonPath('data.personal_email', 'fetch-personal@example.com')
+            ->assertJsonPath('data.latest_message.message', 'Detail latest message');
     }
 
     public function test_ticket_fetch_list_returns_latest_message(): void

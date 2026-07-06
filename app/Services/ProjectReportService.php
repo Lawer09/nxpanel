@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ProjectAppInfo;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -54,6 +55,9 @@ class ProjectReportService
         }
         if (($definition['includeRecentHourlyAdMatchRates'] ?? false) === true) {
             $this->applyRecentHourlyAdMatchRates($rows);
+        }
+        if (($definition['includeProjectAppInfos'] ?? false) === true) {
+            $this->applyProjectAppInfos($rows);
         }
         $this->applyTopRevenueCountries($rows, 'daily', [
             'dateFrom' => $definition['dateFrom'],
@@ -215,6 +219,7 @@ class ProjectReportService
         $this->applyProjectDepartmentFilter($query, 'project_report_hourly.project_code', $filters);
 
         $summaryQuery = clone $query;
+        $includeProjectAppInfos = false;
 
         if (empty($groupBy)) {
             $sortable = array_merge(array_keys($dimensionMap), array_keys($metricMap));
@@ -273,10 +278,11 @@ class ProjectReportService
             if (empty($groupDimensions)) {
                 $groupDimensions = ['reportDate', 'hour'];
             }
+            $includeProjectAppInfos = in_array('projectCode', $groupDimensions, true);
 
             $groupColumns = array_map(static fn ($key) => $dimensionMap[$key], $groupDimensions);
             $groupQuery = clone $query;
-            if (in_array('projectCode', $groupDimensions, true)) {
+            if ($includeProjectAppInfos) {
                 $this->joinHourlyProjectMetadata($groupQuery);
             }
             foreach ($groupColumns as $groupColumn) {
@@ -310,7 +316,7 @@ class ProjectReportService
                 ->selectRaw('NULL as ad_spend_cpm')
                 ->selectRaw('CASE WHEN (SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost))=0 THEN NULL ELSE ROUND(SUM(project_report_hourly.ad_revenue)/(SUM(project_report_hourly.ad_spend_cost)+SUM(project_report_hourly.traffic_cost)),6) END as roi');
 
-            if (in_array('projectCode', $groupDimensions, true)) {
+            if ($includeProjectAppInfos) {
                 $this->selectGroupedProjectMetadata($groupQuery);
             }
 
@@ -335,6 +341,10 @@ class ProjectReportService
                 ->offset(($page - 1) * $pageSize)
                 ->limit($pageSize)
                 ->get();
+        }
+
+        if ($includeProjectAppInfos) {
+            $this->applyProjectAppInfos($rows);
         }
 
         $this->applyTopRevenueCountries($rows, 'hourly', [
@@ -442,7 +452,7 @@ class ProjectReportService
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return sprintf('project_report:%s_query:v10:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v11:%s', $scope, md5((string) $payload));
     }
 
     /**
@@ -705,6 +715,7 @@ class ProjectReportService
             'groupDimensions' => $groupDimensions,
             'includeLimitState' => in_array('projectCode', $groupDimensions, true),
             'includeRecentHourlyAdMatchRates' => in_array('projectCode', $groupDimensions, true),
+            'includeProjectAppInfos' => in_array('projectCode', $groupDimensions, true),
         ];
     }
 
@@ -1431,6 +1442,43 @@ class ProjectReportService
     }
 
     /**
+     * Attach project application information to project grouped report rows.
+     */
+    private function applyProjectAppInfos($rows): void
+    {
+        $projectCodes = [];
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode !== '') {
+                $projectCodes[] = $projectCode;
+            }
+        }
+
+        $projectCodes = $this->normalizeStringList($projectCodes);
+        if (empty($projectCodes)) {
+            return;
+        }
+
+        $appInfosByProject = ProjectAppInfo::query()
+            ->whereIn('project_code', $projectCodes)
+            ->orderByDesc('enabled')
+            ->orderBy('app_id')
+            ->get()
+            ->groupBy('project_code')
+            ->map(fn ($items) => $items->map(fn ($item) => ProjectAppInfoService::format($item))->values()->all())
+            ->all();
+
+        foreach ($rows as $row) {
+            $projectCode = trim((string) ($row->project_code ?? ''));
+            if ($projectCode === '') {
+                continue;
+            }
+
+            $row->app_infos = $appInfosByProject[$projectCode] ?? [];
+        }
+    }
+
+    /**
      * Select project metadata fields for non-grouped report rows.
      */
     private function selectProjectMetadata(Builder $query): void
@@ -1682,6 +1730,10 @@ class ProjectReportService
 
         if (property_exists($row, 'recent_hourly_ad_match_rates')) {
             $data['recentHourlyAdMatchRates'] = $row->recent_hourly_ad_match_rates;
+        }
+
+        if (property_exists($row, 'app_infos')) {
+            $data['appInfos'] = $row->app_infos;
         }
 
         return $data;

@@ -52,6 +52,8 @@
 | orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`dauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
 | orderDirection | string | 否 | `asc` / `desc` |
 
+当 `groupBy` 包含 `projectCode` 时，项目报表返回行会附带 `appInfos` 字段，来源于 `project_app_infos`，字段结构与管理端项目列表的 `appInfos` 一致；无应用信息时返回空数组 `[]`。
+
 ---
 
 ## 1. 表名与维度

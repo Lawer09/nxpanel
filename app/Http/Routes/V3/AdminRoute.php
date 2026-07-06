@@ -22,6 +22,7 @@ use App\Http\Controllers\V3\Admin\AdRevenuePlatform\AdRevenueController;
 use App\Http\Controllers\V3\Admin\AdSpendPlatform\AdSpendPlatformController;
 use App\Http\Controllers\V3\Admin\Project\ProjectAggregateController;
 use App\Http\Controllers\V3\Admin\Project\ProjectController;
+use App\Http\Controllers\V3\Admin\Project\ProjectAppInfoController;
 use App\Http\Controllers\V3\Admin\Project\ProjectTrafficAccountController;
 use App\Http\Controllers\V3\Admin\Project\ProjectAdAccountController;
 use App\Http\Controllers\V3\Admin\Project\ProjectUserAppMapController;
@@ -394,6 +395,12 @@ class AdminRoute
                 $router->post('/user-apps/create',                   [ProjectUserAppMapController::class, 'store']);
                 $router->post('/user-apps/update',                   [ProjectUserAppMapController::class, 'update']);
                 $router->post('/user-apps/delete',                   [ProjectUserAppMapController::class, 'destroy']);
+
+                $router->get('/app-infos',                           [ProjectAppInfoController::class, 'index']);
+                $router->get('/app-infos/detail',                    [ProjectAppInfoController::class, 'detail']);
+                $router->post('/app-infos/create',                   [ProjectAppInfoController::class, 'store']);
+                $router->post('/app-infos/update',                   [ProjectAppInfoController::class, 'update']);
+                $router->post('/app-infos/delete',                   [ProjectAppInfoController::class, 'destroy']);
 
             });
 

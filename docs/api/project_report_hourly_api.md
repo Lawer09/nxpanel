@@ -76,6 +76,7 @@
 说明：
 
 - 当返回行包含唯一 `projectCode` 时，会附带项目元数据字段：`adStatus`、`appPlatform`。
+- 当 `groupBy` 包含 `projectCode` 时，会附带 `appInfos` 字段，来源于 `project_app_infos`，按当前行 `projectCode` 批量加载；无应用信息时返回空数组 `[]`。
 - 当 `groupBy` 不包含某个维度时，该维度字段返回 `null`。
 - `isLimited` 根据当前返回行自身的 `adMatchRate` 判断：`adMatchRate < 70` 返回 `true`，大于等于 `70` 返回 `false`；`adMatchRate` 为 `null` 时返回 `null`。
 - `adSpendCost/adSpendCpi/adSpendCpc/adSpendCpm` 来源于 `ad_spend_report_hourly` 小时投放表，按当前小时维度聚合后实时计算。

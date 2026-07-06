@@ -22,7 +22,9 @@ class TicketResource extends JsonResource
             "subject" => $this['subject'],
             "personal_email" => $this['personal_email'],
             "message" => array_key_exists('message',$this->additional) ? MessageResource::collection($this['message']) : null,
-            "latest_message" => $this->whenLoaded('latestMessage', fn () => $this->latestMessage ? MessageResource::make($this->latestMessage) : null),
+            "latest_message" => $this->relationLoaded('latestMessage') && $this->latestMessage
+                ? MessageResource::make($this->latestMessage)
+                : null,
             "created_at" => $this['created_at'],
             "updated_at" => $this['updated_at']
         ];

@@ -95,7 +95,7 @@ class ProjectService
         $pageSize = (int) ($params['pageSize'] ?? 20);
 
         $total = $query->count();
-        $items = $query->with(['trafficAccounts', 'adAccounts', 'userApps'])
+        $items = $query->with(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos'])
             ->orderByDesc('id')
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
@@ -137,7 +137,7 @@ class ProjectService
             $this->forgetDepartmentCache();
         }
 
-        return $project;
+        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
     }
 
     public function update(int $id, array $params): Project
@@ -175,7 +175,7 @@ class ProjectService
             $this->forgetDepartmentCache();
         }
 
-        return $project;
+        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
     }
 
     /**
@@ -283,7 +283,7 @@ class ProjectService
 
         $project->update(['status' => $status]);
 
-        return $project;
+        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
     }
 
     /**
