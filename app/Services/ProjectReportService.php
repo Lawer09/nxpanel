@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ProjectAppInfo;
+use App\Models\ProjectUserAppMap;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1442,7 +1443,7 @@ class ProjectReportService
     }
 
     /**
-     * Attach project application information to project grouped report rows.
+     * Attach application information to project grouped report rows.
      */
     private function applyProjectAppInfos($rows): void
     {
@@ -1459,14 +1460,31 @@ class ProjectReportService
             return;
         }
 
-        $appInfosByProject = ProjectAppInfo::query()
+        $appIdsByProject = ProjectUserAppMap::query()
             ->whereIn('project_code', $projectCodes)
-            ->orderByDesc('enabled')
-            ->orderBy('app_id')
-            ->get()
+            ->where('enabled', 1)
+            ->get(['project_code', 'app_id'])
             ->groupBy('project_code')
-            ->map(fn ($items) => $items->map(fn ($item) => ProjectAppInfoService::format($item))->values()->all())
-            ->all();
+            ->map(fn ($items) => $items
+                ->pluck('app_id')
+                ->map(fn ($appId) => trim((string) $appId))
+                ->filter(fn ($appId) => $appId !== '')
+                ->unique()
+                ->values());
+
+        $allAppIds = $appIdsByProject
+            ->flatMap(fn ($appIds) => $appIds)
+            ->unique()
+            ->values();
+
+        $appInfosByAppId = $allAppIds->isEmpty()
+            ? collect()
+            : ProjectAppInfo::query()
+                ->whereIn('app_id', $allAppIds->all())
+                ->orderByDesc('enabled')
+                ->orderBy('app_id')
+                ->get()
+                ->keyBy('app_id');
 
         foreach ($rows as $row) {
             $projectCode = trim((string) ($row->project_code ?? ''));
@@ -1474,7 +1492,12 @@ class ProjectReportService
                 continue;
             }
 
-            $row->app_infos = $appInfosByProject[$projectCode] ?? [];
+            $row->app_infos = ($appIdsByProject[$projectCode] ?? collect())
+                ->map(fn ($appId) => $appInfosByAppId[$appId] ?? null)
+                ->filter()
+                ->map(fn ($item) => ProjectAppInfoService::format($item))
+                ->values()
+                ->all();
         }
     }
 

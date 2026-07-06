@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\ProjectAppInfo;
+use App\Models\ProjectUserAppMap;
 use App\Services\AdRevenueService;
 use App\Services\ProjectAppInfoService;
 use App\Services\ProjectReportService;
+use App\Services\ProjectService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -29,7 +31,6 @@ class ProjectAppInfoTest extends TestCase
 
         $service = app(ProjectAppInfoService::class);
         $appInfo = $service->store([
-            'projectId' => $project->id,
             'appId' => 'com.example.app',
             'appName' => 'Example App',
             'platform' => 'android',
@@ -44,17 +45,20 @@ class ProjectAppInfoTest extends TestCase
             'enabled' => 1,
         ]);
 
-        $this->assertSame('APP001', $appInfo->project_code);
         $this->assertSame([['date' => '2026-07-05', 'downloads' => 100]], $appInfo->download_data);
         $this->assertSame(['https://example.com/a.png'], $appInfo->image_urls);
 
-        $this->expectExceptionMessage('Project app info already exists');
+        $this->expectExceptionMessage('App info already exists');
         try {
             $service->store([
-                'projectCode' => 'APP001',
                 'appId' => 'com.example.app',
             ]);
         } catch (\Throwable $e) {
+            ProjectUserAppMap::create([
+                'project_code' => 'APP001',
+                'app_id' => 'com.example.app',
+                'enabled' => 1,
+            ]);
             $this->assertSame(1, $service->index(['projectCode' => 'APP001', 'keyword' => 'Example'])['total']);
             $updated = $service->update($appInfo->id, [
                 'downloadCount' => 4321,
@@ -65,7 +69,7 @@ class ProjectAppInfoTest extends TestCase
             $this->assertSame(0, $updated->enabled);
 
             $service->destroy($appInfo->id);
-            $this->assertDatabaseMissing('project_app_infos', ['id' => $appInfo->id]);
+            $this->assertDatabaseMissing('app_infos', ['id' => $appInfo->id]);
 
             throw $e;
         }
@@ -82,14 +86,18 @@ class ProjectAppInfoTest extends TestCase
             'status' => Project::STATUS_ACTIVE,
         ]);
         ProjectAppInfo::create([
-            'project_code' => 'APP002',
             'app_id' => 'com.example.resource',
             'app_name' => 'Resource App',
             'download_count' => 88,
             'image_urls' => ['https://example.com/resource.png'],
         ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'APP002',
+            'app_id' => 'com.example.resource',
+            'enabled' => 1,
+        ]);
 
-        $payload = ProjectResource::make($project->load('appInfos'))->resolve(request());
+        $payload = ProjectResource::make(app(ProjectService::class)->detail((int) $project->id))->resolve(request());
 
         $this->assertCount(1, $payload['appInfos']);
         $this->assertSame('com.example.resource', $payload['appInfos'][0]['appId']);
@@ -107,12 +115,16 @@ class ProjectAppInfoTest extends TestCase
             'status' => Project::STATUS_ACTIVE,
         ]);
         ProjectAppInfo::create([
-            'project_code' => 'APP003',
             'app_id' => 'com.example.report',
             'app_name' => 'Report App',
             'platform' => 'ios',
             'download_count' => 99,
             'icon_url' => 'https://example.com/report-icon.png',
+        ]);
+        ProjectUserAppMap::create([
+            'project_code' => 'APP003',
+            'app_id' => 'com.example.report',
+            'enabled' => 1,
         ]);
 
         $this->insertDailyAggregate('2026-07-05', 'APP003');

@@ -205,7 +205,7 @@
 - 当上一完整小时 `SUM(ad_requests)=0` 时，如果上一完整小时项目聚合 `install_users > 0` 且上一完整小时所属日期、同项目代号在 `project_daily_aggregates` 中聚合后的当日 `ad_requests > 0`，`isLimited` 返回 `true`；否则返回 `null`
 - `isLimited` 使用上一完整小时项目广告请求聚合结果计算，该聚合结果缓存 1 分钟
 - 当返回行包含唯一 `projectCode` 时，会附带项目表元数据字段：`adStatus`、`appPlatform`
-- 当 `groupBy` 包含 `projectCode` 时，会附带 `appInfos` 字段，来源于 `project_app_infos`，按当前行 `projectCode` 批量加载；无应用信息时返回空数组 `[]`
+- 当 `groupBy` 包含 `projectCode` 时，会附带 `appInfos` 字段，来源于 `app_infos`，并通过 `project_user_app_map` 按当前行 `projectCode` 映射 appId 后批量加载；无应用信息时返回空数组 `[]`
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited`、`appInfos` 和项目表元数据字段
 - CSV 导出保持固定列格式，不附加 `isLimited`、`recentHourlyAdMatchRates`、`appInfos` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合

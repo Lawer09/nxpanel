@@ -52,7 +52,7 @@
 | orderBy | string | 否 | `reportDate`/`hour`/`projectCode`/`country`/`installUsers`/`dauUsers`/`adRevenue`/`adSpendCost`/`ros`/`id`/`updatedAt` |
 | orderDirection | string | 否 | `asc` / `desc` |
 
-当 `groupBy` 包含 `projectCode` 时，项目报表返回行会附带 `appInfos` 字段，来源于 `project_app_infos`，字段结构与管理端项目列表的 `appInfos` 一致；无应用信息时返回空数组 `[]`。
+当 `groupBy` 包含 `projectCode` 时，项目报表返回行会附带 `appInfos` 字段，来源于 `app_infos`，并通过 `project_user_app_map` 按当前行 `projectCode` 映射 appId 后批量加载；字段结构与管理端项目列表的 `appInfos` 一致；无应用信息时返回空数组 `[]`。
 
 ---
 

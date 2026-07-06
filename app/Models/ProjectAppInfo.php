@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProjectAppInfo extends Model
 {
-    protected $table = 'project_app_infos';
+    protected $table = 'app_infos';
 
     protected $guarded = ['id'];
 

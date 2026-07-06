@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Project;
+use App\Models\ProjectAppInfo;
+use App\Models\ProjectUserAppMap;
 use App\Exceptions\BusinessException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -95,11 +97,12 @@ class ProjectService
         $pageSize = (int) ($params['pageSize'] ?? 20);
 
         $total = $query->count();
-        $items = $query->with(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos'])
+        $items = $query->with(['trafficAccounts', 'adAccounts', 'userApps'])
             ->orderByDesc('id')
             ->offset(($page - 1) * $pageSize)
             ->limit($pageSize)
             ->get();
+        $this->attachAppInfos($items);
 
         return compact('page', 'pageSize', 'total', 'items');
     }
@@ -137,7 +140,10 @@ class ProjectService
             $this->forgetDepartmentCache();
         }
 
-        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
+        $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps']);
+        $this->attachAppInfos(collect([$project]));
+
+        return $project;
     }
 
     public function update(int $id, array $params): Project
@@ -175,7 +181,10 @@ class ProjectService
             $this->forgetDepartmentCache();
         }
 
-        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
+        $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps']);
+        $this->attachAppInfos(collect([$project]));
+
+        return $project;
     }
 
     /**
@@ -283,7 +292,10 @@ class ProjectService
 
         $project->update(['status' => $status]);
 
-        return $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps', 'appInfos']);
+        $project->loadMissing(['trafficAccounts', 'adAccounts', 'userApps']);
+        $this->attachAppInfos(collect([$project]));
+
+        return $project;
     }
 
     /**
@@ -492,5 +504,57 @@ class ProjectService
     private function forgetProjectCodeCache(): void
     {
         Cache::forget(self::PROJECT_CODE_CACHE_KEY);
+    }
+
+    /**
+     * Attach app info records to projects through project_user_app_map.
+     */
+    private function attachAppInfos($projects): void
+    {
+        $projectCodes = $projects
+            ->pluck('project_code')
+            ->map(fn ($projectCode) => trim((string) $projectCode))
+            ->filter(fn ($projectCode) => $projectCode !== '')
+            ->unique()
+            ->values();
+
+        if ($projectCodes->isEmpty()) {
+            return;
+        }
+
+        $appIdsByProject = ProjectUserAppMap::query()
+            ->whereIn('project_code', $projectCodes->all())
+            ->where('enabled', 1)
+            ->get(['project_code', 'app_id'])
+            ->groupBy('project_code')
+            ->map(fn ($items) => $items
+                ->pluck('app_id')
+                ->map(fn ($appId) => trim((string) $appId))
+                ->filter(fn ($appId) => $appId !== '')
+                ->unique()
+                ->values());
+
+        $allAppIds = $appIdsByProject
+            ->flatMap(fn ($appIds) => $appIds)
+            ->unique()
+            ->values();
+
+        $appInfosByAppId = $allAppIds->isEmpty()
+            ? collect()
+            : ProjectAppInfo::query()
+                ->whereIn('app_id', $allAppIds->all())
+                ->orderByDesc('enabled')
+                ->orderBy('app_id')
+                ->get()
+                ->keyBy('app_id');
+
+        foreach ($projects as $project) {
+            $appInfos = ($appIdsByProject[$project->project_code] ?? collect())
+                ->map(fn ($appId) => $appInfosByAppId[$appId] ?? null)
+                ->filter()
+                ->values();
+
+            $project->setRelation('appInfos', $appInfos);
+        }
     }
 }

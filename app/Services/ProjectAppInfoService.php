@@ -5,19 +5,24 @@ namespace App\Services;
 use App\Exceptions\BusinessException;
 use App\Models\Project;
 use App\Models\ProjectAppInfo;
+use App\Models\ProjectUserAppMap;
 
 class ProjectAppInfoService
 {
     /**
-     * Query project application information records with pagination.
+     * Query application information records with pagination.
      */
     public function index(array $filters): array
     {
         $query = ProjectAppInfo::query();
 
-        $projectCode = $this->resolveProjectCode($filters, false);
-        if ($projectCode !== null) {
-            $query->where('project_code', $projectCode);
+        $mappedAppIds = $this->resolveMappedAppIds($filters);
+        if ($mappedAppIds !== null) {
+            if (empty($mappedAppIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('app_id', $mappedAppIds);
+            }
         }
         if (!empty($filters['appId'])) {
             $query->where('app_id', trim((string) $filters['appId']));
@@ -28,8 +33,7 @@ class ProjectAppInfoService
         if (!empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($query) use ($keyword): void {
-                $query->where('project_code', 'like', "%{$keyword}%")
-                    ->orWhere('app_id', 'like', "%{$keyword}%")
+                $query->where('app_id', 'like', "%{$keyword}%")
                     ->orWhere('app_name', 'like', "%{$keyword}%")
                     ->orWhere('platform', 'like', "%{$keyword}%");
             });
@@ -52,54 +56,49 @@ class ProjectAppInfoService
     }
 
     /**
-     * Load one project application information record.
+     * Load one application information record.
      */
     public function detail(int $id): ProjectAppInfo
     {
         $appInfo = ProjectAppInfo::find($id);
         if (!$appInfo) {
-            throw new BusinessException([404, 'Project app info not found']);
+            throw new BusinessException([404, 'App info not found']);
         }
 
         return $appInfo;
     }
 
     /**
-     * Create one project application information record.
+     * Create one application information record.
      */
     public function store(array $data): ProjectAppInfo
     {
-        $projectCode = $this->resolveProjectCode($data, true);
         $appId = trim((string) $data['appId']);
         if ($appId === '') {
             throw new BusinessException([422, 'appId cannot be empty']);
         }
 
         $exists = ProjectAppInfo::query()
-            ->where('project_code', $projectCode)
             ->where('app_id', $appId)
             ->exists();
         if ($exists) {
-            throw new BusinessException([422, 'Project app info already exists']);
+            throw new BusinessException([422, 'App info already exists']);
         }
 
         return ProjectAppInfo::create(array_merge(
-            ['project_code' => $projectCode, 'app_id' => $appId],
+            ['app_id' => $appId],
             $this->extractAttributes($data)
         ));
     }
 
     /**
-     * Update one project application information record.
+     * Update one application information record.
      */
     public function update(int $id, array $data): ProjectAppInfo
     {
         $appInfo = $this->detail($id);
         $attributes = $this->extractAttributes($data);
 
-        if (array_key_exists('projectCode', $data) || array_key_exists('projectId', $data)) {
-            $attributes['project_code'] = $this->resolveProjectCode($data, true);
-        }
         if (array_key_exists('appId', $data)) {
             $appId = trim((string) $data['appId']);
             if ($appId === '') {
@@ -108,16 +107,14 @@ class ProjectAppInfoService
             $attributes['app_id'] = $appId;
         }
 
-        if (isset($attributes['project_code']) || isset($attributes['app_id'])) {
-            $projectCode = $attributes['project_code'] ?? $appInfo->project_code;
+        if (isset($attributes['app_id'])) {
             $appId = $attributes['app_id'] ?? $appInfo->app_id;
             $exists = ProjectAppInfo::query()
-                ->where('project_code', $projectCode)
                 ->where('app_id', $appId)
                 ->where('id', '!=', $appInfo->id)
                 ->exists();
             if ($exists) {
-                throw new BusinessException([422, 'Project app info already exists']);
+                throw new BusinessException([422, 'App info already exists']);
             }
         }
 
@@ -132,7 +129,7 @@ class ProjectAppInfoService
     }
 
     /**
-     * Delete one project application information record.
+     * Delete one application information record.
      */
     public function destroy(int $id): void
     {
@@ -147,7 +144,6 @@ class ProjectAppInfoService
     {
         return [
             'id' => (int) $appInfo->id,
-            'projectCode' => $appInfo->project_code,
             'appId' => $appInfo->app_id,
             'appName' => $appInfo->app_name,
             'platform' => $appInfo->platform,
@@ -165,33 +161,35 @@ class ProjectAppInfoService
     }
 
     /**
-     * Resolve a project code from request projectCode or projectId.
+     * Resolve app ids mapped to a project filter, if one was supplied.
      */
-    private function resolveProjectCode(array $data, bool $required): ?string
+    private function resolveMappedAppIds(array $filters): ?array
     {
-        if (array_key_exists('projectCode', $data) && $data['projectCode'] !== null && trim((string) $data['projectCode']) !== '') {
-            $projectCode = trim((string) $data['projectCode']);
-            if ($required && !Project::query()->where('project_code', $projectCode)->exists()) {
-                throw new BusinessException([404, 'Project not found']);
-            }
-
-            return $projectCode;
-        }
-
-        if (!empty($data['projectId'])) {
-            $project = Project::find((int) $data['projectId']);
+        $projectCode = null;
+        if (!empty($filters['projectId'])) {
+            $project = Project::find((int) $filters['projectId']);
             if (!$project) {
                 throw new BusinessException([404, 'Project not found']);
             }
 
-            return (string) $project->project_code;
+            $projectCode = (string) $project->project_code;
+        } elseif (array_key_exists('projectCode', $filters) && $filters['projectCode'] !== null && trim((string) $filters['projectCode']) !== '') {
+            $projectCode = trim((string) $filters['projectCode']);
         }
 
-        if ($required) {
-            throw new BusinessException([422, 'projectCode or projectId is required']);
+        if ($projectCode === null) {
+            return null;
         }
 
-        return null;
+        return ProjectUserAppMap::query()
+            ->where('project_code', $projectCode)
+            ->where('enabled', 1)
+            ->pluck('app_id')
+            ->map(static fn ($appId) => trim((string) $appId))
+            ->filter(static fn ($appId) => $appId !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

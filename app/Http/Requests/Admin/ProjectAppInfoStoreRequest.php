@@ -14,8 +14,6 @@ class ProjectAppInfoStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'projectCode' => 'nullable|required_without:projectId|string|max:100',
-            'projectId' => 'nullable|required_without:projectCode|integer|min:1',
             'appId' => 'required|string|max:255',
             'appName' => 'nullable|string|max:191',
             'platform' => 'nullable|string|max:50',

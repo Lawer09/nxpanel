@@ -35,11 +35,4 @@ class Project extends Model
     {
         return $this->hasMany(ProjectUserAppMap::class, 'project_code', 'project_code');
     }
-
-    public function appInfos(): HasMany
-    {
-        return $this->hasMany(ProjectAppInfo::class, 'project_code', 'project_code')
-            ->orderByDesc('enabled')
-            ->orderBy('app_id');
-    }
 }

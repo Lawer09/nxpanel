@@ -19,7 +19,7 @@ class ProjectAppInfoController extends Controller
     ) {}
 
     /**
-     * Query project application information records.
+     * Query application information records.
      */
     public function index(ProjectAppInfoIndexRequest $request): JsonResponse
     {
@@ -39,7 +39,7 @@ class ProjectAppInfoController extends Controller
     }
 
     /**
-     * Load one project application information record.
+     * Load one application information record.
      */
     public function detail(IdRequest $request): JsonResponse
     {
@@ -56,7 +56,7 @@ class ProjectAppInfoController extends Controller
     }
 
     /**
-     * Create one project application information record.
+     * Create one application information record.
      */
     public function store(ProjectAppInfoStoreRequest $request): JsonResponse
     {
@@ -73,7 +73,7 @@ class ProjectAppInfoController extends Controller
     }
 
     /**
-     * Update one project application information record.
+     * Update one application information record.
      */
     public function update(ProjectAppInfoUpdateRequest $request): JsonResponse
     {
@@ -94,7 +94,7 @@ class ProjectAppInfoController extends Controller
     }
 
     /**
-     * Delete one project application information record.
+     * Delete one application information record.
      */
     public function destroy(IdRequest $request): JsonResponse
     {

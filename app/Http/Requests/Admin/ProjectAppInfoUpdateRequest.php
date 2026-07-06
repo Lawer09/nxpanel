@@ -15,8 +15,6 @@ class ProjectAppInfoUpdateRequest extends FormRequest
     {
         return [
             'id' => 'required|integer|min:1',
-            'projectCode' => 'nullable|string|max:100',
-            'projectId' => 'nullable|integer|min:1',
             'appId' => 'nullable|string|max:255',
             'appName' => 'nullable|string|max:191',
             'platform' => 'nullable|string|max:50',

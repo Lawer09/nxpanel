@@ -144,7 +144,6 @@
       "appInfos": [
         {
           "id": 1,
-          "projectCode": "P001",
           "appId": "com.example.app",
           "appName": "Example App",
           "platform": "android",
@@ -211,7 +210,7 @@
 | trafficAccounts | array | 关联的流量账号列表 |
 | adAccounts | array | 关联的广告账号列表 |
 | userApps | array | 关联的用户 App 绑定列表 |
-| appInfos | array | 按 `projectCode + appId` 维护的应用信息列表 |
+| appInfos | array | 通过 `project_user_app_map.app_id` 间接关联的应用信息列表 |
 
 ### 1.4 trafficAccounts[] 字段说明
 
@@ -260,7 +259,6 @@
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | int | 应用信息记录 ID |
-| projectCode | string | 项目代号 |
 | appId | string | 应用 ID，使用项目用户 App 绑定中的 `app_id` 口径 |
 | appName | string/null | 应用名称 |
 | platform | string/null | 应用平台 |
@@ -827,7 +825,7 @@
 
 ## 应用信息管理
 
-应用信息基于 `project_app_infos` 表维护，按 `projectCode + appId` 唯一。`appId` 使用现有 `project_user_app_map.app_id` 口径，但不强制要求先存在用户 App 绑定。
+应用信息基于 `app_infos` 表维护，按 `appId` 唯一。项目列表和报表中的 `appInfos` 不直接关联项目表，而是通过现有 `project_user_app_map.project_code -> app_id` 映射加载。
 
 ### 应用信息列表
 
@@ -837,11 +835,11 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| projectCode | string | 否 | 按项目代号精确筛选 |
-| projectId | int | 否 | 按项目 ID 筛选，服务端解析为项目代号 |
+| projectCode | string | 否 | 通过项目代号查找已绑定的 appId 后筛选 |
+| projectId | int | 否 | 通过项目 ID 查找项目代号，再按已绑定 appId 筛选 |
 | appId | string | 否 | 按应用 ID 精确筛选 |
 | enabled | int | 否 | `1` 启用，`0` 停用 |
-| keyword | string | 否 | 模糊匹配 `projectCode/appId/appName/platform` |
+| keyword | string | 否 | 模糊匹配 `appId/appName/platform` |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 20，最大 200 |
 
@@ -852,12 +850,10 @@
 - **删除**：`POST /api/v3/admin/{securePath}/projects/app-infos/delete`
 - **详情**：`GET /api/v3/admin/{securePath}/projects/app-infos/detail?id=1`
 
-新增时必须传 `projectCode` 或 `projectId` 之一，并必须传 `appId`；修改时必须传 `id`，其他字段未传不修改。删除和详情只需要 `id`。
+新增时必须传 `appId`；修改时必须传 `id`，其他字段未传不修改。删除和详情只需要 `id`。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| projectCode | string | 项目代号，最大 100 字符 |
-| projectId | int | 项目 ID，可替代 `projectCode` |
 | appId | string | 应用 ID，最大 255 字符 |
 | appName | string/null | 应用名称，最大 191 字符 |
 | platform | string/null | 应用平台，最大 50 字符 |
