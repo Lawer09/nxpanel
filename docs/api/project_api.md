@@ -149,6 +149,9 @@
           "appName": "Example App",
           "platform": "android",
           "downloadCount": 12345,
+          "downloadData": [
+            {"date": "2026-07-05", "downloads": 100}
+          ],
           "iconUrl": "https://example.com/icon.png",
           "chartUrl": "https://example.com/chart.png",
           "imageUrls": ["https://example.com/screenshot.png"],
@@ -262,6 +265,7 @@
 | appName | string/null | 应用名称 |
 | platform | string/null | 应用平台 |
 | downloadCount | int | 应用累计下载量 |
+| downloadData | object[] | 应用下载数据，可保存趋势或渠道明细等结构化数据 |
 | iconUrl | string/null | 应用图标 URL |
 | chartUrl | string/null | 图表或截图 URL |
 | imageUrls | string[] | 其他应用图片 URL 列表 |
@@ -858,6 +862,7 @@
 | appName | string/null | 应用名称，最大 191 字符 |
 | platform | string/null | 应用平台，最大 50 字符 |
 | downloadCount | int | 累计下载量，最小 0 |
+| downloadData | object[] | 应用下载数据，JSON 数组 |
 | iconUrl | string/null | 应用图标 URL，最大 255 字符 |
 | chartUrl | string/null | 图表或截图 URL，最大 255 字符 |
 | imageUrls | string[] | 其他应用图片 URL 列表，单项最大 255 字符 |

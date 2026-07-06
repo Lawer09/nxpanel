@@ -862,7 +862,7 @@
 ## 2026-07-06 项目应用信息维护与报表返回
 
 - 日期：2026-07-06
-- 变更摘要：新增 `project_app_infos` 应用信息表，按 `projectCode + appId` 维护应用名称、平台、下载量、图标/图表 URL、图片 URL、商店地址等基础信息；V3 管理端项目模块新增应用信息列表、详情、创建、更新、删除接口；项目列表/详情返回新增 `appInfos`；项目日报和小时报表在 `groupBy` 包含 `projectCode` 时批量返回对应 `appInfos`，CSV 导出保持固定列不变；项目报表查询缓存 key 升级到 `v11`。
+- 变更摘要：新增 `project_app_infos` 应用信息表，按 `projectCode + appId` 维护应用名称、平台、下载量、下载数据、图标/图表 URL、图片 URL、商店地址等基础信息；V3 管理端项目模块新增应用信息列表、详情、创建、更新、删除接口；项目列表/详情返回新增 `appInfos`；项目日报和小时报表在 `groupBy` 包含 `projectCode` 时批量返回对应 `appInfos`，CSV 导出保持固定列不变；项目报表查询缓存 key 升级到 `v11`。
 - 影响范围：`database/migrations/2026_07_06_130000_create_project_app_infos_table.php`、`app/Models/Project.php`、`app/Models/ProjectAppInfo.php`、`app/Services/ProjectAppInfoService.php`、`app/Services/ProjectService.php`、`app/Services/ProjectReportService.php`、`app/Http/Controllers/V3/Admin/Project/ProjectAppInfoController.php`、`app/Http/Requests/Admin/ProjectAppInfoIndexRequest.php`、`app/Http/Requests/Admin/ProjectAppInfoStoreRequest.php`、`app/Http/Requests/Admin/ProjectAppInfoUpdateRequest.php`、`app/Http/Resources/ProjectResource.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/ProjectAppInfoTest.php`、`docs/api/project_api.md`、`docs/api/project_report_query_api.md`、`docs/api/project_report_hourly_api.md`、`docs/api/application_route_api.md`、`version.md`
 - 是否需要迁移：是，需要执行新增 migration 创建 `project_app_infos` 表。
 - 回滚说明：回滚新增 migration 删除 `project_app_infos` 表，并移除应用信息 Controller、Request、Service、Model、路由、项目返回字段、报表 `appInfos` 附加逻辑、测试和文档说明即可。
