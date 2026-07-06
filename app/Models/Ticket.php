@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * App\Models\Ticket
@@ -53,6 +54,14 @@ class Ticket extends Model
     }
     
     // 即将删除
+    /**
+     * 最新一条工单消息
+     */
+    public function latestMessage(): HasOne
+    {
+        return $this->hasOne(TicketMessage::class, 'ticket_id', 'id')->latestOfMany('id');
+    }
+
     public function message(): HasMany
     {
         return $this->hasMany(TicketMessage::class, 'ticket_id', 'id');

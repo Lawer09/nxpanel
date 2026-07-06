@@ -851,3 +851,11 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`database/migrations/2026_07_06_120000_add_country_dimension_project_report_indexes.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：是，需要执行新增 migration，为 `project_daily_aggregates` 和 `ad_spend_platform_daily_reports` 增加国家维度查询复合索引。
 - 回滚说明：回滚新增 migration 删除索引，并恢复 `ProjectReportService` 中 grouped total、summary 和 `topRevenueCountries` 的旧查询逻辑即可。
+
+## 2026-07-06 工单列表返回最新聊天记录
+
+- 日期：2026-07-06
+- 变更摘要：用户端 `/ticket/fetch` 列表查询为每个工单新增 `latest_message` 字段，返回该工单最新一条聊天记录；详情查询继续通过 `message` 返回完整聊天记录列表。
+- 影响范围：`app/Models/Ticket.php`、`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `Ticket::latestMessage()` 关系、列表查询预加载、Resource 的 `latest_message` 字段以及对应测试和文档说明即可。

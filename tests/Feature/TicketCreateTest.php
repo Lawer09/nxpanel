@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\User;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -85,6 +86,31 @@ class TicketCreateTest extends TestCase
         $this->getJson('/api/v1/user/ticket/fetch?id=' . $ticket->id)
             ->assertOk()
             ->assertJsonPath('data.personal_email', 'fetch-personal@example.com');
+    }
+
+    public function test_ticket_fetch_list_returns_latest_message(): void
+    {
+        $user = $this->actingTicketUser('latest-message-ticket@example.com');
+        $ticket = Ticket::create([
+            'user_id' => $user->id,
+            'subject' => 'Latest message ticket',
+            'level' => 1,
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'message' => 'First message',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'message' => 'Latest message',
+        ]);
+
+        $this->getJson('/api/v1/user/ticket/fetch')
+            ->assertOk()
+            ->assertJsonPath('data.0.latest_message.message', 'Latest message')
+            ->assertJsonPath('data.0.latest_message.is_me', true);
     }
 
     private function actingTicketUser(string $email = 'ticket-user@example.com'): User

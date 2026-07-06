@@ -35,7 +35,8 @@ class TicketController extends V1TicketController
             });
             return $this->ok(TicketResource::make($ticket)->additional(['message' => true]));
         }
-        $ticket = Ticket::ok('user_id', $request->user()->id)
+        $ticket = Ticket::with('latestMessage.ticket')
+            ->ok('user_id', $request->user()->id)
             ->orderBy('created_at', 'DESC')
             ->get();
         return $this->ok(TicketResource::collection($ticket));
