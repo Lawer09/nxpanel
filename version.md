@@ -804,6 +804,14 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 `ProjectController::projectCodes()`、路由、`ProjectService::projectCodes()` 及项目代号缓存清理逻辑，并恢复项目 API 文档即可。
 
+## 2026-07-06 项目管理关键词支持 app_id
+
+- 日期：2026-07-06
+- 变更摘要：项目管理列表 `GET /api/v3/admin/{securePath}/projects/` 的 `keyword` 模糊搜索新增关联用户 App `app_id` 匹配，现可通过 `project_user_app_map.app_id` 搜索对应项目。
+- 影响范围：`app/Services/ProjectService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ProjectService::fetch()` 中 `keyword` 对 `userApps.app_id` 的关联匹配条件，并恢复项目 API 文档说明即可。
+
 ## 2026-07-02 套餐列表容量统计查询优化
 
 - 日期：2026-07-02

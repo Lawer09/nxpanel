@@ -47,7 +47,7 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| keyword | string | 否 | 模糊搜索（匹配 projectCode / projectName） |
+| keyword | string | 否 | 模糊搜索（匹配 projectCode / projectName / 关联用户 App 的 app_id） |
 | status | string | 否 | 筛选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态筛选，自定义字符串 |
 | appPlatform | string | 否 | 应用平台筛选，自定义字符串 |

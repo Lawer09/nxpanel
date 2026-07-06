@@ -66,7 +66,10 @@ class ProjectService
             $keyword = $params['keyword'];
             $query->where(function ($q) use ($keyword) {
                 $q->where('project_code', 'like', "%{$keyword}%")
-                  ->orWhere('project_name', 'like', "%{$keyword}%");
+                  ->orWhere('project_name', 'like', "%{$keyword}%")
+                  ->orWhereHas('userApps', function ($userAppQuery) use ($keyword) {
+                      $userAppQuery->where('app_id', 'like', "%{$keyword}%");
+                  });
             });
         }
         if (!empty($params['ownerId'])) {
