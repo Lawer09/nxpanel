@@ -873,3 +873,17 @@
 - 影响范围：`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复详情查询不预加载 `latestMessage`，并将 `TicketResource` 的 `latest_message` 改回 `whenLoaded` 写法即可。
+
+## 2026-07-06 管理端工单 latest_message 字段补齐
+- 日期：2026-07-06
+- 变更摘要：V2/V3 管理端 `/ticket/fetch` 分页列表和详情查询同步预加载 `latestMessage`，确保 `page/pageSize` 分页响应中的每条工单包含 `latest_message` 字段。
+- 影响范围：`app/Http/Controllers/V2/Admin/TicketController.php`、`app/Http/Controllers/V3/Admin/TicketController.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复管理端工单查询只加载 `user/messages`，移除管理端分页测试和文档说明即可。
+
+## 2026-07-06 移除用户端工单 latest_message 返回
+- 日期：2026-07-06
+- 变更摘要：移除用户端 V1/V3 `/user/ticket/fetch` 对 `latestMessage` 的预加载，`TicketResource` 恢复为仅在显式加载关系时输出 `latest_message`，当前用户端列表和详情不再返回该字段；管理端工单分页保留 `latest_message`。
+- 影响范围：`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：用户端查询重新预加载 `latestMessage.ticket`，并恢复对应测试断言即可。

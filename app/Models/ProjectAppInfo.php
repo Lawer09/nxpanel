@@ -12,6 +12,7 @@ class ProjectAppInfo extends Model
 
     protected $casts = [
         'download_count' => 'integer',
+        'download_data' => 'array',
         'image_urls' => 'array',
         'enabled' => 'integer',
         'created_at' => 'datetime',

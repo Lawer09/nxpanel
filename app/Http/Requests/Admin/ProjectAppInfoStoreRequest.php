@@ -20,6 +20,7 @@ class ProjectAppInfoStoreRequest extends FormRequest
             'appName' => 'nullable|string|max:191',
             'platform' => 'nullable|string|max:50',
             'downloadCount' => 'nullable|integer|min:0',
+            'downloadData' => 'nullable|array',
             'iconUrl' => 'nullable|string|max:255',
             'chartUrl' => 'nullable|string|max:255',
             'imageUrls' => 'nullable|array',

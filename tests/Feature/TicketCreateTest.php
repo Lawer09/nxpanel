@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\Setting;
 use App\Models\User;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -82,19 +83,13 @@ class TicketCreateTest extends TestCase
             'level' => 0,
             'personal_email' => 'fetch-personal@example.com',
         ]);
-        TicketMessage::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'message' => 'Detail latest message',
-        ]);
-
         $this->getJson('/api/v1/user/ticket/fetch?id=' . $ticket->id)
             ->assertOk()
             ->assertJsonPath('data.personal_email', 'fetch-personal@example.com')
-            ->assertJsonPath('data.latest_message.message', 'Detail latest message');
+            ->assertJsonMissingPath('data.latest_message');
     }
 
-    public function test_ticket_fetch_list_returns_latest_message(): void
+    public function test_user_ticket_fetch_list_omits_latest_message(): void
     {
         $user = $this->actingTicketUser('latest-message-ticket@example.com');
         $ticket = Ticket::create([
@@ -115,14 +110,50 @@ class TicketCreateTest extends TestCase
 
         $this->getJson('/api/v1/user/ticket/fetch')
             ->assertOk()
-            ->assertJsonPath('data.0.latest_message.message', 'Latest message')
-            ->assertJsonPath('data.0.latest_message.is_me', true);
+            ->assertJsonMissingPath('data.0.latest_message');
+    }
+
+    public function test_admin_ticket_fetch_list_returns_latest_message(): void
+    {
+        $this->withoutMiddleware();
+        Setting::createOrUpdate('secure_path', 'admin');
+
+        $user = $this->createTicketUser('admin-ticket-latest@example.com');
+        $ticket = Ticket::create([
+            'user_id' => $user->id,
+            'subject' => 'Admin latest message ticket',
+            'level' => 1,
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'message' => 'Admin first message',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'message' => 'Admin latest message',
+        ]);
+
+        $this->postJson('/api/v3/admin/ticket/fetch', [
+            'page' => 1,
+            'pageSize' => 20,
+        ])->assertOk()
+            ->assertJsonPath('data.data.0.latest_message.message', 'Admin latest message');
     }
 
     private function actingTicketUser(string $email = 'ticket-user@example.com'): User
     {
         $this->withoutMiddleware();
 
+        $user = $this->createTicketUser($email);
+        Auth::setUser($user);
+
+        return $user;
+    }
+
+    private function createTicketUser(string $email): User
+    {
         $user = User::create([
             'email' => $email,
             'password' => password_hash('password', PASSWORD_DEFAULT),
@@ -136,8 +167,6 @@ class TicketCreateTest extends TestCase
             'd' => 0,
             'banned' => 0,
         ]);
-
-        Auth::setUser($user);
 
         return $user;
     }

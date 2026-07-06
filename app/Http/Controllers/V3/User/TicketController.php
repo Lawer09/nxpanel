@@ -22,7 +22,7 @@ class TicketController extends V1TicketController
     public function fetch(Request $request)
     {
         if ($request->input('id')) {
-            $ticket = Ticket::with('message', 'latestMessage.ticket')
+            $ticket = Ticket::with('message')
                 ->where('id', $request->input('id'))
                 ->where('user_id', $request->user()->id)
                 ->first();
@@ -35,8 +35,7 @@ class TicketController extends V1TicketController
             });
             return $this->ok(TicketResource::make($ticket)->additional(['message' => true]));
         }
-        $ticket = Ticket::with('latestMessage.ticket')
-            ->ok('user_id', $request->user()->id)
+        $ticket = Ticket::ok('user_id', $request->user()->id)
             ->orderBy('created_at', 'DESC')
             ->get();
         return $this->ok(TicketResource::collection($ticket));

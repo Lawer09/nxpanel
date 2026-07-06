@@ -41,7 +41,7 @@ class TicketController extends Controller
     public function fetch(TicketFetch $request)
     {
         if ($request->filled('id')) {
-            $ticket = Ticket::with('messages', 'user')->find($request->integer('id'));
+            $ticket = Ticket::with('messages', 'user', 'latestMessage.ticket')->find($request->integer('id'));
             if (!$ticket) {
                 return $this->error([400202, '工单不存在']);
             }
@@ -52,7 +52,7 @@ class TicketController extends Controller
             return $this->ok($result);
         }
 
-        $ticketModel = Ticket::with('user')
+        $ticketModel = Ticket::with('user', 'latestMessage.ticket')
             ->when($request->has('status'), function ($query) use ($request) {
                 $query->where('status', $request->input('status'));
             })

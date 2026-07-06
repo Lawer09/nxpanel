@@ -152,6 +152,7 @@ class ProjectAppInfoService
             'appName' => $appInfo->app_name,
             'platform' => $appInfo->platform,
             'downloadCount' => (int) ($appInfo->download_count ?? 0),
+            'downloadData' => $appInfo->download_data ?? [],
             'iconUrl' => $appInfo->icon_url,
             'chartUrl' => $appInfo->chart_url,
             'imageUrls' => $appInfo->image_urls ?? [],
@@ -202,6 +203,7 @@ class ProjectAppInfoService
             'appName' => 'app_name',
             'platform' => 'platform',
             'downloadCount' => 'download_count',
+            'downloadData' => 'download_data',
             'iconUrl' => 'icon_url',
             'chartUrl' => 'chart_url',
             'imageUrls' => 'image_urls',
@@ -222,6 +224,7 @@ class ProjectAppInfoService
             $attributes[$column] = match ($requestKey) {
                 'downloadCount' => (int) $data[$requestKey],
                 'enabled' => (int) $data[$requestKey],
+                'downloadData' => is_array($data[$requestKey]) ? $data[$requestKey] : [],
                 'imageUrls' => $this->normalizeImageUrls($data[$requestKey]),
                 default => $this->normalizeOptionalString($data[$requestKey]),
             };

@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('app_name', 191)->nullable()->comment('Application name');
             $table->string('platform', 50)->nullable()->comment('Application platform');
             $table->unsignedBigInteger('download_count')->default(0)->comment('Application download count');
+            $table->json('download_data')->nullable()->comment('Application download data');
             $table->string('icon_url', 255)->nullable()->comment('Application icon URL');
             $table->string('chart_url', 255)->nullable()->comment('Application chart image URL');
             $table->json('image_urls')->nullable()->comment('Additional application image URLs');

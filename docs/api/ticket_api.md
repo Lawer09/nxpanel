@@ -44,4 +44,6 @@
 
 用户端工单列表和详情返回新增 `personal_email` 字段；未填写时为 `null`。
 
-工单列表和详情返回均包含 `latest_message` 字段，表示该工单最新一条聊天记录；无聊天记录时为 `null`。工单详情仍通过 `message` 字段返回完整聊天记录列表。
+用户端工单列表不返回 `latest_message` 字段；工单详情通过 `message` 字段返回完整聊天记录列表。
+
+管理端 V2/V3 工单分页列表和详情返回 `latest_message` 字段，分页请求如 `{"page":1,"pageSize":20}` 时字段位于每条工单数据内。

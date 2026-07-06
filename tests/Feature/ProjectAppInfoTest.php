@@ -34,6 +34,9 @@ class ProjectAppInfoTest extends TestCase
             'appName' => 'Example App',
             'platform' => 'android',
             'downloadCount' => 1234,
+            'downloadData' => [
+                ['date' => '2026-07-05', 'downloads' => 100],
+            ],
             'iconUrl' => 'https://example.com/icon.png',
             'chartUrl' => 'https://example.com/chart.png',
             'imageUrls' => ['https://example.com/a.png', 'https://example.com/a.png'],
@@ -42,6 +45,7 @@ class ProjectAppInfoTest extends TestCase
         ]);
 
         $this->assertSame('APP001', $appInfo->project_code);
+        $this->assertSame([['date' => '2026-07-05', 'downloads' => 100]], $appInfo->download_data);
         $this->assertSame(['https://example.com/a.png'], $appInfo->image_urls);
 
         $this->expectExceptionMessage('Project app info already exists');

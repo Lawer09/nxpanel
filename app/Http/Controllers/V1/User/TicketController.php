@@ -20,7 +20,7 @@ class TicketController extends Controller
     public function fetch(Request $request)
     {
         if ($request->input('id')) {
-            $ticket = Ticket::with('message', 'latestMessage.ticket')
+            $ticket = Ticket::with('message')
                 ->where('id', $request->input('id'))
                 ->where('user_id', $request->user()->id)
                 ->first();
@@ -33,8 +33,7 @@ class TicketController extends Controller
             });
             return $this->success(TicketResource::make($ticket)->additional(['message' => true]));
         }
-        $ticket = Ticket::with('latestMessage.ticket')
-            ->where('user_id', $request->user()->id)
+        $ticket = Ticket::where('user_id', $request->user()->id)
             ->orderBy('created_at', 'DESC')
             ->get();
         return $this->success(TicketResource::collection($ticket));
