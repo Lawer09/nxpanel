@@ -835,3 +835,11 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 V3 用户列表元数据筛选扩展、对应测试和文档说明即可。
+
+## 2026-07-06 项目日报国家维度查询优化
+
+- 日期：2026-07-06
+- 变更摘要：优化项目日报 JSON 查询在 `country` 维度下的性能：分页 `total` 改为基于过滤后的基础日报维度计数，`summary` 拆分为基础日报指标汇总和投放指标汇总，日报行包含 `country` 时 `topRevenueCountries` 直接使用当前行国家收益生成；新增项目日报与投放日报复合索引支撑国家维度查询。
+- 影响范围：`app/Services/ProjectReportService.php`、`database/migrations/2026_07_06_120000_add_country_dimension_project_report_indexes.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：是，需要执行新增 migration，为 `project_daily_aggregates` 和 `ad_spend_platform_daily_reports` 增加国家维度查询复合索引。
+- 回滚说明：回滚新增 migration 删除索引，并恢复 `ProjectReportService` 中 grouped total、summary 和 `topRevenueCountries` 的旧查询逻辑即可。

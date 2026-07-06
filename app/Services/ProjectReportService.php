@@ -40,15 +40,9 @@ class ProjectReportService
         $page = (int) ($validated['page'] ?? 1);
         $pageSize = (int) ($validated['pageSize'] ?? 50);
 
-        if ($definition['grouped']) {
-            $countQuery = DB::table(DB::raw("({$definition['query']->toSql()}) as t"))
-                ->mergeBindings($definition['query'])
-                ->selectRaw('COUNT(*) as cnt')
-                ->first();
-            $total = (int) ($countQuery->cnt ?? 0);
-        } else {
-            $total = (clone $definition['query'])->count();
-        }
+        $total = $definition['grouped']
+            ? $this->countDailyGroups($definition)
+            : (clone $definition['query'])->count();
 
         $rows = $definition['query']
             ->offset(($page - 1) * $pageSize)
@@ -637,6 +631,7 @@ class ProjectReportService
                 'dateTo' => $dateTo,
                 'filters' => $filters,
                 'requestedGroupBy' => $requestedGroupBy,
+                'groupDimensions' => [],
             ];
         }
 
@@ -707,9 +702,30 @@ class ProjectReportService
             'dateTo' => $dateTo,
             'filters' => $filters,
             'requestedGroupBy' => $requestedGroupBy,
+            'groupDimensions' => $groupDimensions,
             'includeLimitState' => in_array('projectCode', $groupDimensions, true),
             'includeRecentHourlyAdMatchRates' => in_array('projectCode', $groupDimensions, true),
         ];
+    }
+
+    /**
+     * Count grouped daily rows from the filtered base table without replaying metric joins.
+     */
+    private function countDailyGroups(array $definition): int
+    {
+        $groupDimensions = $definition['groupDimensions'] ?? [];
+        if (empty($groupDimensions)) {
+            return (clone $definition['baseQuery'])->count();
+        }
+
+        $query = clone $definition['baseQuery'];
+        foreach ($groupDimensions as $dimension) {
+            $column = $this->dailyDimensionColumn($dimension);
+            $query->selectRaw($column . ' as ' . $this->dailyDimensionAlias($dimension))
+                ->groupBy($column);
+        }
+
+        return (int) DB::query()->fromSub($query, 'daily_groups')->count();
     }
 
     /**
@@ -744,10 +760,6 @@ class ProjectReportService
     private function buildDailySummary(array $definition): array
     {
         $summaryQuery = clone $definition['baseQuery'];
-        $this->joinDailySpendMetrics(
-            $summaryQuery,
-            $this->buildDailySpendMetricSubquery($definition['dateFrom'], $definition['dateTo'], $definition['filters'] ?? [])
-        );
 
         $row = $summaryQuery
             ->selectRaw('SUM(project_daily_aggregates.new_users) as new_users')
@@ -760,23 +772,23 @@ class ProjectReportService
             ->selectRaw('SUM(project_daily_aggregates.ad_matched_requests) as ad_matched_requests')
             ->selectRaw('SUM(project_daily_aggregates.ad_impressions) as ad_impressions')
             ->selectRaw('SUM(project_daily_aggregates.ad_clicks) as ad_clicks')
-            ->selectRaw('COALESCE(SUM(spend_metrics.ad_spend_cost), 0) as ad_spend_cost')
-            ->selectRaw('SUM(spend_metrics.ad_spend_clicks) as ad_spend_clicks')
-            ->selectRaw('SUM(spend_metrics.ad_spend_impressions) as ad_spend_impressions')
             ->selectRaw('SUM(project_daily_aggregates.traffic_usage_mb) as traffic_usage_mb')
             ->selectRaw('SUM(project_daily_aggregates.traffic_cost) as traffic_cost')
-            ->selectRaw('(SUM(project_daily_aggregates.ad_revenue) - COALESCE(SUM(spend_metrics.ad_spend_cost), 0) - SUM(project_daily_aggregates.traffic_cost)) as profit')
             ->selectRaw('MAX(project_daily_aggregates.updated_at) as updated_at')
             ->selectRaw('CASE WHEN SUM(project_daily_aggregates.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_revenue)/SUM(project_daily_aggregates.ad_impressions)*1000,6) END as ad_ecpm')
             ->selectRaw('CASE WHEN SUM(project_daily_aggregates.ad_impressions)=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_clicks)/SUM(project_daily_aggregates.ad_impressions)*100,6) END as ad_ctr')
             ->selectRaw('CASE WHEN SUM(project_daily_aggregates.ad_requests)=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_matched_requests)/SUM(project_daily_aggregates.ad_requests)*100,6) END as ad_match_rate')
             ->selectRaw('CASE WHEN SUM(project_daily_aggregates.ad_matched_requests)=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_impressions)/SUM(project_daily_aggregates.ad_matched_requests)*100,6) END as ad_show_rate')
-            ->selectRaw('CASE WHEN SUM(project_daily_aggregates.new_users)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)/SUM(project_daily_aggregates.new_users),6) END as ad_spend_cpi')
-            ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_clicks), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)/SUM(spend_metrics.ad_spend_clicks),6) END as ad_spend_cpc')
-            ->selectRaw('CASE WHEN COALESCE(SUM(spend_metrics.ad_spend_impressions), 0)=0 THEN NULL ELSE ROUND(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)*1000/SUM(spend_metrics.ad_spend_impressions),6) END as ad_spend_cpm')
-            ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(project_daily_aggregates.traffic_cost), 0))=0 THEN NULL ELSE ROUND(COALESCE(SUM(project_daily_aggregates.traffic_cost), 0)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+COALESCE(SUM(project_daily_aggregates.traffic_cost), 0)),6) END as traffic_cost_ratio')
-            ->selectRaw('CASE WHEN (COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(project_daily_aggregates.traffic_cost))=0 THEN NULL ELSE ROUND(SUM(project_daily_aggregates.ad_revenue)/(COALESCE(SUM(spend_metrics.ad_spend_cost), 0)+SUM(project_daily_aggregates.traffic_cost)),6) END as roi')
             ->first();
+        $spendRow = $this->buildDailySummarySpendMetrics($definition);
+        $newUsers = (int) ($row->new_users ?? 0);
+        $adRevenue = (float) ($row->ad_revenue ?? 0);
+        $trafficCost = (float) ($row->traffic_cost ?? 0);
+        $adSpendCost = (float) ($spendRow->ad_spend_cost ?? 0);
+        $adSpendClicks = (int) ($spendRow->ad_spend_clicks ?? 0);
+        $adSpendImpressions = (int) ($spendRow->ad_spend_impressions ?? 0);
+        $totalCost = $adSpendCost + $trafficCost;
+        $profit = $adRevenue - $adSpendCost - $trafficCost;
 
         $adRevenueNow = $this->buildDailySummaryNowRevenue($definition);
         $adRevenueDiff = $adRevenueNow === null
@@ -802,18 +814,43 @@ class ProjectReportService
             'adShowRate' => $this->formatDecimal($row->ad_show_rate ?? null),
             'impressionsPerUser' => $this->ratio((float) ($row->ad_impressions ?? 0), (float) ($row->dau_users ?? 0)),
             'arpu' => $this->ratio((float) ($row->ad_revenue ?? 0), (float) ($row->dau_users ?? 0)),
-            'adSpendCost' => $this->formatDecimal($row->ad_spend_cost ?? null),
-            'adSpendCpi' => $this->formatDecimal($row->ad_spend_cpi ?? null),
-            'adSpendCpc' => $this->formatDecimal($row->ad_spend_cpc ?? null),
-            'adSpendCpm' => $this->formatDecimal($row->ad_spend_cpm ?? null),
+            'adSpendCost' => $this->formatDecimal($adSpendCost),
+            'adSpendCpi' => $this->formatDecimal($newUsers === 0 ? null : $adSpendCost / $newUsers),
+            'adSpendCpc' => $this->formatDecimal($adSpendClicks === 0 ? null : $adSpendCost / $adSpendClicks),
+            'adSpendCpm' => $this->formatDecimal($adSpendImpressions === 0 ? null : $adSpendCost * 1000 / $adSpendImpressions),
             'trafficUsageMb' => $this->formatDecimal($row->traffic_usage_mb ?? null),
             'trafficCost' => $this->formatDecimal($row->traffic_cost ?? null),
-            'totalCost' => $this->formatDecimal(($row->ad_spend_cost ?? 0) + ($row->traffic_cost ?? 0)),
-            'trafficCostRatio' => $this->formatDecimal($row->traffic_cost_ratio ?? null),
-            'profit' => $this->formatDecimal($row->profit ?? null),
-            'roi' => $this->formatDecimal($row->roi ?? null),
+            'totalCost' => $this->formatDecimal($totalCost),
+            'trafficCostRatio' => $this->formatDecimal($totalCost == 0.0 ? null : $trafficCost / $totalCost),
+            'profit' => $this->formatDecimal($profit),
+            'roi' => $this->formatDecimal($totalCost == 0.0 ? null : $adRevenue / $totalCost),
             'updatedAt' => $row->updated_at ?? null,
         ];
+    }
+
+    /**
+     * Sum spend metrics only for daily aggregate dimension keys that survived report filters.
+     */
+    private function buildDailySummarySpendMetrics(array $definition): object
+    {
+        $dimensionQuery = (clone $definition['baseQuery'])
+            ->selectRaw('project_daily_aggregates.report_date as report_date')
+            ->selectRaw('project_daily_aggregates.project_code as project_code')
+            ->selectRaw('project_daily_aggregates.country as country')
+            ->distinct();
+        $countryExpression = $this->normalizedCountrySql('spend.country');
+
+        return DB::query()
+            ->fromSub($dimensionQuery, 'daily_dims')
+            ->leftJoin('ad_spend_platform_daily_reports as spend', function ($join) use ($countryExpression) {
+                $join->on('spend.report_date', '=', 'daily_dims.report_date')
+                    ->on('spend.project_code', '=', 'daily_dims.project_code')
+                    ->whereRaw($countryExpression . ' = daily_dims.country');
+            })
+            ->selectRaw('COALESCE(SUM(spend.spend), 0) as ad_spend_cost')
+            ->selectRaw('COALESCE(SUM(spend.clicks), 0) as ad_spend_clicks')
+            ->selectRaw('COALESCE(SUM(spend.impressions), 0) as ad_spend_impressions')
+            ->first();
     }
 
     /**
@@ -938,6 +975,12 @@ class ProjectReportService
         $hasCountry = $this->rowsContainProperty($rows, 'country');
         $hasHour = $scope === 'hourly' && $this->rowsContainProperty($rows, 'hour');
 
+        if ($scope === 'daily' && $hasCountry) {
+            $this->applyCurrentRowTopRevenueCountry($rows);
+
+            return;
+        }
+
         $reportDates = $hasReportDate ? $this->collectRowValues($rows, 'report_date') : [];
         $projectCodes = $hasProjectCode ? $this->collectRowValues($rows, 'project_code') : [];
         $rowCountries = $hasCountry
@@ -1031,6 +1074,21 @@ class ProjectReportService
                 $hasHour ? ($row->hour ?? null) : null
             );
             $row->top_revenue_countries = $formattedBuckets[$key] ?? [];
+        }
+    }
+
+    /**
+     * Use the current country row as its own Top country to avoid redundant country re-aggregation.
+     */
+    private function applyCurrentRowTopRevenueCountry($rows): void
+    {
+        foreach ($rows as $row) {
+            $country = (string) (($row->country ?? '') ?: 'XX');
+            $adRevenue = (float) ($row->ad_revenue ?? 0);
+            $row->top_revenue_countries = $this->formatTopRevenueCountries(
+                [strtoupper($country) => $adRevenue],
+                $adRevenue
+            );
         }
     }
 
@@ -1534,6 +1592,19 @@ class ProjectReportService
             'reportDate' => 'report_date',
             'projectCode' => 'project_code',
             'country' => 'country',
+            default => $dimension,
+        };
+    }
+
+    /**
+     * Resolve the project_daily_aggregates column for a grouped daily dimension.
+     */
+    private function dailyDimensionColumn(string $dimension): string
+    {
+        return match ($dimension) {
+            'reportDate' => 'project_daily_aggregates.report_date',
+            'projectCode' => 'project_daily_aggregates.project_code',
+            'country' => 'project_daily_aggregates.country',
             default => $dimension,
         };
     }

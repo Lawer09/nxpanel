@@ -208,6 +208,7 @@
 - 当 `groupBy` 不包含 `projectCode` 时，聚合行无法确定唯一项目，不返回 `isLimited` 和项目表元数据字段
 - CSV 导出保持固定列格式，不附加 `isLimited`、`recentHourlyAdMatchRates` 或项目表元数据字段
 - 投放相关字段 `adSpendCost`、`adSpendCpi`、`adSpendCpc`、`adSpendCpm` 来源于 `ad_spend_platform_daily_reports` 聚合
+- `summary` 中的投放相关字段只统计当前筛选条件下已存在项目日报基础行的 `reportDate + projectCode + country` 维度，避免没有日报基础行的投放数据被额外计入汇总
 - `adSpendCpc = 投放成本 / 投放点击数`，不使用广告收入侧 `adClicks`
 - `adSpendCpm = 投放成本 * 1000 / 投放展示数`，不使用广告收入侧 `adImpressions`
 - `totalCost = adSpendCost + trafficCost`
@@ -328,9 +329,16 @@ axios.post(url, payload, { responseType: 'blob' })
 - 项目日报 JSON 查询返回行新增 `topRevenueCountries` 字段，表示该行对应维度范围内广告收益最高的前 3 个国家。
 - 字段结构为数组：`country` 为国家代码，`adRevenue` 为该国家收益，`ratio` 为该国家收益占当前行维度范围总收益的比例，金额和比例均保留 6 位小数。
 - 计算来源为 `project_daily_aggregates.ad_revenue`，按当前返回行可确定的 `reportDate`、`projectCode`、`country` 维度以及请求 `dateFrom/dateTo`、筛选条件批量聚合；不对每一行单独查询。
-- 当返回行包含 `country` 维度时，该字段只返回当前国家及其占比；当不包含 `country` 维度时返回当前日期/项目范围内收益 Top3 国家。
+- 当返回行包含 `country` 维度时，该字段直接使用当前行国家和当前行收益生成，不再额外执行国家聚合查询；当不包含 `country` 维度时返回当前日期/项目范围内收益 Top3 国家。
 - 无收益或总收益小于等于 0 时返回空数组 `[]`。
 - 该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
+
+## 国家维度查询性能
+
+- 项目日报按国家维度查询时，分页 `total` 基于过滤后的基础日报维度计数，不再重复执行完整列表指标聚合。
+- `summary` 拆分为基础日报指标汇总和投放指标汇总，减少国家维度下的重复 Join 聚合。
+- 新增索引用于优化国家维度查询：`project_daily_aggregates(report_date,country,project_code)`、`ad_spend_platform_daily_reports(report_date,project_code,country)`；生产环境需要执行对应 migration 后获得完整优化效果。
+
 ## 排除筛选说明
 
 - `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前筛选范围中排除指定项目或国家。
