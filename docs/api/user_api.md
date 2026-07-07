@@ -951,3 +951,48 @@ POST /api/v3/admin/user/blockedIp/batchDelete
   "type": "dangerous"
 }
 ```
+
+### 批量封禁 IP
+
+`POST /api/v3/{secure_path}/user/blockedIp/batchBlock`
+
+用于直接按 IP 批量写入或更新 `blocked_user_ips` 记录，并可选择是否同时封禁注册 IP 命中的用户。
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ips` | `string[]` | 是 | 需要封禁的 IP 列表，最多 500 个；服务端会去重 |
+| `type` | `string` | 否 | 封禁 IP 类型，可选 `normal` / `dangerous`，默认 `normal` |
+| `banUsers` | `bool` | 否 | 是否同时封禁 `register_metadata.ip` 命中的用户，默认 `false` |
+| `reason` | `string` | 否 | 封禁原因，最大 500 字符 |
+
+请求示例：
+
+```json
+{
+  "ips": ["203.0.113.10", "203.0.113.11"],
+  "type": "dangerous",
+  "banUsers": true,
+  "reason": "manual risk ip batch"
+}
+```
+
+返回示例：
+
+```json
+{
+  "requestedCount": 2,
+  "blockedIpCount": 2,
+  "blockedIps": ["203.0.113.10", "203.0.113.11"],
+  "bannedUserCount": 1,
+  "bannedUserIds": [10001]
+}
+```
+
+说明：
+
+- `banUsers=false` 时只写入或更新 IP 封禁记录，不修改用户 `banned` 状态。
+- `banUsers=true` 时，系统会查找 `v2_user.register_metadata.ip` 等于这些 IP 的用户，将其 `banned` 更新为 `1`，清理登录会话，并触发节点用户同步。
+- 同一个 IP 已存在时会更新其 `type`、`reason`、`operator_user_id` 和 `metadata`。
+- 批量封禁 IP 不会自动解除用户封禁；解除逻辑仍只按已有解封接口或邀请码安全解封规则执行。

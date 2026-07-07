@@ -887,3 +887,10 @@
 - 影响范围：`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`app/Http/Resources/TicketResource.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：用户端查询重新预加载 `latestMessage.ticket`，并恢复对应测试断言即可。
+
+## 2026-07-07 批量 IP 封禁接口
+- 日期：2026-07-07
+- 变更摘要：V3 管理端新增 `POST /user/blockedIp/batchBlock`，支持按 IP 批量写入或更新封禁记录，可指定 `normal` / `dangerous` 类型，并可通过 `banUsers` 选择是否同时封禁注册 IP 命中的用户、清理会话并同步节点。
+- 影响范围：`app/Http/Requests/Admin/BlockedUserIpBatchBlockRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，复用已有 `blocked_user_ips` 表和 `type` 字段。
+- 回滚说明：移除新增 Request、Service 方法、Controller 方法、路由、测试和文档说明即可。

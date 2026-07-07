@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\AidLoginBanRuleDeleteRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleFetchRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleSaveRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleUpdateRequest;
+use App\Http\Requests\Admin\BlockedUserIpBatchBlockRequest;
 use App\Http\Requests\Admin\BlockedUserIpBatchDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
@@ -352,6 +353,30 @@ class UserController extends V2UserController
     }
 
     /**
+     * Batch block explicit IP addresses and optionally ban matched users.
+     */
+    public function batchBlockIps(
+        BlockedUserIpBatchBlockRequest $request,
+        BlockedUserIpService $blockedUserIpService
+    ): JsonResponse {
+        $params = $request->validated();
+        $result = $blockedUserIpService->batchBlockIps(
+            $params['ips'],
+            Auth::guard('sanctum')->id(),
+            $params['reason'] ?? null,
+            $params['type'] ?? BlockedUserIp::TYPE_NORMAL,
+            (bool) ($params['banUsers'] ?? false),
+            ['source' => 'admin_batch_block_ip']
+        );
+
+        if (($result['bannedUserCount'] ?? 0) > 0) {
+            NodeSyncService::notifyUsersUpdated();
+        }
+
+        return $this->ok($result);
+    }
+
+    /**
      * Update a blocked registration IP record type.
      */
     public function updateBlockedIpType(
@@ -364,7 +389,7 @@ class UserController extends V2UserController
         );
 
         if (!$record) {
-            return $this->error([400202, '封禁IP记录不存在']);
+            return $this->error([400202, 'Blocked IP record not found']);
         }
 
         return $this->ok([

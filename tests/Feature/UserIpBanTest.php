@@ -473,6 +473,88 @@ class UserIpBanTest extends TestCase
         ], $this->adminHeaders($admin))->assertStatus(422);
     }
 
+    public function test_admin_can_batch_block_ips_without_banning_users(): void
+    {
+        $admin = $this->createUser('admin-batch-block-ip@example.com', ['is_admin' => 1]);
+        $user = $this->createUser('batch-block-safe@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.65'],
+        ]);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchBlock'), [
+            'ips' => ['203.0.113.65', '203.0.113.66', '203.0.113.65'],
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'banUsers' => false,
+            'reason' => 'manual ip risk',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.requestedCount', 2)
+            ->assertJsonPath('data.blockedIpCount', 2)
+            ->assertJsonPath('data.bannedUserCount', 0);
+
+        $this->assertFalse((bool) $user->refresh()->banned);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.65',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'operator_user_id' => $admin->id,
+            'reason' => 'manual ip risk',
+        ]);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.66',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+        ]);
+    }
+
+    public function test_admin_can_batch_block_ips_and_ban_matched_users(): void
+    {
+        $admin = $this->createUser('admin-batch-block-ban@example.com', ['is_admin' => 1]);
+        $firstUser = $this->createUser('batch-block-first@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.67'],
+        ]);
+        $secondUser = $this->createUser('batch-block-second@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.67'],
+        ]);
+        $unmatchedUser = $this->createUser('batch-block-unmatched@example.com', [
+            'register_metadata' => ['ip' => '203.0.113.68'],
+        ]);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchBlock'), [
+            'ips' => ['203.0.113.67', '203.0.113.69'],
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'banUsers' => true,
+            'reason' => 'block and ban',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.requestedCount', 2)
+            ->assertJsonPath('data.blockedIpCount', 2)
+            ->assertJsonPath('data.bannedUserCount', 2);
+
+        $this->assertTrue((bool) $firstUser->refresh()->banned);
+        $this->assertTrue((bool) $secondUser->refresh()->banned);
+        $this->assertFalse((bool) $unmatchedUser->refresh()->banned);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.67',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'reason' => 'block and ban',
+        ]);
+        $blockedIp = BlockedUserIp::query()->where('ip', '203.0.113.67')->firstOrFail();
+        $this->assertEqualsCanonicalizing(
+            [$firstUser->id, $secondUser->id],
+            $blockedIp->metadata['matched_user_ids'] ?? []
+        );
+    }
+
+    public function test_admin_batch_block_ips_validates_payload(): void
+    {
+        $admin = $this->createUser('admin-batch-block-invalid@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchBlock'), [
+            'ips' => [],
+        ], $this->adminHeaders($admin))->assertStatus(422);
+
+        $this->postJson($this->adminUserUri('blockedIp/batchBlock'), [
+            'ips' => ['not-an-ip'],
+            'type' => 'invalid',
+        ], $this->adminHeaders($admin))->assertStatus(422);
+    }
+
     public function test_admin_can_update_blocked_ip_type(): void
     {
         $admin = $this->createUser('admin-update-type@example.com', ['is_admin' => 1]);

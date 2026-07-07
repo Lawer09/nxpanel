@@ -260,6 +260,100 @@ class BlockedUserIpService
     }
 
     /**
+     * Batch block explicit IP addresses and optionally ban users registered from them.
+     */
+    public function batchBlockIps(
+        array $ips,
+        ?int $operatorUserId = null,
+        ?string $reason = null,
+        string $type = BlockedUserIp::TYPE_NORMAL,
+        bool $banUsers = false,
+        array $metadata = []
+    ): array {
+        $type = $this->normalizeType($type);
+        $normalizedIps = collect($ips)
+            ->map(fn($ip) => $this->normalizeIp($ip))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($normalizedIps->isEmpty()) {
+            return [
+                'requestedCount' => 0,
+                'blockedIpCount' => 0,
+                'blockedIps' => [],
+                'bannedUserCount' => 0,
+                'bannedUserIds' => [],
+            ];
+        }
+
+        return DB::transaction(function () use ($normalizedIps, $operatorUserId, $reason, $type, $banUsers, $metadata): array {
+            $usersByIp = collect();
+            if ($banUsers) {
+                $usersByIp = User::query()
+                    ->where(function ($query) use ($normalizedIps): void {
+                        foreach ($normalizedIps as $ip) {
+                            $query->orWhere('register_metadata->ip', $ip);
+                        }
+                    })
+                    ->lockForUpdate()
+                    ->get()
+                    ->groupBy(fn(User $user): string => (string) $this->extractRegisterIp($user));
+
+                foreach ($usersByIp->flatten(1) as $user) {
+                    if (!$user instanceof User) {
+                        continue;
+                    }
+
+                    $user->banned = 1;
+                    $user->save();
+                    (new AuthService($user))->removeAllSessions();
+                }
+            }
+
+            foreach ($normalizedIps as $ip) {
+                $matchedUsers = $usersByIp->get($ip, collect());
+                $firstUser = $matchedUsers->first();
+
+                BlockedUserIp::query()->updateOrCreate(
+                    ['ip' => $ip],
+                    [
+                        'type' => $type,
+                        'banned_user_id' => $firstUser instanceof User ? $firstUser->id : null,
+                        'operator_user_id' => $operatorUserId,
+                        'reason' => $reason,
+                        'metadata' => array_merge($metadata, [
+                            'matched_user_ids' => $matchedUsers
+                                ->filter(fn($user) => $user instanceof User)
+                                ->pluck('id')
+                                ->map(fn($id) => (int) $id)
+                                ->values()
+                                ->all(),
+                        ]),
+                    ]
+                );
+            }
+
+            $bannedUserIds = $usersByIp
+                ->flatten(1)
+                ->filter(fn($user) => $user instanceof User)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            return [
+                'requestedCount' => $normalizedIps->count(),
+                'blockedIpCount' => $normalizedIps->count(),
+                'blockedIps' => $normalizedIps->all(),
+                'bannedUserCount' => count($bannedUserIds),
+                'bannedUserIds' => $bannedUserIds,
+            ];
+        });
+    }
+
+    /**
      * Update a blocked registration IP record type by id.
      */
     public function updateTypeById(int $id, string $type): ?BlockedUserIp
