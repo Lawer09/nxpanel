@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\V3\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\PerformanceActiveUsersRequest;
+use App\Http\Requests\Admin\PerformanceRetentionRequest;
+use App\Http\Requests\Admin\PerformanceUserHourlyStatsRequest;
 use App\Models\NodePerformanceAggregated;
 use App\Models\Server;
 use App\Models\UserReportCount;
+use App\Services\PerformanceUserStatsService;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Http\Resources\CamelizeResource;
 
@@ -672,94 +675,15 @@ class PerformanceController extends Controller
      *
      * GET /performance/retention
      */
-    public function getRetention(Request $request): JsonResponse
+    public function getRetention(PerformanceRetentionRequest $request, PerformanceUserStatsService $service): JsonResponse
     {
-        $request->validate([
-            'dateFrom' => 'nullable|date',
-            'dateTo'   => 'nullable|date',
-            'appId'    => 'nullable|string|max:255',
-            'platform' => 'nullable|string|max:100',
-        ]);
-
-        $dateFrom = $request->input('dateFrom', now()->subDays(30)->toDateString());
-        $dateTo = $request->input('dateTo', now()->subDay()->toDateString());
-
-        // 留存天数
-        $retentionDays = [1, 3, 7, 14, 30];
-
-        // 构建基础查询条件
-        $baseConditions = function ($query) use ($request) {
-            if ($request->filled('appId')) {
-                $query->where('app_id', $request->input('appId'));
-            }
-            if ($request->filled('platform')) {
-                $query->where('platform', $request->input('platform'));
-            }
-        };
-
-        // 获取每天的活跃用户集合
-        $cohorts = DB::table('v3_user_report_count')
-            ->selectRaw('date, COUNT(DISTINCT user_id) as active_users')
-            ->where('date', '>=', $dateFrom)
-            ->where('date', '<=', $dateTo)
-            ->where($baseConditions)
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        $result = [];
-
-        foreach ($cohorts as $cohort) {
-            $cohortDate = $cohort->date;
-            $row = [
-                'date'         => $cohortDate,
-                'active_users' => $cohort->active_users,
-                'retention'    => [],
-            ];
-
-            foreach ($retentionDays as $day) {
-                $targetDate = date('Y-m-d', strtotime($cohortDate . " +{$day} days"));
-
-                // 如果目标日期超过今天，跳过
-                if ($targetDate > now()->toDateString()) {
-                    $row['retention']["day_{$day}"] = null;
-                    continue;
-                }
-
-                // 计算 cohort 日活跃用户在 target 日也活跃的数量
-                $retained = DB::table('v3_user_report_count as a')
-                    ->join('v3_user_report_count as b', 'a.user_id', '=', 'b.user_id')
-                    ->where('a.date', $cohortDate)
-                    ->where('b.date', $targetDate)
-                    ->where(function ($q) use ($request) {
-                        if ($request->filled('appId')) {
-                            $q->where('a.app_id', $request->input('appId'));
-                        }
-                        if ($request->filled('platform')) {
-                            $q->where('a.platform', $request->input('platform'));
-                        }
-                    })
-                    ->distinct('a.user_id')
-                    ->count('a.user_id');
-
-                $rate = $cohort->active_users > 0
-                    ? round($retained / $cohort->active_users * 100, 2)
-                    : 0;
-
-                $row['retention']["day_{$day}"] = [
-                    'count' => $retained,
-                    'rate'  => $rate,
-                ];
-            }
-
-            $result[] = $row;
-        }
+        $result = $service->retention($request);
 
         return $this->ok([
-            'data'          => CamelizeResource::collection($result),
-            'dateFrom'      => $dateFrom,
-            'dateTo'        => $dateTo,
-            'retentionDays' => $retentionDays,
+            'data'          => CamelizeResource::collection($result['data']),
+            'dateFrom'      => $result['dateFrom'],
+            'dateTo'        => $result['dateTo'],
+            'retentionDays' => $result['retentionDays'],
         ]);
     }
 
@@ -768,128 +692,15 @@ class PerformanceController extends Controller
      *
      * GET /performance/activeUsers
      */
-    public function getActiveUsers(Request $request): JsonResponse
+    public function getActiveUsers(PerformanceActiveUsersRequest $request, PerformanceUserStatsService $service): JsonResponse
     {
-        $request->validate([
-            'dateFrom'    => 'nullable|date',
-            'dateTo'      => 'nullable|date',
-            'appId'       => 'nullable|string|max:255',
-            'platform'    => 'nullable|string|max:100',
-            'granularity' => 'nullable|in:day,week,month',
-        ]);
-
-        $dateFrom = $request->input('dateFrom', now()->subDays(30)->toDateString());
-        $dateTo = $request->input('dateTo', now()->toDateString());
-        $granularity = $request->input('granularity', 'day');
-
-        $baseQuery = DB::table('v3_user_report_count')
-            ->where('date', '>=', $dateFrom)
-            ->where('date', '<=', $dateTo);
-
-        if ($request->filled('appId')) {
-            $baseQuery->where('app_id', $request->input('appId'));
-        }
-        
-        if ($request->filled('platform')) {
-            $baseQuery->where('platform', $request->input('platform'));
-        }
-
-        switch ($granularity) {
-            case 'week':
-                $data = (clone $baseQuery)
-                    ->selectRaw('YEARWEEK(date, 1) as period, MIN(date) as period_start, MAX(date) as period_end, COUNT(DISTINCT user_id) as active_users, SUM(report_count) as total_reports')
-                    ->groupByRaw('YEARWEEK(date, 1)')
-                    ->orderBy('period')
-                    ->get();
-                break;
-            case 'month':
-                $data = (clone $baseQuery)
-                    ->selectRaw('DATE_FORMAT(date, "%Y-%m") as period, MIN(date) as period_start, MAX(date) as period_end, COUNT(DISTINCT user_id) as active_users, SUM(report_count) as total_reports')
-                    ->groupByRaw('DATE_FORMAT(date, "%Y-%m")')
-                    ->orderBy('period')
-                    ->get();
-                break;
-            default: // day
-                $data = (clone $baseQuery)
-                    ->selectRaw('date as period, date as period_start, date as period_end, COUNT(DISTINCT user_id) as active_users, SUM(report_count) as total_reports')
-                    ->groupBy('date')
-                    ->orderBy('date')
-                    ->get();
-                break;
-        }
-
-        $cacheKey = sprintf(
-            'perf:active_users:new_users:%s:%s:%s:%s:%s',
-            $granularity,
-            $dateFrom,
-            $dateTo,
-            $request->input('appId', ''),
-            $request->input('platform', '')
-        );
-
-        $newMap = Cache::remember($cacheKey, 300, function () use ($request, $dateFrom, $dateTo, $granularity) {
-            $firstReportSub = DB::table('v3_user_report_count')
-                ->selectRaw('user_id, MIN(date) as first_date');
-
-            if ($request->filled('appId')) {
-                $firstReportSub->where('app_id', $request->input('appId'));
-            }
-            if ($request->filled('platform')) {
-                $firstReportSub->where('platform', $request->input('platform'));
-            }
-
-            $firstReportSub->groupBy('user_id');
-
-            $newQuery = DB::table(DB::raw("({$firstReportSub->toSql()}) as t"))
-                ->mergeBindings($firstReportSub)
-                ->whereBetween('first_date', [$dateFrom, $dateTo]);
-
-            if ($granularity === 'week') {
-                $rows = $newQuery
-                    ->selectRaw('YEARWEEK(first_date, 1) as period, COUNT(*) as new_users')
-                    ->groupByRaw('YEARWEEK(first_date, 1)')
-                    ->orderBy('period')
-                    ->get();
-            } elseif ($granularity === 'month') {
-                $rows = $newQuery
-                    ->selectRaw('DATE_FORMAT(first_date, "%Y-%m") as period, COUNT(*) as new_users')
-                    ->groupByRaw('DATE_FORMAT(first_date, "%Y-%m")')
-                    ->orderBy('period')
-                    ->get();
-            } else {
-                $rows = $newQuery
-                    ->selectRaw('first_date as period, COUNT(*) as new_users')
-                    ->groupBy('first_date')
-                    ->orderBy('first_date')
-                    ->get();
-            }
-
-            return $rows->mapWithKeys(fn($row) => [(string) $row->period => (int) $row->new_users])->toArray();
-        });
-
-        // 获取注册用户数据（来自 UserService，基于 users 表 created_at）
-        $regMap = app(UserService::class)->getNewUsersByDateRange(
-            $dateFrom,
-            $dateTo,
-            $granularity,
-            [
-                'appId' => $request->input('appId'),
-                'platform' => $request->input('platform'),
-            ]
-        );
-
-        $data = $data->map(function ($row) use ($newMap, $regMap) {
-            $key = (string) $row->period;
-            $row->new_users = $newMap[$key] ?? 0;
-            $row->reg_users = $regMap[$key] ?? 0;
-            return $row;
-        });
+        $result = $service->activeUsers($request);
 
         return $this->ok([
-            'data'        => CamelizeResource::collection($data),
-            'dateFrom'    => $dateFrom,
-            'dateTo'      => $dateTo,
-            'granularity' => $granularity,
+            'data'        => CamelizeResource::collection($result['data']),
+            'dateFrom'    => $result['dateFrom'],
+            'dateTo'      => $result['dateTo'],
+            'granularity' => $result['granularity'],
         ]);
     }
 
@@ -980,90 +791,14 @@ class PerformanceController extends Controller
      *
      * GET /performance/userHourlyStats
      */
-    public function getUserHourlyStats(Request $request): JsonResponse
+    public function getUserHourlyStats(PerformanceUserHourlyStatsRequest $request, PerformanceUserStatsService $service): JsonResponse
     {
-        $request->validate([
-            'appId'    => 'nullable|string|max:255',
-            'platform' => 'nullable|string|max:100',
-            'appVersion' => 'nullable|string|max:50',
-            'clientCountry' => 'nullable|string|max:2',
-        ]);
-
-        $now = now()->startOfHour();
-        $start = (clone $now)->subHours(23);
-
-        $dtExpr = "STR_TO_DATE(CONCAT(date, ' ', LPAD(hour, 2, '0'), ':00:00'), '%Y-%m-%d %H:%i:%s')";
-
-        $applyFilters = function ($query) use ($request) {
-            if ($request->filled('appId')) {
-                $query->where('app_id', $request->input('appId'));
-            }
-            if ($request->filled('platform')) {
-                $query->where('platform', $request->input('platform'));
-            }
-            if ($request->filled('appVersion')) {
-                $query->where('app_version', $request->input('appVersion'));
-            }
-            if ($request->filled('clientCountry')) {
-                $query->where('client_country', $request->input('clientCountry'));
-            }
-            return $query;
-        };
-
-        // 活跃用户（按小时去重）
-        $activeRows = DB::table('v3_user_report_count')
-            ->selectRaw("date, hour, COUNT(DISTINCT user_id) as active_users")
-            ->whereRaw("{$dtExpr} >= ? AND {$dtExpr} <= ?", [
-                $start->format('Y-m-d H:i:s'),
-                $now->format('Y-m-d H:i:s'),
-            ])
-            ->tap($applyFilters)
-            ->groupBy('date', 'hour')
-            ->get();
-
-        // 新增用户：以该用户首次上报时间所在小时计为新增
-        $firstReportSub = DB::table('v3_user_report_count')
-            ->selectRaw("user_id, MIN({$dtExpr}) as first_dt")
-            ->tap($applyFilters)
-            ->groupBy('user_id');
-
-        $newRows = DB::table(DB::raw("({$firstReportSub->toSql()}) as t"))
-            ->mergeBindings($firstReportSub)
-            ->selectRaw("DATE(first_dt) as date, HOUR(first_dt) as hour, COUNT(*) as new_users")
-            ->whereBetween('first_dt', [$start->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s')])
-            ->groupBy('date', 'hour')
-            ->get();
-
-        $activeMap = $activeRows->mapWithKeys(function ($row) {
-            $key = $row->date . '_' . str_pad((string) $row->hour, 2, '0', STR_PAD_LEFT);
-            return [$key => (int) $row->active_users];
-        });
-
-        $newMap = $newRows->mapWithKeys(function ($row) {
-            $key = $row->date . '_' . str_pad((string) $row->hour, 2, '0', STR_PAD_LEFT);
-            return [$key => (int) $row->new_users];
-        });
-
-        $items = [];
-        $cursor = (clone $start);
-        while ($cursor <= $now) {
-            $date = $cursor->toDateString();
-            $hour = (int) $cursor->format('H');
-            $key = $date . '_' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT);
-
-            $items[] = [
-                'time' => $cursor->format('Y-m-d H:00'),
-                'new_users' => $newMap[$key] ?? 0,
-                'active_users' => $activeMap[$key] ?? 0,
-            ];
-
-            $cursor->addHour();
-        }
+        $result = $service->userHourlyStats($request);
 
         return $this->ok([
-            'data' => CamelizeResource::collection($items),
-            'start' => $start->format('Y-m-d H:00'),
-            'end' => $now->format('Y-m-d H:00'),
+            'data'  => CamelizeResource::collection($result['data']),
+            'start' => $result['start'],
+            'end'   => $result['end'],
         ]);
     }
 

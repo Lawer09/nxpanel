@@ -894,3 +894,10 @@
 - 影响范围：`app/Http/Requests/Admin/BlockedUserIpBatchBlockRequest.php`、`app/Services/BlockedUserIpService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，复用已有 `blocked_user_ips` 表和 `type` 字段。
 - 回滚说明：移除新增 Request、Service 方法、Controller 方法、路由、测试和文档说明即可。
+
+## 2026-07-07 Performance 用户统计查询优化
+- 日期：2026-07-07
+- 变更摘要：优化 V3 管理端 `performance/activeUsers`、`performance/retention`、`performance/userHourlyStats` 查询性能；新增 `PerformanceUserStatsService` 承载批量聚合与首次上报判断逻辑，三个接口改用 Form Request 校验；`retention` 从循环 join 改为批量聚合，`activeUsers` 和 `userHourlyStats` 使用候选窗口 + `NOT EXISTS` 判断首次上报，`userHourlyStats` 改用 `date/hour` 范围条件避免函数包裹索引列；补充 `v3_user_report_count` 复合索引和接口文档。
+- 影响范围：`app/Http/Controllers/V3/Admin/PerformanceController.php`、`app/Http/Requests/Admin/PerformanceActiveUsersRequest.php`、`app/Http/Requests/Admin/PerformanceRetentionRequest.php`、`app/Http/Requests/Admin/PerformanceUserHourlyStatsRequest.php`、`app/Services/PerformanceUserStatsService.php`、`database/migrations/2026_07_07_120000_add_user_report_count_performance_indexes.php`、`tests/Feature/PerformanceUserStatsServiceTest.php`、`docs/api/performance_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration，为 `v3_user_report_count` 添加性能查询复合索引。
+- 回滚说明：回滚新增 migration 删除索引，并将三个 Performance 接口恢复为 Controller 内旧查询逻辑，移除新增 Service、Request、测试和文档说明即可。
