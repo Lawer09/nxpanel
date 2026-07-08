@@ -32,6 +32,7 @@ use App\Http\Controllers\V3\Admin\EnumController;
 use App\Http\Controllers\V3\Admin\UserReportController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAccountController;
+use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAllocationController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformUsageController;
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformSyncController;
 use App\Http\Controllers\V3\Admin\AutomationRuleController;
@@ -99,6 +100,14 @@ class AdminRoute
                 $router->post('/blockedIp/batchBlock', [UserController::class, 'batchBlockIps']);
                 $router->post('/blockedIp/batchDelete', [UserController::class, 'batchDeleteBlockedIps']);
                 $router->post('/blockedIp/updateType', [UserController::class, 'updateBlockedIpType']);
+                $router->any('/allowedIp/fetch',    [UserController::class, 'fetchAllowedIps']);
+                $router->post('/allowedIp/save',    [UserController::class, 'saveAllowedIps']);
+                $router->post('/allowedIp/delete',  [UserController::class, 'deleteAllowedIp']);
+                $router->post('/allowedIp/batchDelete', [UserController::class, 'batchDeleteAllowedIps']);
+                $router->any('/ipAllowlistRule/fetch', [UserController::class, 'fetchIpAllowlistRules']);
+                $router->post('/ipAllowlistRule/save', [UserController::class, 'saveIpAllowlistRule']);
+                $router->post('/ipAllowlistRule/update', [UserController::class, 'updateIpAllowlistRule']);
+                $router->post('/ipAllowlistRule/delete', [UserController::class, 'deleteIpAllowlistRule']);
                 $router->any('/aidLoginBanRule/fetch',   [UserController::class, 'fetchAidLoginBanRules']);
                 $router->post('/aidLoginBanRule/save',   [UserController::class, 'saveAidLoginBanRule']);
                 $router->post('/aidLoginBanRule/update', [UserController::class, 'updateAidLoginBanRule']);
@@ -518,6 +527,7 @@ class AdminRoute
                 $router->post('/sync',           [TrafficPlatformSyncController::class, 'trigger']);
                 $router->get('/sync-jobs',       [TrafficPlatformSyncController::class, 'index']);
                 $router->get('/sync-jobs/detail', [TrafficPlatformSyncController::class, 'detail']);
+                $router->post('/traffic-allocations/create', [TrafficPlatformAllocationController::class, 'store']);
 
             });
 

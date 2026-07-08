@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AidChannelTypeUpdateQueueService;
 use App\Services\AidLoginBanRuleService;
 use App\Services\BlockedUserIpService;
+use App\Services\IpAccessPolicyService;
 use App\Services\NodeSyncService;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
@@ -114,21 +115,12 @@ class LoginService
                     return [false, [500, 'User creation failed']];
                 }
 
-                $bannedByIp = $this->banCreatedUserWhenIpBlocked($user, $normalizedMetadata);
-                if ($bannedByIp && !$allowBannedLogin) {
+                $bannedByPolicy = $this->applyCreatedAidUserIpPolicy($user, $aid, $normalizedMetadata);
+                if ($bannedByPolicy && !$allowBannedLogin) {
                     return [false, [400, __('Your account has been suspended')]];
                 }
 
-                if ($bannedByIp) {
-                    $user->refresh();
-                }
-
-                $bannedByAidRule = !$bannedByIp && $this->banCreatedUserWhenAidRuleMatched($user, $aid, $normalizedMetadata);
-                if ($bannedByAidRule && !$allowBannedLogin) {
-                    return [false, [400, __('Your account has been suspended')]];
-                }
-
-                if ($bannedByAidRule) {
+                if ($bannedByPolicy) {
                     $user->refresh();
                 }
 
@@ -297,21 +289,37 @@ class LoginService
     }
 
     /**
-     * Ban a newly created AID user when its registration IP is already blocked.
+     * Apply IP blacklist, allowlist, and custom rule policy for a newly created AID user.
      */
-    private function banCreatedUserWhenIpBlocked(User $user, array $metadata): bool
+    private function applyCreatedAidUserIpPolicy(User $user, string $aid, array $metadata): bool
     {
-        $ip = $metadata['ip'] ?? null;
+        $ip = is_string($metadata['ip'] ?? null) ? $metadata['ip'] : null;
+        $ipPolicyService = app(IpAccessPolicyService::class);
         $blockedUserIpService = app(BlockedUserIpService::class);
 
-        if (!$blockedUserIpService->isBlocked(is_string($ip) ? $ip : null)) {
+        if ($ipPolicyService->isDangerouslyBlocked($ip)) {
+            $blockedUserIpService->banUsers(collect([$user]));
+            NodeSyncService::notifyUsersUpdated();
+            return true;
+        }
+
+        if ($ipPolicyService->isAllowed($ip)) {
             return false;
         }
 
-        $blockedUserIpService->banUsers(collect([$user]));
-        NodeSyncService::notifyUsersUpdated();
+        if ($ipPolicyService->isNormallyBlocked($ip)) {
+            $blockedUserIpService->banUsers(collect([$user]));
+            NodeSyncService::notifyUsersUpdated();
+            return true;
+        }
 
-        return true;
+        if ($this->banCreatedUserWhenAidRuleMatched($user, $aid, $metadata)) {
+            return true;
+        }
+
+        $ipPolicyService->autoAllowIfRuleMatched($ip, $metadata);
+
+        return false;
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\AutomationRule;
 use App\Models\AutomationRuleState;
 use App\Models\TrafficPlatformAccount;
 use App\Services\Automation\Contracts\AutomationModuleHandler;
+use App\Services\TrafficPlatform\TrafficPlatformAllocationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +24,8 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
 
     public function __construct(
         protected AutomationExecutionLogService $executionLogService,
-        protected AutomationActionDispatcher $actionDispatcher
+        protected AutomationActionDispatcher $actionDispatcher,
+        protected TrafficPlatformAllocationService $allocationService
     ) {}
 
     /**
@@ -430,6 +432,43 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
     }
 
     /**
+     * 调用流量代理服务创建自动划转订单。
+     */
+    private function dispatchTrafficAllocationAction(array $action, TrafficPlatformAccount $target, bool $recovery): array
+    {
+        if ($recovery) {
+            return [
+                'type' => 'traffic_allocation',
+                'ok' => true,
+                'skipped' => true,
+                'reason' => 'recovery stage',
+            ];
+        }
+
+        $targetUserId = trim((string) ($action['targetUserId'] ?? ''));
+        $targetUsername = trim((string) ($action['targetUsername'] ?? ''));
+        $amountGb = (float) ($action['amountGb'] ?? 0);
+
+        $result = $this->allocationService->createOrder(
+            (int) $target->id,
+            $targetUserId,
+            $targetUsername,
+            $amountGb
+        );
+
+        return [
+            'type' => 'traffic_allocation',
+            'ok' => true,
+            'accountId' => (int) $target->id,
+            'targetUserId' => $targetUserId,
+            'targetUsername' => $targetUsername,
+            'amountGb' => $amountGb,
+            'statusCode' => (int) $result['status_code'],
+            'response' => $result['response'],
+        ];
+    }
+
+    /**
      * 创建或读取规则状态。
      */
     private function getOrCreateState(AutomationRule $rule, TrafficPlatformAccount $target): AutomationRuleState
@@ -501,6 +540,7 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
 
         return match ($type) {
             'disable_account' => $this->dispatchDisableAccountAction($target, $recovery),
+            'traffic_allocation' => $this->dispatchTrafficAllocationAction($action, $target, $recovery),
             default => [
                 'type' => $type,
                 'ok' => false,

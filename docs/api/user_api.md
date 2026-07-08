@@ -996,3 +996,205 @@ POST /api/v3/admin/user/blockedIp/batchDelete
 - `banUsers=true` 时，系统会查找 `v2_user.register_metadata.ip` 等于这些 IP 的用户，将其 `banned` 更新为 `1`，清理登录会话，并触发节点用户同步。
 - 同一个 IP 已存在时会更新其 `type`、`reason`、`operator_user_id` 和 `metadata`。
 - 批量封禁 IP 不会自动解除用户封禁；解除逻辑仍只按已有解封接口或邀请码安全解封规则执行。
+
+---
+
+## 2026-07-08 补充：IP 黑白名单与白名单策略
+
+### 业务策略
+
+当前系统将 `blocked_user_ips` 定义为 IP 黑名单，将 `allowed_user_ips` 定义为 IP 白名单。两者暂不合并为一张物理表，统一通过服务层策略判断。
+
+`loginByAid` 新注册用户时按以下顺序执行：
+
+1. 注册 IP 命中 `blocked_user_ips.type=dangerous`：直接封禁用户，白名单不能覆盖。
+2. 注册 IP 命中 `allowed_user_ips`：跳过普通黑名单和 AID 自定义封禁规则，不封禁用户。
+3. 注册 IP 命中 `blocked_user_ips.type=normal`：封禁用户。
+4. 执行 AID 自定义封禁规则，命中后封禁用户并写入黑名单 IP。
+5. 未命中任何封禁逻辑时，检查启用的白名单策略；命中后自动写入 `allowed_user_ips`，不封禁用户。
+
+说明：
+
+- `normal` 黑名单表示普通风险 IP，可被显式白名单覆盖。
+- `dangerous` 黑名单表示高风险 IP，优先级最高，不能被白名单覆盖。
+- 白名单只影响后续 AID 新注册策略判断，不自动删除黑名单记录，不自动解除已有用户的 `banned` 状态。
+- 黑名单接口返回的 `operator_user` 表示操作人，不表示被封禁用户，也不应理解为“管理员对象”。
+
+### IP 白名单列表查询
+
+`POST /api/v3/{secure_path}/user/allowedIp/fetch`
+
+支持 GET/POST。
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ip` | `string` | 否 | 精确筛选 IP |
+| `operatorUserId` | `int` | 否 | 按操作人用户 ID 筛选 |
+| `current` | `int` | 否 | 页码，默认 `1` |
+| `pageSize` | `int` | 否 | 每页数量，默认 `10`，最大 `200` |
+
+返回字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `int` | 白名单记录 ID |
+| `ip` | `string` | IP 地址 |
+| `reason` | `string|null` | 加入原因 |
+| `metadata` | `object|null` | 来源上下文 |
+| `operator_user_id` | `int|null` | 操作人用户 ID |
+| `operator_user` | `object|null` | 操作人信息 |
+| `created_at` | `int` | 创建时间戳 |
+| `updated_at` | `int` | 更新时间戳 |
+
+示例：
+
+```json
+{
+  "ip": "203.0.113.10",
+  "current": 1,
+  "pageSize": 10
+}
+```
+
+### 添加或更新 IP 白名单
+
+`POST /api/v3/{secure_path}/user/allowedIp/save`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ips` | `string[]` | 是 | IP 列表，最大 500 个；服务端去重 |
+| `reason` | `string` | 否 | 加入原因，最大 500 字符 |
+
+同一个 IP 已存在时会更新 `reason`、`operator_user_id` 和 `metadata`。
+
+请求示例：
+
+```json
+{
+  "ips": ["203.0.113.10", "203.0.113.11"],
+  "reason": "trusted source"
+}
+```
+
+返回示例：
+
+```json
+{
+  "requestedCount": 2,
+  "allowedIpCount": 2,
+  "allowedIps": ["203.0.113.10", "203.0.113.11"]
+}
+```
+
+### 删除 IP 白名单
+
+`POST /api/v3/{secure_path}/user/allowedIp/delete`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 白名单记录 ID |
+
+删除白名单记录不会自动封禁或解封用户。
+
+### 批量删除 IP 白名单
+
+`POST /api/v3/{secure_path}/user/allowedIp/batchDelete`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ids` | `int[]` | 是 | 白名单记录 ID 列表，服务端去重 |
+
+返回示例：
+
+```json
+{
+  "deletedCount": 2,
+  "requestedCount": 3,
+  "missingIds": [99]
+}
+```
+
+### IP 白名单策略查询
+
+`POST /api/v3/{secure_path}/user/ipAllowlistRule/fetch`
+
+支持 GET/POST。
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `enabled` | `bool` | 否 | 是否启用 |
+| `country` | `string` | 否 | 国家缩写，按大写精确匹配 |
+| `projectCode` | `string` | 否 | 项目代号 |
+| `packageName` | `string` | 否 | 包名 / app_id |
+| `current` | `int` | 否 | 页码，默认 `1` |
+| `pageSize` | `int` | 否 | 每页数量，默认 `10`，最大 `200` |
+
+### 新增 IP 白名单策略
+
+`POST /api/v3/{secure_path}/user/ipAllowlistRule/save`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | `string` | 是 | 规则名称 |
+| `enabled` | `bool` | 否 | 是否启用，默认 `true` |
+| `countries` | `string[]` | 否 | 国家缩写数组，保存时统一转大写 |
+| `projectCodes` | `string[]` | 否 | 项目代号数组 |
+| `packageNames` | `string[]` | 否 | 包名 / app_id 数组 |
+| `reason` | `string` | 否 | 自动加入白名单原因 |
+
+`countries`、`projectCodes`、`packageNames` 至少需要配置一类，避免误配置成全局自动白名单。规则命中时，只对已配置的条件做限制；未配置的条件表示不限制。若一个规则同时配置了国家、项目和包名，则三类条件都需要匹配。
+
+请求示例：
+
+```json
+{
+  "name": "US Rocket allow",
+  "enabled": true,
+  "countries": ["US"],
+  "projectCodes": ["rocket"],
+  "packageNames": ["com.rocket.vpn"],
+  "reason": "trusted launch cohort"
+}
+```
+
+### 更新 IP 白名单策略
+
+`POST /api/v3/{secure_path}/user/ipAllowlistRule/update`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 规则 ID |
+| `name` | `string` | 否 | 规则名称 |
+| `enabled` | `bool` | 否 | 是否启用 |
+| `countries` | `string[]` | 否 | 国家缩写数组 |
+| `projectCodes` | `string[]` | 否 | 项目代号数组 |
+| `packageNames` | `string[]` | 否 | 包名 / app_id 数组 |
+| `reason` | `string` | 否 | 自动加入白名单原因 |
+
+更新后仍必须至少保留 `countries`、`projectCodes`、`packageNames` 中任意一类条件。
+
+### 删除 IP 白名单策略
+
+`POST /api/v3/{secure_path}/user/ipAllowlistRule/delete`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | `int` | 是 | 规则 ID |
+
+删除规则不会删除已经自动写入的 `allowed_user_ips` 记录。

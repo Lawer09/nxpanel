@@ -901,3 +901,26 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/PerformanceController.php`、`app/Http/Requests/Admin/PerformanceActiveUsersRequest.php`、`app/Http/Requests/Admin/PerformanceRetentionRequest.php`、`app/Http/Requests/Admin/PerformanceUserHourlyStatsRequest.php`、`app/Services/PerformanceUserStatsService.php`、`database/migrations/2026_07_07_120000_add_user_report_count_performance_indexes.php`、`tests/Feature/PerformanceUserStatsServiceTest.php`、`docs/api/performance_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration，为 `v3_user_report_count` 添加性能查询复合索引。
 - 回滚说明：回滚新增 migration 删除索引，并将三个 Performance 接口恢复为 Controller 内旧查询逻辑，移除新增 Service、Request、测试和文档说明即可。
+
+## 2026-07-08 代理账户流量检测自动划转
+
+- 日期：2026-07-08
+- 变更摘要：为 `traffic_platform` 自动化规则新增专属动作 `traffic_allocation`，规则命中后可调用流量代理服务创建划转订单；新增外部服务配置项、动作参数校验、执行/失败测试和接口补充文档。
+- 影响范围：`app/Services/Automation/TrafficPlatformAutomationService.php`、`app/Services/TrafficPlatform/TrafficPlatformAllocationService.php`、`app/Http/Requests/Admin/AutomationRuleStoreRequest.php`、`app/Http/Requests/Admin/AutomationRuleUpdateRequest.php`、`config/services.php`、`.env.example`、`tests/Feature/TrafficPlatformAllocationAutomationTest.php`、`tests/Feature/AutomationRuleRequestValidationTest.php`、`docs/api/traffic_platform_allocation_automation_api.md`、`docs/api/automation_rules_api.md`、`docs/components/automation_rule_development_guide.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `traffic_allocation` 动作分支、划转 Service、配置项、Request 校验字段、对应测试和文档补充即可回滚。
+
+## 2026-07-08 流量平台手动划转接口
+
+- 日期：2026-07-08
+- 变更摘要：新增 V3 管理端 `POST /traffic-platform/traffic-allocations/create` 接口，支持按本地代理流量账号、目标用户和 GB 数手动创建流量划转订单，并复用自动化划转 Service 调用外部流量代理服务。
+- 影响范围：`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAllocationController.php`、`app/Http/Requests/Admin/TrafficPlatformAllocationCreateRequest.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/TrafficPlatform/TrafficPlatformAllocationService.php`、`tests/Feature/TrafficPlatformAllocationControllerTest.php`、`docs/api/traffic_platform_allocation_automation_api.md`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 Controller、Request、路由、Service 手动接口包装方法、对应测试和文档说明即可回滚。
+
+## 2026-07-08 IP 黑白名单与白名单策略
+- 日期：2026-07-08
+- 变更摘要：保留 `blocked_user_ips` 作为 IP 黑名单，新增 `allowed_user_ips` IP 白名单表和 `ip_allowlist_rules` 白名单策略表；新增 V3 管理端白名单 IP 查询、新增/更新、删除、批量删除接口，以及白名单策略查询、新增、更新、删除接口；`loginByAid` 新注册流程改为按“危险黑名单 > 显式白名单 > 普通黑名单 > AID 自定义封禁规则 > 自动白名单策略”的顺序判断。
+- 影响范围：`database/migrations/2026_07_08_120000_create_allowed_user_ips_table.php`、`database/migrations/2026_07_08_121000_create_ip_allowlist_rules_table.php`、`app/Models/AllowedUserIp.php`、`app/Models/IpAllowlistRule.php`、`app/Services/AllowedUserIpService.php`、`app/Services/IpAllowlistRuleService.php`、`app/Services/IpAccessPolicyService.php`、`app/Services/Auth/LoginService.php`、`app/Http/Requests/Admin/AllowedUserIp*Request.php`、`app/Http/Requests/Admin/IpAllowlistRule*Request.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增迁移创建 `allowed_user_ips` 和 `ip_allowlist_rules`。
+- 回滚说明：回滚上述两个新增 migration，并移除白名单模型、Service、Request、Controller 方法、路由、`loginByAid` IP 策略调用、测试和文档补充即可；`blocked_user_ips` 黑名单表及其现有接口不需要物理改名或回滚。

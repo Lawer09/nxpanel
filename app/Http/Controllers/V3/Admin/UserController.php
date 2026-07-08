@@ -7,20 +7,32 @@ use App\Http\Requests\Admin\AidLoginBanRuleDeleteRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleFetchRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleSaveRequest;
 use App\Http\Requests\Admin\AidLoginBanRuleUpdateRequest;
+use App\Http\Requests\Admin\AllowedUserIpBatchDeleteRequest;
+use App\Http\Requests\Admin\AllowedUserIpDeleteRequest;
+use App\Http\Requests\Admin\AllowedUserIpFetchRequest;
+use App\Http\Requests\Admin\AllowedUserIpSaveRequest;
 use App\Http\Requests\Admin\BlockedUserIpBatchBlockRequest;
 use App\Http\Requests\Admin\BlockedUserIpBatchDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpDeleteRequest;
 use App\Http\Requests\Admin\BlockedUserIpFetchRequest;
 use App\Http\Requests\Admin\BlockedUserIpUpdateTypeRequest;
+use App\Http\Requests\Admin\IpAllowlistRuleDeleteRequest;
+use App\Http\Requests\Admin\IpAllowlistRuleFetchRequest;
+use App\Http\Requests\Admin\IpAllowlistRuleSaveRequest;
+use App\Http\Requests\Admin\IpAllowlistRuleUpdateRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
+use App\Models\AllowedUserIp;
 use App\Models\AidLoginBanRule;
 use App\Http\Requests\Admin\UserUpdate;
 use App\Models\BlockedUserIp;
+use App\Models\IpAllowlistRule;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\AidLoginBanRuleService;
+use App\Services\AllowedUserIpService;
 use App\Services\AuthService;
 use App\Services\BlockedUserIpService;
+use App\Services\IpAllowlistRuleService;
 use App\Services\NodeSyncService;
 use App\Http\Resources\CamelizeResource;
 use App\Utils\Helper;
@@ -397,6 +409,139 @@ class UserController extends V2UserController
             'ip' => (string) $record->ip,
             'type' => $record->type ?: BlockedUserIp::TYPE_NORMAL,
         ]);
+    }
+
+    /**
+     * Query IP allowlist records for admin management.
+     */
+    public function fetchAllowedIps(
+        AllowedUserIpFetchRequest $request,
+        AllowedUserIpService $allowedUserIpService
+    ): JsonResponse {
+        $result = $allowedUserIpService->paginate($request->validated());
+
+        return $this->ok([
+            'data' => collect($result->items())
+                ->map(fn(AllowedUserIp $record): array => $allowedUserIpService->transform($record))
+                ->values(),
+            'total' => $result->total(),
+            'page' => $result->currentPage(),
+            'pageSize' => $result->perPage(),
+        ]);
+    }
+
+    /**
+     * Add or update IP allowlist records.
+     */
+    public function saveAllowedIps(
+        AllowedUserIpSaveRequest $request,
+        AllowedUserIpService $allowedUserIpService
+    ): JsonResponse {
+        return $this->ok($allowedUserIpService->saveIps(
+            $request->validated('ips'),
+            Auth::guard('sanctum')->id(),
+            $request->validated('reason') ?? null,
+            ['source' => 'admin_allowed_ip_save']
+        ));
+    }
+
+    /**
+     * Delete one IP allowlist record.
+     */
+    public function deleteAllowedIp(
+        AllowedUserIpDeleteRequest $request,
+        AllowedUserIpService $allowedUserIpService
+    ): JsonResponse {
+        $deleted = $allowedUserIpService->deleteById((int) $request->validated('id'));
+        if (!$deleted) {
+            return $this->error([400202, 'Allowed IP record not found']);
+        }
+
+        return $this->ok(true);
+    }
+
+    /**
+     * Batch delete IP allowlist records.
+     */
+    public function batchDeleteAllowedIps(
+        AllowedUserIpBatchDeleteRequest $request,
+        AllowedUserIpService $allowedUserIpService
+    ): JsonResponse {
+        return $this->ok($allowedUserIpService->batchDeleteByIds($request->validated('ids')));
+    }
+
+    /**
+     * Query IP allowlist rules.
+     */
+    public function fetchIpAllowlistRules(
+        IpAllowlistRuleFetchRequest $request,
+        IpAllowlistRuleService $ipAllowlistRuleService
+    ): JsonResponse {
+        $result = $ipAllowlistRuleService->paginate($request->validated());
+
+        return $this->ok([
+            'data' => collect($result->items())
+                ->map(fn(IpAllowlistRule $rule): array => $ipAllowlistRuleService->transform($rule))
+                ->values(),
+            'total' => $result->total(),
+            'page' => $result->currentPage(),
+            'pageSize' => $result->perPage(),
+        ]);
+    }
+
+    /**
+     * Create an IP allowlist rule.
+     */
+    public function saveIpAllowlistRule(
+        IpAllowlistRuleSaveRequest $request,
+        IpAllowlistRuleService $ipAllowlistRuleService
+    ): JsonResponse {
+        try {
+            $rule = $ipAllowlistRuleService->create(
+                $request->validated(),
+                Auth::guard('sanctum')->id()
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
+        }
+
+        return $this->ok($ipAllowlistRuleService->transform($rule));
+    }
+
+    /**
+     * Update an IP allowlist rule.
+     */
+    public function updateIpAllowlistRule(
+        IpAllowlistRuleUpdateRequest $request,
+        IpAllowlistRuleService $ipAllowlistRuleService
+    ): JsonResponse {
+        $data = $request->validated();
+        try {
+            $rule = $ipAllowlistRuleService->update(
+                (int) $data['id'],
+                $data,
+                Auth::guard('sanctum')->id()
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error([422, $e->getMessage()]);
+        }
+
+        return $this->ok($ipAllowlistRuleService->transform($rule));
+    }
+
+    /**
+     * Delete an IP allowlist rule.
+     */
+    public function deleteIpAllowlistRule(
+        IpAllowlistRuleDeleteRequest $request,
+        IpAllowlistRuleService $ipAllowlistRuleService
+    ): JsonResponse {
+        $deleted = $ipAllowlistRuleService->delete((int) $request->validated('id'));
+        if (!$deleted) {
+            return $this->error([400202, 'IP allowlist rule not found']);
+        }
+
+        return $this->ok(true);
     }
 
     /**

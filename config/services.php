@@ -40,4 +40,10 @@ return [
         'project_traffic_report_timeout_seconds' => env('FEISHU_PROJECT_TRAFFIC_REPORT_TIMEOUT_SECONDS', 10),
     ],
 
+    'traffic_platform_service' => [
+        'base_url' => env('TRAFFIC_PLATFORM_SERVICE_BASE_URL', 'http://127.0.0.1:8080'),
+        'api_key' => env('TRAFFIC_PLATFORM_SERVICE_API_KEY', ''),
+        'timeout_seconds' => env('TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS', 15),
+    ],
+
 ];

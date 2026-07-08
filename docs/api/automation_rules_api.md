@@ -229,6 +229,7 @@ traffic_platform 专有解读
   - `email`
   - `webhook`
   - `disable_account`
+  - `traffic_allocation`
 - `actions[]` 可选扩展字段（该模块当前支持）  - `template` / `recoverTemplate`
   - `subject` / `recoverSubject`（`email` 使用  - `toAdmin` / `recipients`（`email` 使用  - `webhookUrl` / `method` / `headers` / `timeoutSeconds`（`webhook` 使用  - `signing.enabled` / `signing.secret` / `signing.timestampHeader` / `signing.signatureHeader`（`webhook` 可选签名）
 

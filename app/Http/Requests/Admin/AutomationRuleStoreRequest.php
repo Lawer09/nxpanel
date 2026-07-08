@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class AutomationRuleStoreRequest extends FormRequest
 {
@@ -52,9 +53,38 @@ class AutomationRuleStoreRequest extends FormRequest
             'actions.*.signing.secret' => 'nullable|string|max:500',
             'actions.*.signing.timestampHeader' => 'nullable|string|max:100',
             'actions.*.signing.signatureHeader' => 'nullable|string|max:100',
+            'actions.*.targetUserId' => 'nullable|string|max:100',
+            'actions.*.targetUsername' => 'nullable|string|max:100',
+            'actions.*.amountGb' => 'nullable|numeric|gt:0',
             'cooldownSeconds' => 'nullable|integer|min:0|max:604800',
             'recoveryEnabled' => 'nullable|integer|in:0,1',
             'enabled' => 'nullable|integer|in:0,1',
         ];
+    }
+
+    /**
+     * 校验 traffic_platform 专属流量划转动作的必要参数。
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            foreach ((array) $this->input('actions', []) as $index => $action) {
+                if ((string) ($action['type'] ?? '') !== 'traffic_allocation') {
+                    continue;
+                }
+
+                if (trim((string) ($action['targetUserId'] ?? '')) === '') {
+                    $validator->errors()->add("actions.{$index}.targetUserId", 'targetUserId is required for traffic_allocation action.');
+                }
+
+                if (trim((string) ($action['targetUsername'] ?? '')) === '') {
+                    $validator->errors()->add("actions.{$index}.targetUsername", 'targetUsername is required for traffic_allocation action.');
+                }
+
+                if (!array_key_exists('amountGb', $action) || $action['amountGb'] === null || $action['amountGb'] === '') {
+                    $validator->errors()->add("actions.{$index}.amountGb", 'amountGb is required for traffic_allocation action.');
+                }
+            }
+        });
     }
 }

@@ -554,3 +554,63 @@ data[] 字段说明：
 `GET /sync-jobs/detail?id=1`
 
 返回字段（data）：与「5.2 同步任务列表」的 `data[]` 单项字段一致。
+
+---
+
+## 6. 流量划转接口
+
+### 6.1 手动创建流量划转订单
+
+`POST /traffic-allocations/create`
+
+Body：
+
+```json
+{
+  "accountId": 1,
+  "targetUserId": "2",
+  "targetUsername": "kookeey",
+  "amountGb": 10
+}
+```
+
+成功响应：
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "accountId": 1,
+    "accountName": "Main Traffic Account",
+    "targetUserId": "2",
+    "targetUsername": "kookeey",
+    "amountGb": 10,
+    "statusCode": 200,
+    "response": {
+      "code": 0,
+      "data": {
+        "order_id": "order-2001"
+      }
+    }
+  }
+}
+```
+
+`data` 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| accountId | int | 本地代理流量账号 ID |
+| accountName | string | 本地代理流量账号名称 |
+| targetUserId | string | 划转目标用户 ID |
+| targetUsername | string | 划转目标用户名 |
+| amountGb | number | 划转流量 GB |
+| statusCode | int | 外部流量代理服务 HTTP 状态码 |
+| response | object | 外部流量代理服务原始响应 JSON |
+
+失败响应：
+
+- 本地账号不存在：`code=404`，`msg=流量平台账号不存在`
+- 外部服务配置缺失、请求超时或非 2xx：`code=500`，`msg` 为失败原因
+- 真实 `X-API-Key` 不会出现在接口响应或日志中。

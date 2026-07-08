@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\AllowedUserIp;
 use App\Models\BlockedUserIp;
 use App\Models\AidChannelTypeUpdateQueue;
 use App\Models\AidLoginBanRule;
 use App\Models\InviteCode;
+use App\Models\IpAllowlistRule;
 use App\Models\Plan;
 use App\Models\ProjectUserAppMap;
 use App\Models\Setting;
@@ -591,6 +593,299 @@ class UserIpBanTest extends TestCase
             'id' => 999999,
             'type' => BlockedUserIp::TYPE_DANGEROUS,
         ], $this->adminHeaders($admin))->assertStatus(400);
+    }
+
+    public function test_allowed_ip_overrides_normal_blocklist_for_new_aid_user(): void
+    {
+        BlockedUserIp::create([
+            'ip' => '203.0.113.100',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+            'reason' => 'normal block',
+        ]);
+        AllowedUserIp::create([
+            'ip' => '203.0.113.100',
+            'reason' => 'trusted after review',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-allowed-normal',
+            'metadata' => [
+                'app_id' => 'com.example.allowed',
+                'ip' => '203.0.113.100',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $user = User::query()->where('email', 'device-allowed-normal@apple.com')->firstOrFail();
+
+        $this->assertFalse((bool) $user->banned);
+        $this->assertDatabaseHas('blocked_user_ips', [
+            'ip' => '203.0.113.100',
+            'type' => BlockedUserIp::TYPE_NORMAL,
+        ]);
+    }
+
+    public function test_dangerous_blocklist_overrides_allowed_ip_for_new_aid_user(): void
+    {
+        BlockedUserIp::create([
+            'ip' => '203.0.113.101',
+            'type' => BlockedUserIp::TYPE_DANGEROUS,
+            'reason' => 'dangerous block',
+        ]);
+        AllowedUserIp::create([
+            'ip' => '203.0.113.101',
+            'reason' => 'old allow',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-danger-wins',
+            'metadata' => [
+                'app_id' => 'com.example.allowed',
+                'ip' => '203.0.113.101',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', true);
+
+        $user = User::query()->where('email', 'device-danger-wins@apple.com')->firstOrFail();
+        $this->assertTrue((bool) $user->banned);
+    }
+
+    public function test_allowed_ip_skips_aid_custom_ban_rule(): void
+    {
+        $window = $this->currentHourWindow();
+        AllowedUserIp::create([
+            'ip' => '203.0.113.102',
+            'reason' => 'trusted explicit allow',
+        ]);
+        AidLoginBanRule::create([
+            'name' => 'Would ban without allowlist',
+            'enabled' => true,
+            'timezone' => 'Asia/Shanghai',
+            'cutoff_at' => now()->addDay()->timestamp,
+            'weekly_windows' => [[
+                'weekday' => (int) now()->isoWeekday(),
+                'start' => $window['start'],
+                'end' => $window['end'],
+            ]],
+            'package_names' => ['com.example.allow-rule'],
+            'countries' => ['US'],
+            'reason' => 'custom fraud rule',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-allowed-skips-rule',
+            'metadata' => [
+                'app_id' => 'com.example.allow-rule',
+                'country' => 'US',
+                'ip' => '203.0.113.102',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $user = User::query()->where('email', 'device-allowed-skips-rule@apple.com')->firstOrFail();
+        $this->assertFalse((bool) $user->banned);
+        $this->assertDatabaseMissing('blocked_user_ips', [
+            'ip' => '203.0.113.102',
+        ]);
+    }
+
+    public function test_login_by_aid_auto_allows_ip_when_allowlist_rule_matches(): void
+    {
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.vpn',
+            'enabled' => 1,
+        ]);
+        IpAllowlistRule::create([
+            'name' => 'Rocket US allow',
+            'enabled' => true,
+            'countries' => ['US'],
+            'project_codes' => ['rocket'],
+            'package_names' => ['com.rocket.vpn'],
+            'reason' => 'trusted launch cohort',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-auto-allow',
+            'metadata' => [
+                'app_id' => 'com.rocket.vpn',
+                'country' => 'us',
+                'ip' => '203.0.113.103',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $user = User::query()->where('email', 'device-auto-allow@apple.com')->firstOrFail();
+        $this->assertFalse((bool) $user->banned);
+
+        $allowedIp = AllowedUserIp::query()->where('ip', '203.0.113.103')->firstOrFail();
+        $this->assertSame('trusted launch cohort', $allowedIp->reason);
+        $this->assertSame('ip_allowlist_rule', $allowedIp->metadata['source'] ?? null);
+        $this->assertSame('Rocket US allow', $allowedIp->metadata['rule_name'] ?? null);
+        $this->assertSame('US', $allowedIp->metadata['country'] ?? null);
+        $this->assertSame('com.rocket.vpn', $allowedIp->metadata['package_name'] ?? null);
+        $this->assertEqualsCanonicalizing(['rocket'], $allowedIp->metadata['project_codes'] ?? []);
+    }
+
+    public function test_login_by_aid_does_not_auto_allow_when_country_mismatches(): void
+    {
+        IpAllowlistRule::create([
+            'name' => 'US only allow',
+            'enabled' => true,
+            'countries' => ['US'],
+            'package_names' => ['com.example.country'],
+            'reason' => 'country allow',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-auto-allow-country-miss',
+            'metadata' => [
+                'app_id' => 'com.example.country',
+                'country' => 'CA',
+                'ip' => '203.0.113.104',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertDatabaseMissing('allowed_user_ips', [
+            'ip' => '203.0.113.104',
+        ]);
+    }
+
+    public function test_login_by_aid_does_not_auto_allow_when_project_or_package_mismatches(): void
+    {
+        ProjectUserAppMap::create([
+            'project_code' => 'rocket',
+            'app_id' => 'com.rocket.vpn',
+            'enabled' => 1,
+        ]);
+        IpAllowlistRule::create([
+            'name' => 'Rocket package allow',
+            'enabled' => true,
+            'project_codes' => ['rocket'],
+            'package_names' => ['com.rocket.vpn'],
+            'reason' => 'project package allow',
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'device-auto-allow-package-miss',
+            'metadata' => [
+                'app_id' => 'com.other.vpn',
+                'country' => 'US',
+                'ip' => '203.0.113.105',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertDatabaseMissing('allowed_user_ips', [
+            'ip' => '203.0.113.105',
+        ]);
+    }
+
+    public function test_admin_can_manage_allowed_ip_records(): void
+    {
+        $admin = $this->createUser('admin-allowed-ip@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('allowedIp/save'), [
+            'ips' => ['203.0.113.106', '203.0.113.107', '203.0.113.106'],
+            'reason' => 'manual allow',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.requestedCount', 2)
+            ->assertJsonPath('data.allowedIpCount', 2);
+
+        $this->assertDatabaseHas('allowed_user_ips', [
+            'ip' => '203.0.113.106',
+            'operator_user_id' => $admin->id,
+            'reason' => 'manual allow',
+        ]);
+
+        $fetchResponse = $this->postJson($this->adminUserUri('allowedIp/fetch'), [
+            'ip' => '203.0.113.106',
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.ip', '203.0.113.106')
+            ->assertJsonPath('data.data.0.operator_user.id', $admin->id);
+
+        $firstId = (int) $fetchResponse->json('data.data.0.id');
+        $secondId = (int) AllowedUserIp::query()->where('ip', '203.0.113.107')->value('id');
+
+        $this->postJson($this->adminUserUri('allowedIp/delete'), [
+            'id' => $firstId,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data', true);
+
+        $this->assertDatabaseMissing('allowed_user_ips', [
+            'id' => $firstId,
+        ]);
+
+        $missingId = $secondId + 1000;
+        $this->postJson($this->adminUserUri('allowedIp/batchDelete'), [
+            'ids' => [$secondId, $secondId, $missingId],
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.deletedCount', 1)
+            ->assertJsonPath('data.requestedCount', 2)
+            ->assertJsonPath('data.missingIds.0', $missingId);
+
+        $this->assertDatabaseMissing('allowed_user_ips', [
+            'id' => $secondId,
+        ]);
+    }
+
+    public function test_admin_can_manage_ip_allowlist_rules(): void
+    {
+        $admin = $this->createUser('admin-allow-rule@example.com', ['is_admin' => 1]);
+
+        $this->postJson($this->adminUserUri('ipAllowlistRule/save'), [
+            'name' => 'No condition allow rule',
+        ], $this->adminHeaders($admin))->assertStatus(422);
+
+        $saveResponse = $this->postJson($this->adminUserUri('ipAllowlistRule/save'), [
+            'name' => 'Admin allow rule',
+            'enabled' => true,
+            'countries' => ['us'],
+            'projectCodes' => ['rocket'],
+            'packageNames' => ['com.rocket.vpn'],
+            'reason' => 'admin allow',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.name', 'Admin allow rule')
+            ->assertJsonPath('data.countries.0', 'US')
+            ->assertJsonPath('data.projectCodes.0', 'rocket')
+            ->assertJsonPath('data.packageNames.0', 'com.rocket.vpn')
+            ->assertJsonPath('data.createdBy.id', $admin->id);
+
+        $ruleId = (int) $saveResponse->json('data.id');
+
+        $this->postJson($this->adminUserUri('ipAllowlistRule/fetch'), [
+            'country' => 'us',
+            'projectCode' => 'rocket',
+            'packageName' => 'com.rocket.vpn',
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $ruleId);
+
+        $this->postJson($this->adminUserUri('ipAllowlistRule/update'), [
+            'id' => $ruleId,
+            'enabled' => false,
+            'countries' => ['CA'],
+            'projectCodes' => [],
+            'packageNames' => [],
+            'reason' => 'updated allow',
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.countries.0', 'CA')
+            ->assertJsonPath('data.reason', 'updated allow')
+            ->assertJsonPath('data.updatedBy.id', $admin->id);
+
+        $this->postJson($this->adminUserUri('ipAllowlistRule/delete'), [
+            'id' => $ruleId,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data', true);
+
+        $this->assertDatabaseMissing('ip_allowlist_rules', [
+            'id' => $ruleId,
+        ]);
     }
 
     public function test_login_by_aid_bans_new_user_when_custom_rule_matches(): void
