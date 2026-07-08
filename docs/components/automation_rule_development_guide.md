@@ -189,6 +189,6 @@ project_aggregate 模块实现约束：
 - 动作类型：`traffic_allocation`
 - 适用模块：仅 `traffic_platform`
 - 执行阶段：仅告警触发阶段调用外部划转接口；恢复阶段返回 skipped，不创建订单。
-- 参数来源：`actions[]` 配置 `targetUserId`、`targetUsername`、`amountGb`；`account_id` 固定使用当前命中的 `traffic_platform_accounts.id`。
+- 参数来源：`actions[]` 配置 `sourceAccountId`、`amountGb`；`account_id` 使用总账号 `sourceAccountId`，目标用户默认使用当前命中的 `traffic_platform_accounts.external_account_id/account_name`。
 - 防重复：沿用规则 `cooldownSeconds`；外部接口未提供幂等键时，不额外承诺远端幂等。
 - 外部服务配置：`TRAFFIC_PLATFORM_SERVICE_BASE_URL`、`TRAFFIC_PLATFORM_SERVICE_API_KEY`、`TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS`，禁止将真实 API Key 写入规则、文档或测试。

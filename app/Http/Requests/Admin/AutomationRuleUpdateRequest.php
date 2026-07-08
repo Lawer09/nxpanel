@@ -54,6 +54,7 @@ class AutomationRuleUpdateRequest extends FormRequest
             'actions.*.signing.secret' => 'nullable|string|max:500',
             'actions.*.signing.timestampHeader' => 'nullable|string|max:100',
             'actions.*.signing.signatureHeader' => 'nullable|string|max:100',
+            'actions.*.sourceAccountId' => 'nullable|integer|min:1',
             'actions.*.targetUserId' => 'nullable|string|max:100',
             'actions.*.targetUsername' => 'nullable|string|max:100',
             'actions.*.amountGb' => 'nullable|numeric|gt:0',
@@ -74,12 +75,8 @@ class AutomationRuleUpdateRequest extends FormRequest
                     continue;
                 }
 
-                if (trim((string) ($action['targetUserId'] ?? '')) === '') {
-                    $validator->errors()->add("actions.{$index}.targetUserId", 'targetUserId is required for traffic_allocation action.');
-                }
-
-                if (trim((string) ($action['targetUsername'] ?? '')) === '') {
-                    $validator->errors()->add("actions.{$index}.targetUsername", 'targetUsername is required for traffic_allocation action.');
+                if (!array_key_exists('sourceAccountId', $action) || $action['sourceAccountId'] === null || $action['sourceAccountId'] === '') {
+                    $validator->errors()->add("actions.{$index}.sourceAccountId", 'sourceAccountId is required for traffic_allocation action.');
                 }
 
                 if (!array_key_exists('amountGb', $action) || $action['amountGb'] === null || $action['amountGb'] === '') {

@@ -918,6 +918,14 @@
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Controller、Request、路由、Service 手动接口包装方法、对应测试和文档说明即可回滚。
 
+## 2026-07-08 自动化流量划转方向修正
+
+- 日期：2026-07-08
+- 变更摘要：修正 `traffic_allocation` 自动化动作语义，由配置的总账号 `sourceAccountId` 向当前检测命中的代理账号划转流量；目标用户默认取检测账号的 `external_account_id/account_name`，不再要求固定配置 `targetUserId/targetUsername`。
+- 影响范围：`app/Services/Automation/TrafficPlatformAutomationService.php`、`app/Http/Requests/Admin/AutomationRuleStoreRequest.php`、`app/Http/Requests/Admin/AutomationRuleUpdateRequest.php`、`tests/Feature/TrafficPlatformAllocationAutomationTest.php`、`tests/Feature/AutomationRuleRequestValidationTest.php`、`docs/api/traffic_platform_allocation_automation_api.md`、`docs/components/automation_rule_development_guide.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `traffic_allocation` 动作为固定目标用户配置，并将 Request、测试和文档中的 `sourceAccountId` 说明回退即可。
+
 ## 2026-07-08 IP 黑白名单与白名单策略
 - 日期：2026-07-08
 - 变更摘要：保留 `blocked_user_ips` 作为 IP 黑名单，新增 `allowed_user_ips` IP 白名单表和 `ip_allowlist_rules` 白名单策略表；新增 V3 管理端白名单 IP 查询、新增/更新、删除、批量删除接口，以及白名单策略查询、新增、更新、删除接口；`loginByAid` 新注册流程改为按“危险黑名单 > 显式白名单 > 普通黑名单 > AID 自定义封禁规则 > 自动白名单策略”的顺序判断。

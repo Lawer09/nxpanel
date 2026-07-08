@@ -445,12 +445,14 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
             ];
         }
 
-        $targetUserId = trim((string) ($action['targetUserId'] ?? ''));
-        $targetUsername = trim((string) ($action['targetUsername'] ?? ''));
+        $sourceAccountId = (int) ($action['sourceAccountId'] ?? 0);
+        $defaultTargetUserId = $target->external_account_id ?: (string) $target->id;
+        $targetUserId = trim((string) ($action['targetUserId'] ?? $defaultTargetUserId));
+        $targetUsername = trim((string) ($action['targetUsername'] ?? $target->account_name));
         $amountGb = (float) ($action['amountGb'] ?? 0);
 
         $result = $this->allocationService->createOrder(
-            (int) $target->id,
+            $sourceAccountId,
             $targetUserId,
             $targetUsername,
             $amountGb
@@ -459,7 +461,8 @@ class TrafficPlatformAutomationService implements AutomationModuleHandler
         return [
             'type' => 'traffic_allocation',
             'ok' => true,
-            'accountId' => (int) $target->id,
+            'sourceAccountId' => $sourceAccountId,
+            'targetAccountId' => (int) $target->id,
             'targetUserId' => $targetUserId,
             'targetUsername' => $targetUsername,
             'amountGb' => $amountGb,

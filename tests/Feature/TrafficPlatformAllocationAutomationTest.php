@@ -21,6 +21,8 @@ class TrafficPlatformAllocationAutomationTest extends TestCase
 
     private TrafficPlatformAccount $account;
 
+    private TrafficPlatformAccount $sourceAccount;
+
     private array $executionRecords = [];
 
     protected function setUp(): void
@@ -41,12 +43,23 @@ class TrafficPlatformAllocationAutomationTest extends TestCase
         $this->account = TrafficPlatformAccount::create([
             'platform_id' => $platform->id,
             'platform_code' => $platform->code,
-            'account_name' => 'Main Traffic Account',
-            'external_account_id' => 'external-1',
+            'account_name' => 'Detected Traffic Account',
+            'external_account_id' => 'detected-user-1',
             'credential_json' => [],
             'timezone' => 'Asia/Shanghai',
             'enabled' => 1,
             'balance' => 512,
+        ]);
+
+        $this->sourceAccount = TrafficPlatformAccount::create([
+            'platform_id' => $platform->id,
+            'platform_code' => $platform->code,
+            'account_name' => 'Main Traffic Account',
+            'external_account_id' => 'source-account',
+            'credential_json' => [],
+            'timezone' => 'Asia/Shanghai',
+            'enabled' => 1,
+            'balance' => 102400,
         ]);
     }
 
@@ -69,9 +82,9 @@ class TrafficPlatformAllocationAutomationTest extends TestCase
             return $request->url() === 'http://traffic-service.test/api/traffic-platform/traffic-allocations/orders'
                 && $request->method() === 'POST'
                 && $request->header('X-API-Key') === ['test-api-key']
-                && $request['account_id'] === $this->account->id
-                && $request['target_user_id'] === '2'
-                && $request['target_username'] === 'kookeey'
+                && $request['account_id'] === $this->sourceAccount->id
+                && $request['target_user_id'] === 'detected-user-1'
+                && $request['target_username'] === 'Detected Traffic Account'
                 && (float) $request['amount_gb'] === 10.0;
         });
 
@@ -156,8 +169,7 @@ class TrafficPlatformAllocationAutomationTest extends TestCase
             'actions_json' => [
                 [
                     'type' => 'traffic_allocation',
-                    'targetUserId' => '2',
-                    'targetUsername' => 'kookeey',
+                    'sourceAccountId' => $this->sourceAccount->id,
                     'amountGb' => 10,
                 ],
             ],

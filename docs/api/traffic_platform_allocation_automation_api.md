@@ -21,9 +21,9 @@ Request body:
 
 ```json
 {
-  "account_id": 1,
-  "target_user_id": "2",
-  "target_username": "kookeey",
+  "account_id": 99,
+  "target_user_id": "detected-user-1",
+  "target_username": "Detected Traffic Account",
   "amount_gb": 10
 }
 ```
@@ -33,15 +33,18 @@ Request body:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | type | string | Yes | Must be `traffic_allocation` |
-| targetUserId | string | Yes | Allocation target user ID, sent as `target_user_id` |
-| targetUsername | string | Yes | Allocation target username, sent as `target_username` |
+| sourceAccountId | int | Yes | Source/master traffic account ID, sent as `account_id` |
 | amountGb | number | Yes | Allocation amount in GB, sent as `amount_gb` |
+| targetUserId | string | No | Overrides the detected account target user ID; defaults to the detected account `external_account_id`, then local account ID |
+| targetUsername | string | No | Overrides the detected account target username; defaults to the detected account `account_name` |
 
-`account_id` is always the matched `traffic_platform_accounts.id`; it is not accepted from action config.
+For automation, `account_id` is the configured source/master account. The allocation target is the account detected by the rule.
 
 ## Runtime Behavior
 
 - The action only runs during the alert trigger stage.
+- The source/master account is configured with `sourceAccountId`.
+- The default allocation target is the matched account: `target_user_id = external_account_id`, `target_username = account_name`.
 - The recovery stage skips allocation requests.
 - Duplicate prevention depends on the rule `cooldownSeconds`.
 - If the upstream service returns a non-2xx response or times out, the automation execution is logged as `failed`.
@@ -75,8 +78,7 @@ TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS=15
   "actions": [
     {
       "type": "traffic_allocation",
-      "targetUserId": "2",
-      "targetUsername": "kookeey",
+      "sourceAccountId": 99,
       "amountGb": 10
     }
   ],
