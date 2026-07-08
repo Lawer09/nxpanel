@@ -932,3 +932,10 @@
 - 影响范围：`database/migrations/2026_07_08_120000_create_allowed_user_ips_table.php`、`database/migrations/2026_07_08_121000_create_ip_allowlist_rules_table.php`、`app/Models/AllowedUserIp.php`、`app/Models/IpAllowlistRule.php`、`app/Services/AllowedUserIpService.php`、`app/Services/IpAllowlistRuleService.php`、`app/Services/IpAccessPolicyService.php`、`app/Services/Auth/LoginService.php`、`app/Http/Requests/Admin/AllowedUserIp*Request.php`、`app/Http/Requests/Admin/IpAllowlistRule*Request.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增迁移创建 `allowed_user_ips` 和 `ip_allowlist_rules`。
 - 回滚说明：回滚上述两个新增 migration，并移除白名单模型、Service、Request、Controller 方法、路由、`loginByAid` IP 策略调用、测试和文档补充即可；`blocked_user_ips` 黑名单表及其现有接口不需要物理改名或回滚。
+## 2026-07-08 流量平台代理账号测试接口服务配置化
+
+- 日期：2026-07-08
+- 变更摘要：调整 V3 管理端 `POST /traffic-platform/accounts/test` 账号测试接口，转发外部流量代理服务时改为读取 `TRAFFIC_PLATFORM_SERVICE_BASE_URL`、`TRAFFIC_PLATFORM_SERVICE_API_KEY`、`TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS` 配置，并统一携带 `X-API-Key` 与 JSON 请求头；补充对应 Feature 测试和接口文档说明。
+- 影响范围：`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAccountController.php`、`tests/Feature/TrafficPlatformAccountControllerTest.php`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `TrafficPlatformAccountController::test()` 中旧的固定服务地址调用，并移除新增测试和文档说明即可。

@@ -129,9 +129,26 @@ class TrafficPlatformAccountController extends Controller
             $id = (int) $request->validated()['id'];
             $this->service->findForTest($id);
 
-            $goUrl = 'http://47.254.131.223:8080/api/traffic-platform/accounts/' . $id . '/test';
+            $baseUrl = rtrim((string) config('services.traffic_platform_service.base_url', ''), '/');
+            $apiKey = (string) config('services.traffic_platform_service.api_key', '');
+            $timeout = (int) config('services.traffic_platform_service.timeout_seconds', 15);
 
-            $response = Http::timeout(15)->post($goUrl);
+            if ($baseUrl === '') {
+                return $this->error([500, 'traffic platform service base_url is not configured']);
+            }
+
+            if ($apiKey === '') {
+                return $this->error([500, 'traffic platform service api_key is not configured']);
+            }
+
+            $goUrl = $baseUrl . '/api/traffic-platform/accounts/' . $id . '/test';
+
+            $response = Http::timeout(max(1, $timeout))
+                ->withHeaders([
+                    'X-API-Key' => $apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($goUrl);
 
             if ($response->successful()) {
                 $body = $response->json();

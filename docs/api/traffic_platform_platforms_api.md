@@ -283,6 +283,13 @@ Body：
 
 说明：用于测试账号连通与实时接口返回，不直接代表统计报表已入库。
 
+后端会将请求转发到流量代理服务：
+
+- 地址：`{TRAFFIC_PLATFORM_SERVICE_BASE_URL}/api/traffic-platform/accounts/{id}/test`
+- Header：`X-API-Key: {TRAFFIC_PLATFORM_SERVICE_API_KEY}`、`Content-Type: application/json`
+- 超时：`TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS`
+- 配置来源与流量分配接口一致，均从 `.env` 读取，不应在代码或文档中写入真实 API Key。
+
 返回字段说明：该接口透传内部 Go 服务返回的 `data`，字段会因平台实现不同而变化。
 
 ---
