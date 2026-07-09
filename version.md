@@ -960,3 +960,10 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAccountController.php`、`app/Http/Requests/Admin/TrafficPlatformAccountBatch*Request.php`、`app/Services/TrafficPlatform/TrafficPlatformAccountService.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/TrafficPlatformAccountControllerTest.php`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
 - 是否需要迁移：否，复用已有 `traffic_platform_accounts.tags` 与 `enabled` 字段。
 - 回滚说明：移除批量 tags/禁用 Request、Controller 方法、Service 方法、路由、测试和文档说明即可。
+
+## 2026-07-09 项目小时广告匹配率查询接口
+- 日期：2026-07-09
+- 变更摘要：新增 V3 管理端接口 `POST /api/v3/admin/{securePath}/report/project/hourly/ad-match-rate`，支持按 `projectCode + dateFrom/dateTo` 查询指定项目在日期范围内的小时广告匹配率；数据来源为 `project_report_hourly`，按 `report_date + hour` 聚合同项目所有国家的 `ad_requests` 和 `ad_matched_requests`，返回 `adMatchRate = SUM(ad_matched_requests) / SUM(ad_requests) * 100`。
+- 影响范围：`app/Http/Requests/Admin/ProjectHourlyAdMatchRateRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 Request、Controller 方法、路由、`ProjectReportService::queryHourlyAdMatchRate()` 以及对应文档说明即可回滚。

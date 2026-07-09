@@ -243,3 +243,68 @@ $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServ
 - `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前小时报表筛选范围中排除指定项目或国家。
 - 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
 - 小时报表列表、summary 和 `topRevenueCountries` 均使用相同排除筛选口径。
+
+## 指定项目小时广告匹配率接口
+
+- 方法/路径：`POST /api/v3/admin/{securePath}/report/project/hourly/ad-match-rate`
+- 控制器：`ReportController::queryProjectHourlyAdMatchRate`
+- Request：`ProjectHourlyAdMatchRateRequest`
+- 用途：返回指定项目代号在指定日期范围内，按小时维度聚合后的广告匹配率。
+- 数据来源：`project_report_hourly`
+- 聚合维度：`report_date + hour`
+- 聚合范围：同一项目代号下所有国家合计。
+- 计算公式：`adMatchRate = SUM(ad_matched_requests) / SUM(ad_requests) * 100`
+- 当 `SUM(ad_requests)=0` 时，`adMatchRate` 返回 `null`。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCode | string | 是 | 项目代号，最大 100 字符，服务端会去除首尾空格 |
+| dateFrom | string | 是 | 开始日期，格式建议 `YYYY-MM-DD` |
+| dateTo | string | 是 | 结束日期，必须大于等于 `dateFrom` |
+
+### 请求示例
+
+```json
+{
+  "projectCode": "A001",
+  "dateFrom": "2026-07-01",
+  "dateTo": "2026-07-03"
+}
+```
+
+### 返回示例
+
+接口返回统一 JSON 响应，`data` 结构如下：
+
+```json
+{
+  "projectCode": "A001",
+  "dateFrom": "2026-07-01",
+  "dateTo": "2026-07-03",
+  "data": [
+    {
+      "reportDate": "2026-07-01",
+      "hour": 0,
+      "hourStart": "2026-07-01 00:00:00",
+      "projectCode": "A001",
+      "adRequests": 1000,
+      "adMatchedRequests": 820,
+      "adMatchRate": "82.000000"
+    }
+  ]
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| reportDate | string | 报表日期 |
+| hour | int | 小时，范围 0-23 |
+| hourStart | string | 当前小时桶起始时间 |
+| projectCode | string | 项目代号 |
+| adRequests | int | 当前项目、当前小时的广告请求数合计 |
+| adMatchedRequests | int | 当前项目、当前小时的广告匹配请求数合计 |
+| adMatchRate | string/null | 广告匹配率百分比，保留 6 位小数；请求数为 0 时返回 `null` |

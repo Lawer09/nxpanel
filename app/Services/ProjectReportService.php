@@ -152,6 +152,55 @@ class ProjectReportService
     }
 
     /**
+     * Query hourly ad match rate for a single project over a date range.
+     */
+    public function queryHourlyAdMatchRate(array $validated): array
+    {
+        $projectCode = trim((string) $validated['projectCode']);
+        $dateFrom = (string) $validated['dateFrom'];
+        $dateTo = (string) $validated['dateTo'];
+
+        $rows = DB::table('project_report_hourly')
+            ->where('project_code', '=', $projectCode)
+            ->where('report_date', '>=', $dateFrom)
+            ->where('report_date', '<=', $dateTo)
+            ->selectRaw('report_date')
+            ->selectRaw('hour')
+            ->selectRaw('SUM(ad_requests) as ad_requests')
+            ->selectRaw('SUM(ad_matched_requests) as ad_matched_requests')
+            ->groupBy('report_date', 'hour')
+            ->orderBy('report_date')
+            ->orderBy('hour')
+            ->get();
+
+        $data = $rows->map(function ($row) use ($projectCode) {
+            $adRequests = (int) ($row->ad_requests ?? 0);
+            $adMatchedRequests = (int) ($row->ad_matched_requests ?? 0);
+            $reportDate = (string) $row->report_date;
+            $hour = (int) $row->hour;
+
+            return [
+                'reportDate' => $reportDate,
+                'hour' => $hour,
+                'hourStart' => sprintf('%s %02d:00:00', $reportDate, $hour),
+                'projectCode' => $projectCode,
+                'adRequests' => $adRequests,
+                'adMatchedRequests' => $adMatchedRequests,
+                'adMatchRate' => $adRequests === 0
+                    ? null
+                    : $this->formatDecimal($adMatchedRequests / $adRequests * 100),
+            ];
+        })->values();
+
+        return [
+            'projectCode' => $projectCode,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'data' => $data,
+        ];
+    }
+
+    /**
      * Execute the project hourly report query.
      */
     private function executeHourlyQuery(array $validated): array
