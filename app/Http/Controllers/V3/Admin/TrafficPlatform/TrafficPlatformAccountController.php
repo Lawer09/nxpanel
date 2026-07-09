@@ -5,6 +5,8 @@ namespace App\Http\Controllers\V3\Admin\TrafficPlatform;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IdRequest;
+use App\Http\Requests\Admin\TrafficPlatformAccountBatchDisableRequest;
+use App\Http\Requests\Admin\TrafficPlatformAccountBatchUpdateTagsRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountIndexRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountStoreRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountUpdateTagsRequest;
@@ -114,6 +116,42 @@ class TrafficPlatformAccountController extends Controller
             return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('TrafficPlatformAccount updateTags error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Batch update account tags.
+     * POST /traffic-platform/accounts/batch-update-tags
+     */
+    public function batchUpdateTags(TrafficPlatformAccountBatchUpdateTagsRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+
+            return $this->ok($this->service->batchUpdateTags($params['ids'], $params['tags']));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('TrafficPlatformAccount batchUpdateTags error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Batch disable accounts.
+     * POST /traffic-platform/accounts/batch-disable
+     */
+    public function batchDisable(TrafficPlatformAccountBatchDisableRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+
+            return $this->ok($this->service->batchDisable($params['ids']));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('TrafficPlatformAccount batchDisable error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

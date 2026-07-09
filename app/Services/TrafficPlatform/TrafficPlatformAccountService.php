@@ -5,6 +5,7 @@ namespace App\Services\TrafficPlatform;
 use App\Exceptions\BusinessException;
 use App\Models\TrafficPlatform;
 use App\Models\TrafficPlatformAccount;
+use Illuminate\Support\Facades\DB;
 
 class TrafficPlatformAccountService
 {
@@ -171,6 +172,30 @@ class TrafficPlatformAccountService
     }
 
     /**
+     * Batch update account tags.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    public function batchUpdateTags(array $ids, array $tags): array
+    {
+        return $this->batchUpdateAccounts($ids, [
+            'tags' => $this->normalizeTags($tags),
+        ]);
+    }
+
+    /**
+     * Batch disable accounts.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    public function batchDisable(array $ids): array
+    {
+        return $this->batchUpdateAccounts($ids, [
+            'enabled' => 0,
+        ]);
+    }
+
+    /**
      * 更新账号启用状态。
      */
     public function updateStatus(int $id, int $enabled): void
@@ -225,5 +250,45 @@ class TrafficPlatformAccountService
         $account->tags = $this->normalizeTags($account->tags ?? []);
 
         return $account;
+    }
+
+    /**
+     * Batch update accounts and report IDs that do not exist.
+     *
+     * @return array{requested: int, updated: int, missingIds: array<int>}
+     */
+    private function batchUpdateAccounts(array $ids, array $attributes): array
+    {
+        $ids = collect($ids)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw new BusinessException([422, 'account ids cannot be empty']);
+        }
+
+        return DB::transaction(function () use ($ids, $attributes): array {
+            $existingIds = TrafficPlatformAccount::query()
+                ->whereIn('id', $ids->all())
+                ->lockForUpdate()
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $updated = 0;
+            if ($existingIds->isNotEmpty()) {
+                $updated = TrafficPlatformAccount::query()
+                    ->whereIn('id', $existingIds->all())
+                    ->update($attributes);
+            }
+
+            return [
+                'requested' => $ids->count(),
+                'updated' => (int) $updated,
+                'missingIds' => $ids->diff($existingIds)->values()->all(),
+            ];
+        });
     }
 }

@@ -953,3 +953,10 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将用户列表查询条件恢复为 `onlyBanned`，并同步回滚测试和文档即可。
+## 2026-07-09 代理流量账号批量标签与批量禁用
+
+- 日期：2026-07-09
+- 变更摘要：V3 管理端代理流量账号新增 `POST /traffic-platform/accounts/batch-update-tags` 批量更新标签接口和 `POST /traffic-platform/accounts/batch-disable` 批量禁用接口，均返回 `requested/updated/missingIds` 批量处理结果。
+- 影响范围：`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAccountController.php`、`app/Http/Requests/Admin/TrafficPlatformAccountBatch*Request.php`、`app/Services/TrafficPlatform/TrafficPlatformAccountService.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/TrafficPlatformAccountControllerTest.php`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
+- 是否需要迁移：否，复用已有 `traffic_platform_accounts.tags` 与 `enabled` 字段。
+- 回滚说明：移除批量 tags/禁用 Request、Controller 方法、Service 方法、路由、测试和文档说明即可。

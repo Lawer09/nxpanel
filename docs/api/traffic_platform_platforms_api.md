@@ -274,7 +274,31 @@ Body：
 
 返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
 
-### 3.6 启用/禁用账号
+### 3.6 批量修改账号标签
+
+`POST /accounts/batch-update-tags`
+
+Body：
+```json
+{
+  "ids": [1, 2, 3],
+  "tags": ["总账号", "低余额"]
+}
+```
+
+说明：
+- `ids` 最多 500 个。
+- `tags` 规则与单账号标签更新一致。
+- 传 `tags: []` 表示批量清空标签。
+
+返回字段（data）：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| requested | int | 请求更新的去重账号 ID 数 |
+| updated | int | 实际更新的账号数 |
+| missingIds | array | 未找到的账号 ID |
+
+### 3.7 启用/禁用账号
 
 `POST /accounts/update-status`
 
@@ -293,7 +317,29 @@ Body：
 | --- | --- | --- |
 | data | bool | 操作结果，`true` 表示更新成功 |
 
-### 3.7 测试账号连接
+### 3.8 批量禁用账号
+
+`POST /accounts/batch-disable`
+
+Body：
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+说明：
+- `ids` 最多 500 个。
+- 该接口会将命中的账号统一更新为 `enabled = 0`。
+
+返回字段（data）：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| requested | int | 请求禁用的去重账号 ID 数 |
+| updated | int | 实际禁用的账号数 |
+| missingIds | array | 未找到的账号 ID |
+
+### 3.9 测试账号连接
 
 `POST /accounts/test`
 

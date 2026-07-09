@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\V3\Admin\TrafficPlatform\TrafficPlatformAccountController;
 use App\Http\Requests\Admin\IdRequest;
+use App\Http\Requests\Admin\TrafficPlatformAccountBatchDisableRequest;
+use App\Http\Requests\Admin\TrafficPlatformAccountBatchUpdateTagsRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountIndexRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountStoreRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountUpdateTagsRequest;
@@ -95,6 +97,45 @@ class TrafficPlatformAccountControllerTest extends TestCase
 
         $this->assertSame(0, $payload['code']);
         $this->assertSame([], $payload['data']['tags']);
+    }
+
+    public function test_accounts_can_batch_update_tags_and_batch_disable(): void
+    {
+        $platform = $this->createPlatform();
+        $first = $this->createAccount($platform, 'First Account', 'external-first', ['old']);
+        $second = $this->createAccount($platform, 'Second Account', 'external-second', []);
+        $missingId = $second->id + 1000;
+
+        $tagsRequest = TrafficPlatformAccountBatchUpdateTagsRequest::create('/api/v3/admin/test/traffic-platform/accounts/batch-update-tags', 'POST', [
+            'ids' => [$first->id, $second->id, $missingId],
+            'tags' => [' batch ', 'batch', 'priority'],
+        ]);
+        $this->prepareRequest($tagsRequest);
+
+        $tagsResponse = app(TrafficPlatformAccountController::class)->batchUpdateTags($tagsRequest);
+        $tagsPayload = $tagsResponse->getData(true);
+
+        $this->assertSame(0, $tagsPayload['code']);
+        $this->assertSame(3, $tagsPayload['data']['requested']);
+        $this->assertSame(2, $tagsPayload['data']['updated']);
+        $this->assertSame([$missingId], $tagsPayload['data']['missingIds']);
+        $this->assertSame(['batch', 'priority'], $first->fresh()->tags);
+        $this->assertSame(['batch', 'priority'], $second->fresh()->tags);
+
+        $disableRequest = TrafficPlatformAccountBatchDisableRequest::create('/api/v3/admin/test/traffic-platform/accounts/batch-disable', 'POST', [
+            'ids' => [$first->id, $missingId],
+        ]);
+        $this->prepareRequest($disableRequest);
+
+        $disableResponse = app(TrafficPlatformAccountController::class)->batchDisable($disableRequest);
+        $disablePayload = $disableResponse->getData(true);
+
+        $this->assertSame(0, $disablePayload['code']);
+        $this->assertSame(2, $disablePayload['data']['requested']);
+        $this->assertSame(1, $disablePayload['data']['updated']);
+        $this->assertSame([$missingId], $disablePayload['data']['missingIds']);
+        $this->assertSame(0, $first->fresh()->enabled);
+        $this->assertSame(1, $second->fresh()->enabled);
     }
 
     public function test_test_account_uses_configured_service_url_and_api_key(): void

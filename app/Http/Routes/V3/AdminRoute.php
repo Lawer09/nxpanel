@@ -511,6 +511,8 @@ class AdminRoute
                     $router->post('/create',          [TrafficPlatformAccountController::class, 'store']);
                     $router->post('/update',          [TrafficPlatformAccountController::class, 'update']);
                     $router->post('/update-tags',     [TrafficPlatformAccountController::class, 'updateTags']);
+                    $router->post('/batch-update-tags', [TrafficPlatformAccountController::class, 'batchUpdateTags']);
+                    $router->post('/batch-disable',   [TrafficPlatformAccountController::class, 'batchDisable']);
                     $router->post('/update-status',   [TrafficPlatformAccountController::class, 'updateStatus']);
                     $router->post('/test',            [TrafficPlatformAccountController::class, 'test']);
                 });
