@@ -510,6 +510,7 @@ class AdminRoute
                     $router->get('/detail',           [TrafficPlatformAccountController::class, 'detail']);
                     $router->post('/create',          [TrafficPlatformAccountController::class, 'store']);
                     $router->post('/update',          [TrafficPlatformAccountController::class, 'update']);
+                    $router->post('/update-tags',     [TrafficPlatformAccountController::class, 'updateTags']);
                     $router->post('/update-status',   [TrafficPlatformAccountController::class, 'updateStatus']);
                     $router->post('/test',            [TrafficPlatformAccountController::class, 'test']);
                 });

@@ -18,7 +18,7 @@
 | `ip` | `string` | 否 | 按注册元数据 `register_metadata.ip` 精确筛选 |
 | `filter` | `array` | 否 | 通用字段筛选，格式 `[{id, value}]` |
 | `sort` | `array` | 否 | 排序，格式 `[{id, desc: bool}]` |
-| `onlyBanned` | `bool` | 否 | 只查询已封禁用户 |
+| `banned` | `bool/int` | 否 | 按封禁状态筛选；`1`/`true` 查询已封禁用户，`0`/`false` 查询未封禁用户 |
 | `createdAtFrom` | `string\|int` | 否 | 注册时间起始，包含边界；支持 Unix 时间戳、`YYYY-MM-DD`、`YYYY-MM-DD HH:mm:ss` |
 | `createdAtTo` | `string\|int` | 否 | 注册时间结束，包含边界；支持 Unix 时间戳、`YYYY-MM-DD`、`YYYY-MM-DD HH:mm:ss`，仅日期格式会按当天 `23:59:59` 处理 |
 

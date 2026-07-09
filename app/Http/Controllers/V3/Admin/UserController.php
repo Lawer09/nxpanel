@@ -58,8 +58,8 @@ class UserController extends V2UserController
             $userModel->whereIn('id', $ids);
         }
 
-        if ($request->boolean('onlyBanned')) {
-            $userModel->where('banned', 1);
+        if ($request->filled('banned')) {
+            $userModel->where('banned', $request->boolean('banned') ? 1 : 0);
         }
 
         $this->applyCreatedAtRange($request, $userModel);

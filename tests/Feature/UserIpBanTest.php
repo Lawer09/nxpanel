@@ -145,20 +145,27 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
-    public function test_admin_user_fetch_can_filter_only_banned_users(): void
+    public function test_admin_user_fetch_can_filter_by_banned_status(): void
     {
         $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
         $bannedUser = $this->createUser('banned@example.com', ['banned' => 1]);
-        $this->createUser('normal@example.com', ['banned' => 0]);
+        $normalUser = $this->createUser('normal@example.com', ['banned' => 0]);
 
         $response = $this->postJson($this->adminUserUri('fetch'), [
-            'onlyBanned' => true,
+            'banned' => 1,
             'pageSize' => 10,
         ], $this->adminHeaders($admin));
 
         $response->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.data.0.id', $bannedUser->id);
+
+        $this->postJson($this->adminUserUri('fetch'), [
+            'banned' => 0,
+            'pageSize' => 10,
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $normalUser->id);
     }
 
     public function test_admin_user_fetch_can_filter_by_registration_date_range(): void

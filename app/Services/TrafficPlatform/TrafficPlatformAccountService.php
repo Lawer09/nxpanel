@@ -28,6 +28,9 @@ class TrafficPlatformAccountService
                     ->orWhere('external_account_id', 'like', "%{$keyword}%");
             });
         }
+        foreach ($this->normalizeTags($params['tags'] ?? []) as $tag) {
+            $query->whereJsonContains('tags', $tag);
+        }
 
         $page = (int) ($params['page'] ?? 1);
         $pageSize = (int) ($params['pageSize'] ?? 20);
@@ -43,6 +46,7 @@ class TrafficPlatformAccountService
             $arr = $item->toArray();
             $arr['platform_name'] = $platformMap[$item->platform_code] ?? '';
             $arr['credential_masked'] = $item->getMaskedCredential();
+            $arr['tags'] = $this->normalizeTags($arr['tags'] ?? []);
             unset($arr['credential_json']);
             return $arr;
         });
@@ -67,6 +71,7 @@ class TrafficPlatformAccountService
 
         $arr = $account->toArray();
         $arr['credential_masked'] = $account->getMaskedCredential();
+        $arr['tags'] = $this->normalizeTags($arr['tags'] ?? []);
         unset($arr['credential_json']);
 
         $platform = TrafficPlatform::where('code', $account->platform_code)->first();
@@ -86,7 +91,7 @@ class TrafficPlatformAccountService
             throw new BusinessException([422, '平台不存在']);
         }
 
-        return TrafficPlatformAccount::create([
+        $account = TrafficPlatformAccount::create([
             'platform_id' => $platform->id,
             'platform_code' => $platformCode,
             'account_name' => $params['accountName'],
@@ -95,7 +100,10 @@ class TrafficPlatformAccountService
             'timezone' => $params['timezone'] ?? 'Asia/Shanghai',
             'enabled' => $params['enabled'] ?? 1,
             'balance' => (int) ($params['balance'] ?? 0),
+            'tags' => $this->normalizeTags($params['tags'] ?? []),
         ]);
+
+        return $this->withNormalizedTags($account);
     }
 
     /**
@@ -124,6 +132,9 @@ class TrafficPlatformAccountService
         if (array_key_exists('balance', $params)) {
             $updateData['balance'] = (int) $params['balance'];
         }
+        if (array_key_exists('tags', $params)) {
+            $updateData['tags'] = $this->normalizeTags($params['tags'] ?? []);
+        }
 
         if (array_key_exists('credential', $params) && is_array($params['credential'])) {
             $newCred = $params['credential'];
@@ -141,7 +152,22 @@ class TrafficPlatformAccountService
             $account->update($updateData);
         }
 
-        return $account->fresh();
+        return $this->withNormalizedTags($account->fresh());
+    }
+
+    /**
+     * Update account tags.
+     */
+    public function updateTags(int $id, array $tags): TrafficPlatformAccount
+    {
+        $account = TrafficPlatformAccount::find($id);
+        if (!$account) {
+            throw new BusinessException([404, 'account not found']);
+        }
+
+        $account->update(['tags' => $this->normalizeTags($tags)]);
+
+        return $this->withNormalizedTags($account->fresh());
     }
 
     /**
@@ -166,6 +192,37 @@ class TrafficPlatformAccountService
         if (!$account) {
             throw new BusinessException([404, '账号不存在']);
         }
+
+        return $account;
+    }
+
+    /**
+     * Normalize tags by trimming, removing blanks, and de-duplicating values.
+     */
+    private function normalizeTags(mixed $tags): array
+    {
+        if (!is_array($tags)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($tags as $tag) {
+            $value = trim((string) $tag);
+            if ($value === '') {
+                continue;
+            }
+            $normalized[$value] = $value;
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * Keep API output stable for legacy accounts whose tags are null.
+     */
+    private function withNormalizedTags(TrafficPlatformAccount $account): TrafficPlatformAccount
+    {
+        $account->tags = $this->normalizeTags($account->tags ?? []);
 
         return $account;
     }

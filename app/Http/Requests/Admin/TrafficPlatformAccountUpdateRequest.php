@@ -21,6 +21,8 @@ class TrafficPlatformAccountUpdateRequest extends FormRequest
             'timezone' => 'nullable|string|max:64',
             'enabled' => 'nullable|integer|in:0,1',
             'balance' => 'nullable|integer|min:0',
+            'tags' => 'nullable|array|max:20',
+            'tags.*' => 'nullable|string|max:50',
         ];
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IdRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountIndexRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountStoreRequest;
+use App\Http\Requests\Admin\TrafficPlatformAccountUpdateTagsRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountUpdateRequest;
 use App\Http\Requests\Admin\TrafficPlatformAccountUpdateStatusRequest;
 use App\Http\Resources\CamelizeResource;
@@ -94,6 +95,25 @@ class TrafficPlatformAccountController extends Controller
             return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('TrafficPlatformAccount update error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Update account tags.
+     * POST /traffic-platform/accounts/update-tags
+     */
+    public function updateTags(TrafficPlatformAccountUpdateTagsRequest $request): JsonResponse
+    {
+        try {
+            $params = $request->validated();
+            $account = $this->service->updateTags((int) $params['id'], $params['tags']);
+
+            return $this->ok(CamelizeResource::make($account));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('TrafficPlatformAccount updateTags error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

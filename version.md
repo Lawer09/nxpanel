@@ -939,3 +939,17 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAccountController.php`、`tests/Feature/TrafficPlatformAccountControllerTest.php`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `TrafficPlatformAccountController::test()` 中旧的固定服务地址调用，并移除新增测试和文档说明即可。
+## 2026-07-09 代理流量账号标签字段与筛选
+
+- 日期：2026-07-09
+- 变更摘要：为 `traffic_platform_accounts` 新增 `tags` JSON 标签字段，账号创建、普通更新和专用 `POST /traffic-platform/accounts/update-tags` 接口均支持维护标签；账号列表 `GET /traffic-platform/accounts` 新增 `tags[]` 全部命中筛选，列表和详情无标签时统一返回空数组。
+- 影响范围：`database/migrations/2026_07_09_100000_add_tags_to_traffic_platform_accounts_table.php`、`app/Models/TrafficPlatformAccount.php`、`app/Http/Requests/Admin/TrafficPlatformAccount*Request.php`、`app/Http/Controllers/V3/Admin/TrafficPlatform/TrafficPlatformAccountController.php`、`app/Services/TrafficPlatform/TrafficPlatformAccountService.php`、`app/Http/Routes/V3/AdminRoute.php`、`tests/Feature/TrafficPlatformAccountControllerTest.php`、`docs/api/traffic_platform_platforms_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 为 `traffic_platform_accounts` 添加 `tags` 字段。
+- 回滚说明：回滚新增 migration 删除 `tags` 字段，并移除账号 tags 校验、清洗、筛选、`update-tags` 路由/Controller 方法、测试和文档说明即可。
+
+## 2026-07-09 用户列表封禁状态筛选参数调整
+- 日期：2026-07-09
+- 变更摘要：V3 管理端用户列表查询由 `onlyBanned` 布尔参数调整为直接使用 `banned` 参数筛选，支持 `banned=1/true` 查询已封禁用户，`banned=0/false` 查询未封禁用户。
+- 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将用户列表查询条件恢复为 `onlyBanned`，并同步回滚测试和文档即可。

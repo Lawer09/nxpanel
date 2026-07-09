@@ -141,6 +141,7 @@ Query 参数：
 | platformCode | string | 否 | 平台编码 |
 | enabled | int | 否 | 0/1 |
 | keyword | string | 否 | 按账号名/外部账号ID检索 |
+| tags[] | array | 否 | 按账号标签筛选；多个标签为全部命中 |
 | page | int | 否 | 默认1 |
 | pageSize | int | 否 | 默认20，最大200 |
 
@@ -160,6 +161,7 @@ Query 参数：
       "accountName": "kkoip-main",
       "externalAccountId": "3494058",
       "balance": 10240,
+      "tags": ["总账号", "低余额"],
       "credentialMasked": {
         "accessid": "349***058",
         "secret": "******"
@@ -193,6 +195,7 @@ data[] 字段说明：
 | accountName | string | 账号名称 |
 | externalAccountId | string | 外部平台账号 ID |
 | balance | int | 账号剩余可用流量（MB） |
+| tags | array | 账号标签；无标签时返回空数组 |
 | credentialMasked | object | 脱敏后的凭证信息 |
 | timezone | string | 账号时区 |
 | enabled | int | 启用状态，1 启用 / 0 禁用 |
@@ -222,7 +225,8 @@ Body：
     "secret": "******"
   },
   "timezone": "Asia/Shanghai",
-  "enabled": 1
+  "enabled": 1,
+  "tags": ["总账号", "低余额"]
 }
 ```
 
@@ -244,13 +248,33 @@ Body（可选字段，必须包含 id）：
     "secret": "******"
   },
   "timezone": "Asia/Shanghai",
-  "enabled": 1
+  "enabled": 1,
+  "tags": ["总账号", "低余额"]
 }
 ```
 
 返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
 
-### 3.5 启用/禁用账号
+### 3.5 修改账号标签
+
+`POST /accounts/update-tags`
+
+Body：
+```json
+{
+  "id": 1,
+  "tags": ["总账号", "低余额"]
+}
+```
+
+说明：
+- `tags` 最多 20 个，每个标签最长 50 个字符。
+- 后端会 trim、移除空标签并去重。
+- 传 `tags: []` 表示清空标签。
+
+返回字段（data）：与「3.1 账号列表」的 `data[]` 单项字段一致。
+
+### 3.6 启用/禁用账号
 
 `POST /accounts/update-status`
 
@@ -269,7 +293,7 @@ Body：
 | --- | --- | --- |
 | data | bool | 操作结果，`true` 表示更新成功 |
 
-### 3.6 测试账号连接
+### 3.7 测试账号连接
 
 `POST /accounts/test`
 

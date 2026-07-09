@@ -17,6 +17,8 @@ class TrafficPlatformAccountIndexRequest extends FormRequest
             'platformCode' => 'nullable|string|max:50',
             'enabled' => 'nullable|integer|in:0,1',
             'keyword' => 'nullable|string|max:100',
+            'tags' => 'nullable|array|max:20',
+            'tags.*' => 'nullable|string|max:50',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
         ];
