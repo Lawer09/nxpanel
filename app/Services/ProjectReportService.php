@@ -2174,7 +2174,7 @@ class ProjectReportService
     }
 
     /**
-     * Calculate (current - previous) / previous; return null when previous is unavailable or zero.
+     * Calculate (current - previous) / ABS(previous); return null when previous is unavailable or zero.
      */
     private function calculateDayOverDayRatio(float $current, $previous): ?float
     {
@@ -2187,7 +2187,7 @@ class ProjectReportService
             return null;
         }
 
-        return ($current - $previous) / $previous;
+        return ($current - $previous) / abs($previous);
     }
 
     private function computeRos(float $adRevenue, int $installUsers, int $dauUsers, float $adSpendCost): ?string

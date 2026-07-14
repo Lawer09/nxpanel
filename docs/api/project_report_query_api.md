@@ -352,9 +352,9 @@ axios.post(url, payload, { responseType: 'blob' })
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| adRevenueDayOverDay | string/null | 广告收入相对昨日同口径的环比，计算公式为 `(今日广告收入 - 昨日广告收入) / 昨日广告收入` |
-| adSpendCostDayOverDay | string/null | 投放支出相对昨日同口径的环比，计算公式为 `(今日投放支出 - 昨日投放支出) / 昨日投放支出` |
-| profitDayOverDay | string/null | 利润相对昨日同口径的环比，计算公式为 `(今日利润 - 昨日利润) / 昨日利润` |
+| adRevenueDayOverDay | string/null | 广告收入相对昨日同口径的环比，计算公式为 `(今日广告收入 - 昨日广告收入) / ABS(昨日广告收入)` |
+| adSpendCostDayOverDay | string/null | 投放支出相对昨日同口径的环比，计算公式为 `(今日投放支出 - 昨日投放支出) / ABS(昨日投放支出)` |
+| profitDayOverDay | string/null | 利润相对昨日同口径的环比，计算公式为 `(今日利润 - 昨日利润) / ABS(昨日利润)` |
 
 计算口径：
 
@@ -365,6 +365,7 @@ axios.post(url, payload, { responseType: 'blob' })
 - 投放支出继续使用 `ad_spend_platform_daily_reports` 聚合口径，不使用 `project_daily_aggregates` 中已落库的投放字段。
 - 利润口径为 `adRevenue - adSpendCost - trafficCost`。
 - 昨日值不存在或昨日值为 `0` 时，环比字段返回 `null`，避免除零。
+- 分母统一使用昨日值的绝对值，避免利润为负数时出现方向相反的环比含义。
 - 返回值保留 6 位小数，`0.100000` 表示上涨 10%，`-0.100000` 表示下降 10%。
 
 性能说明：

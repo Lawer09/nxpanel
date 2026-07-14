@@ -981,3 +981,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `ProjectReportService` 中昨日指标批量查询、环比字段格式化和缓存 key 升级逻辑，并删除对应文档说明即可。
+
+## 2026-07-14 项目日报环比分母口径调整
+- 日期：2026-07-14
+- 变更摘要：项目日报 `adRevenueDayOverDay`、`adSpendCostDayOverDay`、`profitDayOverDay` 的环比计算统一调整为 `(当前值 - 昨日值) / ABS(昨日值)`，避免利润等指标昨日为负数时出现方向相反的业务含义；昨日值不存在或为 0 时仍返回 `null`。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将 `ProjectReportService::calculateDayOverDayRatio()` 的分母恢复为昨日值本身，并同步恢复文档说明即可。
