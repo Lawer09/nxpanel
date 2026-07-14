@@ -12,6 +12,8 @@ class ProjectReportService
 {
     private const QUERY_CACHE_TTL = 60;
 
+    private const QUERY_CACHE_VERSION_KEY = 'project_report:query_cache_version';
+
     private const RECENT_HOURLY_AD_MATCH_RATE_CACHE_TTL = 120;
 
     private const PROJECT_METADATA_COLUMNS = [
@@ -22,6 +24,16 @@ class ProjectReportService
     public function __construct(
         private readonly AdRevenueService $adRevenueService,
     ) {}
+
+    /**
+     * Invalidate cached project report query results after manual aggregation.
+     */
+    public function refreshQueryCache(): void
+    {
+        $currentVersion = (int) Cache::get(self::QUERY_CACHE_VERSION_KEY, 1);
+
+        Cache::forever(self::QUERY_CACHE_VERSION_KEY, $currentVersion + 1);
+    }
 
     /**
      * Query project daily aggregate report.
@@ -501,8 +513,9 @@ class ProjectReportService
     {
         $normalized = $this->normalizeCacheValue($params);
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $version = (int) Cache::get(self::QUERY_CACHE_VERSION_KEY, 1);
 
-        return sprintf('project_report:%s_query:v11:%s', $scope, md5((string) $payload));
+        return sprintf('project_report:%s_query:v11:%d:%s', $scope, $version, md5((string) $payload));
     }
 
     /**

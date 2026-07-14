@@ -308,3 +308,10 @@ $schedule->command('project:prune-hourly --days=30')->dailyAt('0:30')->onOneServ
 | adRequests | int | 当前项目、当前小时的广告请求数合计 |
 | adMatchedRequests | int | 当前项目、当前小时的广告匹配请求数合计 |
 | adMatchRate | string/null | 广告匹配率百分比，保留 6 位小数；请求数为 0 时返回 `null` |
+
+## 手动项目聚合接口运行态说明
+
+- `POST /api/v3/admin/{securePath}/projects/aggregate` 和 `POST /api/v3/admin/{securePath}/projects/aggregate-hourly` 会在 HTTP 请求内同步调用 Artisan 命令。
+- 为避免 Octane/常驻 Worker 的数据库连接状态影响命令执行，接口在调用命令前后会回滚残留事务、断开并重连默认数据库连接，使运行状态更接近 CLI 手动执行。
+- 命令执行成功后会刷新项目报表查询缓存版本，避免项目日报/小时报表 JSON 查询在 60 秒缓存期内继续返回聚合前的旧数据。
+- 该调整不改变请求参数、响应结构和聚合命令本身的计算口径。

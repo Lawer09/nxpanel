@@ -967,3 +967,10 @@
 - 影响范围：`app/Http/Requests/Admin/ProjectHourlyAdMatchRateRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Request、Controller 方法、路由、`ProjectReportService::queryHourlyAdMatchRate()` 以及对应文档说明即可回滚。
+
+## 2026-07-14 项目手动聚合接口运行态修复
+- 日期：2026-07-14
+- 变更摘要：修复管理端 `/projects/aggregate` 与 `/projects/aggregate-hourly` 在 HTTP/Octane 常驻进程中调用 Artisan 时可能与 CLI 行为不一致的问题；接口调用聚合命令前后会重置数据库运行态，并在命令成功后刷新项目报表查询缓存版本，避免手动聚合后日报/小时报表查询继续命中旧缓存。
+- 影响范围：`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Services/ProjectReportService.php`、`docs/api/project_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `ProjectController` 直接调用 `Artisan::call()` 的旧逻辑，并移除 `ProjectReportService` 查询缓存版本刷新逻辑及对应文档说明即可。

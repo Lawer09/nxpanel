@@ -14,11 +14,13 @@ use App\Http\Requests\Admin\ProjectSaveRequest;
 use App\Http\Requests\Admin\ProjectUpdateRequest;
 use App\Http\Requests\Admin\ProjectUpdateStatusRequest;
 use App\Http\Resources\ProjectResource;
+use App\Services\ProjectReportService;
 use App\Services\ProjectService;
 use App\Jobs\AggregateProjectDailyJob;
 use Illuminate\Http\JsonResponse;
 use App\Exceptions\BusinessException;
 use App\Http\Requests\Admin\IdRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Artisan;
@@ -27,6 +29,7 @@ class ProjectController extends Controller
 {
     public function __construct(
         protected ProjectService $projectService,
+        protected ProjectReportService $projectReportService,
     ) {}
 
     public function index(ProjectFetchRequest $request): JsonResponse
@@ -165,7 +168,10 @@ class ProjectController extends Controller
                 $arguments['--project-id'] = $projectId;
             }
 
-            $exitCode = Artisan::call('project:aggregate-daily', $arguments);
+            $exitCode = $this->callArtisanWithFreshDatabase('project:aggregate-daily', $arguments);
+            if ($exitCode === 0) {
+                $this->projectReportService->refreshQueryCache();
+            }
 
             return $this->ok([
                 'success' => $exitCode === 0,
@@ -205,7 +211,10 @@ class ProjectController extends Controller
                 $arguments['--hour-to'] = (int) $params['hourTo'];
             }
 
-            $exitCode = Artisan::call('project:aggregate-hourly', $arguments);
+            $exitCode = $this->callArtisanWithFreshDatabase('project:aggregate-hourly', $arguments);
+            if ($exitCode === 0) {
+                $this->projectReportService->refreshQueryCache();
+            }
 
             return $this->ok([
                 'success' => $exitCode === 0,
@@ -250,5 +259,32 @@ class ProjectController extends Controller
             Log::error('ProjectAggregate aggregateAsync error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
+    }
+
+    /**
+     * Run aggregation commands from HTTP with a clean DB state, matching CLI behavior more closely.
+     */
+    private function callArtisanWithFreshDatabase(string $command, array $arguments): int
+    {
+        $this->resetArtisanDatabaseState();
+
+        try {
+            return Artisan::call($command, $arguments);
+        } finally {
+            $this->resetArtisanDatabaseState();
+        }
+    }
+
+    /**
+     * Reset lingering DB state before/after Artisan calls in long-lived workers.
+     */
+    private function resetArtisanDatabaseState(): void
+    {
+        while (DB::transactionLevel() > 0) {
+            DB::rollBack();
+        }
+
+        DB::purge();
+        DB::reconnect();
     }
 }
