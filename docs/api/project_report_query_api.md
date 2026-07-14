@@ -345,3 +345,31 @@ axios.post(url, payload, { responseType: 'blob' })
 - `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前筛选范围中排除指定项目或国家。
 - 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
 - 日报 JSON、`summary`、`topRevenueCountries` 和 CSV 导出均使用相同排除筛选口径。
+
+## 广告收入、投放支出、利润环比字段
+
+项目日报 JSON 查询新增以下字段，`summary` 与 `data[]` 行均返回：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| adRevenueDayOverDay | string/null | 广告收入相对昨日同口径的环比，计算公式为 `(今日广告收入 - 昨日广告收入) / 昨日广告收入` |
+| adSpendCostDayOverDay | string/null | 投放支出相对昨日同口径的环比，计算公式为 `(今日投放支出 - 昨日投放支出) / 昨日投放支出` |
+| profitDayOverDay | string/null | 利润相对昨日同口径的环比，计算公式为 `(今日利润 - 昨日利润) / 昨日利润` |
+
+计算口径：
+
+- 昨日同口径会沿用当前查询的 `filters.projectCodes`、`filters.countries`、`filters.exclude`、`filters.adStatuses`、`filters.appPlatforms`、`filters.departments`。
+- 当返回行包含 `reportDate` 时，比较该行日期的前一天；例如 `2026-07-14` 比较 `2026-07-13`。
+- 当返回行不包含 `reportDate` 时，比较整个查询日期范围向前平移 1 天后的同口径数据；例如 `2026-07-10 ~ 2026-07-14` 比较 `2026-07-09 ~ 2026-07-13`。
+- 当返回行包含 `projectCode` 或 `country` 时，昨日数据按相同项目或国家维度匹配；未包含的维度按当前筛选范围整体聚合。
+- 投放支出继续使用 `ad_spend_platform_daily_reports` 聚合口径，不使用 `project_daily_aggregates` 中已落库的投放字段。
+- 利润口径为 `adRevenue - adSpendCost - trafficCost`。
+- 昨日值不存在或昨日值为 `0` 时，环比字段返回 `null`，避免除零。
+- 返回值保留 6 位小数，`0.100000` 表示上涨 10%，`-0.100000` 表示下降 10%。
+
+性能说明：
+
+- `data[]` 行级环比不会逐行查询数据库；服务端会根据当前页实际出现的日期、项目代号、国家集合批量查询昨日指标。
+- `summary` 环比单独执行一次昨日全量汇总，不受分页影响。
+- 项目日报 JSON 查询缓存 key 已升级，避免旧缓存缺少新增字段。
+- CSV 导出暂不新增环比列。

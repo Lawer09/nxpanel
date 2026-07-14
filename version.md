@@ -974,3 +974,10 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Services/ProjectReportService.php`、`docs/api/project_api.md`、`docs/api/project_report_hourly_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `ProjectController` 直接调用 `Artisan::call()` 的旧逻辑，并移除 `ProjectReportService` 查询缓存版本刷新逻辑及对应文档说明即可。
+
+## 2026-07-14 项目日报环比字段
+- 日期：2026-07-14
+- 变更摘要：项目日报 JSON 查询在 `data[]` 与 `summary` 中新增 `adRevenueDayOverDay`、`adSpendCostDayOverDay`、`profitDayOverDay`，分别表示广告收入、投放支出和利润相对昨日同口径的环比；行级环比按当前页维度批量查询昨日指标，summary 单独计算昨日全量汇总，项目报表查询缓存 key 升级到 v12。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ProjectReportService` 中昨日指标批量查询、环比字段格式化和缓存 key 升级逻辑，并删除对应文档说明即可。
