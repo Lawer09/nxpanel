@@ -352,25 +352,27 @@ axios.post(url, payload, { responseType: 'blob' })
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| adRevenueDayOverDay | string/null | 广告收入相对昨日同口径的环比，计算公式为 `(今日广告收入 - 昨日广告收入) / ABS(昨日广告收入)` |
-| adSpendCostDayOverDay | string/null | 投放支出相对昨日同口径的环比，计算公式为 `(今日投放支出 - 昨日投放支出) / ABS(昨日投放支出)` |
-| profitDayOverDay | string/null | 利润相对昨日同口径的环比，计算公式为 `(今日利润 - 昨日利润) / ABS(昨日利润)` |
+| adRevenueDayOverDay | string/null | 广告收入相对昨日同时间累计口径的环比，计算公式为 `(当前累计广告收入 - 昨日同时间累计广告收入) / ABS(昨日同时间累计广告收入)` |
+| adSpendCostDayOverDay | string/null | 投放支出相对昨日同时间累计口径的环比，计算公式为 `(当前累计投放支出 - 昨日同时间累计投放支出) / ABS(昨日同时间累计投放支出)` |
+| profitDayOverDay | string/null | 利润相对昨日同时间累计口径的环比，计算公式为 `(当前累计利润 - 昨日同时间累计利润) / ABS(昨日同时间累计利润)` |
 
 计算口径：
 
 - 昨日同口径会沿用当前查询的 `filters.projectCodes`、`filters.countries`、`filters.exclude`、`filters.adStatuses`、`filters.appPlatforms`、`filters.departments`。
+- 环比数据来源为 `project_report_hourly`，按 Asia/Shanghai 当前时间取上一完整小时作为截止小时，累计小时范围为 `0 ~ 上一完整小时`。
+- 例如当前时间为 `10:xx`，则只累计 `0 ~ 9` 点小时数据，并与前一天 `0 ~ 9` 点小时数据比较；当前小时 `10` 会被忽略。
+- 当前时间为 `00:xx` 时，当天没有上一完整小时，环比字段返回 `null`。
 - 当返回行包含 `reportDate` 时，比较该行日期的前一天；例如 `2026-07-14` 比较 `2026-07-13`。
 - 当返回行不包含 `reportDate` 时，比较整个查询日期范围向前平移 1 天后的同口径数据；例如 `2026-07-10 ~ 2026-07-14` 比较 `2026-07-09 ~ 2026-07-13`。
 - 当返回行包含 `projectCode` 或 `country` 时，昨日数据按相同项目或国家维度匹配；未包含的维度按当前筛选范围整体聚合。
-- 投放支出继续使用 `ad_spend_platform_daily_reports` 聚合口径，不使用 `project_daily_aggregates` 中已落库的投放字段。
-- 利润口径为 `adRevenue - adSpendCost - trafficCost`。
-- 昨日值不存在或昨日值为 `0` 时，环比字段返回 `null`，避免除零。
+- 投放支出、广告收入和利润均使用 `project_report_hourly` 的小时聚合字段累计；小时表中的投放数据来自小时投放同步与项目小时聚合。
+- 昨日同时间累计值不存在或为 `0` 时，环比字段返回 `null`，避免除零。
 - 分母统一使用昨日值的绝对值，避免利润为负数时出现方向相反的环比含义。
 - 返回值保留 6 位小数，`0.100000` 表示上涨 10%，`-0.100000` 表示下降 10%。
 
 性能说明：
 
-- `data[]` 行级环比不会逐行查询数据库；服务端会根据当前页实际出现的日期、项目代号、国家集合批量查询昨日指标。
-- `summary` 环比单独执行一次昨日全量汇总，不受分页影响。
+- `data[]` 行级环比不会逐行查询数据库；服务端会根据当前页实际出现的日期、项目代号、国家集合批量查询当前累计和昨日同时间累计指标。
+- `summary` 环比单独执行当前筛选范围的小时累计汇总，不受分页影响。
 - 项目日报 JSON 查询缓存 key 已升级，避免旧缓存缺少新增字段。
 - CSV 导出暂不新增环比列。

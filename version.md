@@ -988,3 +988,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将 `ProjectReportService::calculateDayOverDayRatio()` 的分母恢复为昨日值本身，并同步恢复文档说明即可。
+
+## 2026-07-15 项目日报环比同时间累计口径
+- 日期：2026-07-15
+- 变更摘要：项目日报 JSON 查询中的 `adRevenueDayOverDay`、`adSpendCostDayOverDay`、`profitDayOverDay` 改为基于 `project_report_hourly` 按 Asia/Shanghai 上一完整小时累计计算，比较当前筛选日期范围 `0~上一完整小时` 与前一天同小时范围的数据；当前小时被忽略，0 点无完整小时则返回 `null`。项目报表查询缓存 key 升级到 v13，避免旧环比缓存混用。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复环比查询为 `project_daily_aggregates` 与 `ad_spend_platform_daily_reports` 的整日昨日口径，并将缓存 key 和文档说明回退即可。

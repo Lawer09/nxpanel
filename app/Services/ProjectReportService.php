@@ -517,7 +517,7 @@ class ProjectReportService
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $version = (int) Cache::get(self::QUERY_CACHE_VERSION_KEY, 1);
 
-        return sprintf('project_report:%s_query:v12:%d:%s', $scope, $version, md5((string) $payload));
+        return sprintf('project_report:%s_query:v13:%d:%s', $scope, $version, md5((string) $payload));
     }
 
     /**
@@ -539,6 +539,10 @@ class ProjectReportService
         if ($scope === 'hourly') {
             $params['hourFrom'] = isset($validated['hourFrom']) ? (int) $validated['hourFrom'] : null;
             $params['hourTo'] = isset($validated['hourTo']) ? (int) $validated['hourTo'] : null;
+        } else {
+            $now = now('Asia/Shanghai');
+            $params['dayOverDayHourBucket'] = $now->format('YmdH');
+            $params['dayOverDayHourTo'] = $this->currentDayOverDayHourTo($now);
         }
 
         return $params;
@@ -607,6 +611,9 @@ class ProjectReportService
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
         $orderBy = $validated['orderBy'] ?? null;
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
+        $dayOverDayHourTo = array_key_exists('dayOverDayHourTo', $validated)
+            ? $validated['dayOverDayHourTo']
+            : $this->currentDayOverDayHourTo();
 
         $dimensionMap = [
             'reportDate' => 'project_daily_aggregates.report_date',
@@ -707,6 +714,7 @@ class ProjectReportService
                 'filters' => $filters,
                 'requestedGroupBy' => $requestedGroupBy,
                 'groupDimensions' => [],
+                'dayOverDayHourTo' => $dayOverDayHourTo,
             ];
         }
 
@@ -778,6 +786,7 @@ class ProjectReportService
             'filters' => $filters,
             'requestedGroupBy' => $requestedGroupBy,
             'groupDimensions' => $groupDimensions,
+            'dayOverDayHourTo' => $dayOverDayHourTo,
             'includeLimitState' => in_array('projectCode', $groupDimensions, true),
             'includeRecentHourlyAdMatchRates' => in_array('projectCode', $groupDimensions, true),
             'includeProjectAppInfos' => in_array('projectCode', $groupDimensions, true),
@@ -870,7 +879,7 @@ class ProjectReportService
         $adRevenueDiff = $adRevenueNow === null
             ? null
             : $adRevenueNow - (float) ($row->ad_revenue ?? 0);
-        $previousMetrics = $this->buildDailySummaryPreviousMetrics($definition);
+        $dayOverDayMetrics = $this->buildDailySummaryDayOverDayMetrics($definition);
 
         return [
             'newUsers' => (int) ($row->new_users ?? 0),
@@ -881,7 +890,10 @@ class ProjectReportService
             'adRevenue' => $this->formatDecimal($row->ad_revenue ?? null),
             'adRevenueNow' => $this->formatDecimal($adRevenueNow),
             'adRevenueDiff' => $this->formatDecimal($adRevenueDiff),
-            'adRevenueDayOverDay' => $this->dayOverDayRatio($adRevenue, $previousMetrics['ad_revenue'] ?? null),
+            'adRevenueDayOverDay' => $this->dayOverDayRatio(
+                $dayOverDayMetrics['current']['ad_revenue'] ?? null,
+                $dayOverDayMetrics['previous']['ad_revenue'] ?? null
+            ),
             'adRequests' => (int) ($row->ad_requests ?? 0),
             'adMatchedRequests' => (int) ($row->ad_matched_requests ?? 0),
             'adImpressions' => (int) ($row->ad_impressions ?? 0),
@@ -893,7 +905,10 @@ class ProjectReportService
             'impressionsPerUser' => $this->ratio((float) ($row->ad_impressions ?? 0), (float) ($row->dau_users ?? 0)),
             'arpu' => $this->ratio((float) ($row->ad_revenue ?? 0), (float) ($row->dau_users ?? 0)),
             'adSpendCost' => $this->formatDecimal($adSpendCost),
-            'adSpendCostDayOverDay' => $this->dayOverDayRatio($adSpendCost, $previousMetrics['ad_spend_cost'] ?? null),
+            'adSpendCostDayOverDay' => $this->dayOverDayRatio(
+                $dayOverDayMetrics['current']['ad_spend_cost'] ?? null,
+                $dayOverDayMetrics['previous']['ad_spend_cost'] ?? null
+            ),
             'adSpendCpi' => $this->formatDecimal($newUsers === 0 ? null : $adSpendCost / $newUsers),
             'adSpendCpc' => $this->formatDecimal($adSpendClicks === 0 ? null : $adSpendCost / $adSpendClicks),
             'adSpendCpm' => $this->formatDecimal($adSpendImpressions === 0 ? null : $adSpendCost * 1000 / $adSpendImpressions),
@@ -902,28 +917,36 @@ class ProjectReportService
             'totalCost' => $this->formatDecimal($totalCost),
             'trafficCostRatio' => $this->formatDecimal($totalCost == 0.0 ? null : $trafficCost / $totalCost),
             'profit' => $this->formatDecimal($profit),
-            'profitDayOverDay' => $this->dayOverDayRatio($profit, $previousMetrics['profit'] ?? null),
+            'profitDayOverDay' => $this->dayOverDayRatio(
+                $dayOverDayMetrics['current']['profit'] ?? null,
+                $dayOverDayMetrics['previous']['profit'] ?? null
+            ),
             'roi' => $this->formatDecimal($totalCost == 0.0 ? null : $adRevenue / $totalCost),
             'updatedAt' => $row->updated_at ?? null,
         ];
     }
 
     /**
-     * Build previous-day summary metrics using the same filters and spend-source semantics.
+     * Build summary comparison metrics from project_report_hourly up to the previous complete hour.
      */
-    private function buildDailySummaryPreviousMetrics(array $definition): array
+    private function buildDailySummaryDayOverDayMetrics(array $definition): array
     {
-        $rows = $this->queryDailyPreviousMetrics($definition, false, false, false);
-        $row = $rows->first();
+        $hourTo = $definition['dayOverDayHourTo'] ?? null;
+        if ($hourTo === null) {
+            return [];
+        }
+        $hourTo = (int) $hourTo;
 
-        if ($row === null) {
+        $currentRow = $this->queryDailyHourlyDayOverDayMetrics($definition, false, false, false, false, [], $hourTo)->first();
+        $previousRow = $this->queryDailyHourlyDayOverDayMetrics($definition, false, false, false, true, [], $hourTo)->first();
+
+        if ($previousRow === null) {
             return [];
         }
 
         return [
-            'ad_revenue' => (float) ($row->ad_revenue ?? 0),
-            'ad_spend_cost' => (float) ($row->ad_spend_cost ?? 0),
-            'profit' => (float) ($row->profit ?? 0),
+            'current' => $this->extractDailyDayOverDayMetrics($currentRow),
+            'previous' => $this->extractDailyDayOverDayMetrics($previousRow),
         ];
     }
 
@@ -1056,7 +1079,7 @@ class ProjectReportService
     }
 
     /**
-     * Attach previous-day ratios for revenue, spend and profit without per-row queries.
+     * Attach previous-day ratios from hourly cumulative metrics without per-row queries.
      */
     private function applyDailyDayOverDayMetrics($rows, array $definition): void
     {
@@ -1064,25 +1087,50 @@ class ProjectReportService
             return;
         }
 
+        $hourTo = $definition['dayOverDayHourTo'] ?? null;
+        if ($hourTo === null) {
+            foreach ($rows as $row) {
+                $this->attachDailyDayOverDayMetricValues($row, null, null);
+            }
+
+            return;
+        }
+        $hourTo = (int) $hourTo;
+
         $groupDimensions = $definition['groupDimensions'] ?? [];
         $grouped = (bool) ($definition['grouped'] ?? false);
         $includeDate = !$grouped || in_array('reportDate', $groupDimensions, true);
         $includeProject = !$grouped || in_array('projectCode', $groupDimensions, true);
         $includeCountry = !$grouped || in_array('country', $groupDimensions, true);
+        $constraints = $this->buildDailyDayOverDayPageConstraints($rows, $includeDate, $includeProject, $includeCountry);
 
-        $previousRows = $this->queryDailyPreviousMetrics(
+        $currentRows = $this->queryDailyHourlyDayOverDayMetrics(
             $definition,
             $includeDate,
             $includeProject,
             $includeCountry,
-            $this->buildDailyDayOverDayPageConstraints($rows, $includeDate, $includeProject, $includeCountry)
+            false,
+            $constraints,
+            $hourTo
         );
-        if ($previousRows->isEmpty()) {
-            foreach ($rows as $row) {
-                $this->attachDailyDayOverDayMetricValues($row, null);
-            }
+        $previousRows = $this->queryDailyHourlyDayOverDayMetrics(
+            $definition,
+            $includeDate,
+            $includeProject,
+            $includeCountry,
+            true,
+            $constraints,
+            $hourTo
+        );
 
-            return;
+        $currentByKey = [];
+        foreach ($currentRows as $currentRow) {
+            $key = $this->makeDailyDayOverDayKey(
+                $includeDate ? ($currentRow->report_date ?? null) : null,
+                $includeProject ? ($currentRow->project_code ?? null) : null,
+                $includeCountry ? ($currentRow->country ?? null) : null
+            );
+            $currentByKey[$key] = $currentRow;
         }
 
         $previousByKey = [];
@@ -1105,78 +1153,80 @@ class ProjectReportService
                 $includeProject ? ($row->project_code ?? null) : null,
                 $includeCountry ? ($row->country ?? null) : null
             );
-            $this->attachDailyDayOverDayMetricValues($row, $previousByKey[$key] ?? null);
+            $this->attachDailyDayOverDayMetricValues($row, $currentByKey[$key] ?? null, $previousByKey[$key] ?? null);
         }
     }
 
     /**
-     * Query previous-day metrics using the same filters as the current daily report.
+     * Query current or previous-day hourly cumulative metrics using daily report filters.
      */
-    private function queryDailyPreviousMetrics(
+    private function queryDailyHourlyDayOverDayMetrics(
         array $definition,
         bool $includeDate,
         bool $includeProject,
         bool $includeCountry,
-        array $constraints = []
+        bool $previous,
+        array $constraints,
+        int $hourTo
     ) {
-        $previousDateFrom = Carbon::parse((string) $definition['dateFrom'])->subDay()->toDateString();
-        $previousDateTo = Carbon::parse((string) $definition['dateTo'])->subDay()->toDateString();
+        $dateFrom = Carbon::parse((string) $definition['dateFrom']);
+        $dateTo = Carbon::parse((string) $definition['dateTo']);
+        if ($previous) {
+            $dateFrom->subDay();
+            $dateTo->subDay();
+        }
+
         $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : [];
+        $countryExpression = $this->normalizedCountrySql('project_report_hourly.country');
 
-        $baseQuery = DB::table('project_daily_aggregates')
-            ->where('project_daily_aggregates.report_date', '>=', $previousDateFrom)
-            ->where('project_daily_aggregates.report_date', '<=', $previousDateTo);
+        $query = DB::table('project_report_hourly')
+            ->where('project_report_hourly.report_date', '>=', $dateFrom->toDateString())
+            ->where('project_report_hourly.report_date', '<=', $dateTo->toDateString())
+            ->whereBetween('project_report_hourly.hour', [0, $hourTo]);
 
-        if (!empty($constraints['previousDates'])) {
-            $baseQuery->whereIn('project_daily_aggregates.report_date', $constraints['previousDates']);
+        $dateConstraintKey = $previous ? 'previousDates' : 'currentDates';
+        if (!empty($constraints[$dateConstraintKey])) {
+            $query->whereIn('project_report_hourly.report_date', $constraints[$dateConstraintKey]);
         }
         if (!empty($constraints['projectCodes'])) {
-            $baseQuery->whereIn('project_daily_aggregates.project_code', $constraints['projectCodes']);
+            $query->whereIn('project_report_hourly.project_code', $constraints['projectCodes']);
         }
         if (!empty($constraints['countries'])) {
-            $baseQuery->whereIn('project_daily_aggregates.country', $constraints['countries']);
+            $query->whereIn(DB::raw($countryExpression), $constraints['countries']);
         }
 
-        $this->applyProjectCodeCountryFilters($baseQuery, 'project_daily_aggregates.project_code', 'project_daily_aggregates.country', $filters);
-        $this->applyProjectAdStatusFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
-        $this->applyProjectAppPlatformFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
-        $this->applyProjectDepartmentFilter($baseQuery, 'project_daily_aggregates.project_code', $filters);
-
-        $this->joinDailySpendMetrics(
-            $baseQuery,
-            $this->buildDailySpendMetricSubquery(
-                $previousDateFrom,
-                $previousDateTo,
-                $this->mergeDailyDayOverDaySpendFilters($filters, $constraints)
-            )
-        );
+        $this->applyProjectCodeCountryFilters($query, 'project_report_hourly.project_code', DB::raw($countryExpression), $filters);
+        $this->applyProjectAdStatusFilter($query, 'project_report_hourly.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($query, 'project_report_hourly.project_code', $filters);
+        $this->applyProjectDepartmentFilter($query, 'project_report_hourly.project_code', $filters);
 
         if ($includeDate) {
-            $baseQuery->selectRaw('project_daily_aggregates.report_date as report_date')
-                ->groupBy('project_daily_aggregates.report_date');
+            $query->selectRaw('project_report_hourly.report_date as report_date')
+                ->groupBy('project_report_hourly.report_date');
         }
         if ($includeProject) {
-            $baseQuery->selectRaw('project_daily_aggregates.project_code as project_code')
-                ->groupBy('project_daily_aggregates.project_code');
+            $query->selectRaw('project_report_hourly.project_code as project_code')
+                ->groupBy('project_report_hourly.project_code');
         }
         if ($includeCountry) {
-            $baseQuery->selectRaw('project_daily_aggregates.country as country')
-                ->groupBy('project_daily_aggregates.country');
+            $query->selectRaw($countryExpression . ' as country')
+                ->groupBy(DB::raw($countryExpression));
         }
 
-        return $baseQuery
-            ->selectRaw('SUM(project_daily_aggregates.ad_revenue) as ad_revenue')
-            ->selectRaw('COALESCE(SUM(spend_metrics.ad_spend_cost), 0) as ad_spend_cost')
-            ->selectRaw('(SUM(project_daily_aggregates.ad_revenue) - COALESCE(SUM(spend_metrics.ad_spend_cost), 0) - SUM(project_daily_aggregates.traffic_cost)) as profit')
+        return $query
+            ->selectRaw('COALESCE(SUM(project_report_hourly.ad_revenue), 0) as ad_revenue')
+            ->selectRaw('COALESCE(SUM(project_report_hourly.ad_spend_cost), 0) as ad_spend_cost')
+            ->selectRaw('COALESCE(SUM(project_report_hourly.profit), 0) as profit')
             ->get();
     }
 
     /**
-     * Limit previous-day row lookups to dimensions visible on the current page.
+     * Limit hourly comparison lookups to dimensions visible on the current page.
      */
     private function buildDailyDayOverDayPageConstraints($rows, bool $includeDate, bool $includeProject, bool $includeCountry): array
     {
         $constraints = [
+            'currentDates' => [],
             'previousDates' => [],
             'projectCodes' => [],
             'countries' => [],
@@ -1184,7 +1234,9 @@ class ProjectReportService
 
         foreach ($rows as $row) {
             if ($includeDate && isset($row->report_date)) {
-                $constraints['previousDates'][] = Carbon::parse((string) $row->report_date)->subDay()->toDateString();
+                $currentDate = Carbon::parse((string) $row->report_date);
+                $constraints['currentDates'][] = $currentDate->toDateString();
+                $constraints['previousDates'][] = $currentDate->copy()->subDay()->toDateString();
             }
             if ($includeProject) {
                 $projectCode = trim((string) ($row->project_code ?? ''));
@@ -1198,6 +1250,7 @@ class ProjectReportService
         }
 
         return [
+            'currentDates' => array_values(array_unique($constraints['currentDates'])),
             'previousDates' => array_values(array_unique($constraints['previousDates'])),
             'projectCodes' => array_values(array_unique($constraints['projectCodes'])),
             'countries' => array_values(array_unique($constraints['countries'])),
@@ -1205,44 +1258,36 @@ class ProjectReportService
     }
 
     /**
-     * Push page-level project/country constraints into the spend subquery.
+     * Extract the three metrics used by day-over-day calculations.
      */
-    private function mergeDailyDayOverDaySpendFilters(array $filters, array $constraints): array
+    private function extractDailyDayOverDayMetrics(?object $row): array
     {
-        if (!empty($constraints['projectCodes'])) {
-            $filters['projectCodes'] = empty($filters['projectCodes'] ?? [])
-                ? $constraints['projectCodes']
-                : array_values(array_intersect($this->normalizeStringList($filters['projectCodes']), $constraints['projectCodes']));
-        }
-
-        if (!empty($constraints['countries'])) {
-            $filters['countries'] = empty($filters['countries'] ?? [])
-                ? $constraints['countries']
-                : array_values(array_intersect(
-                    array_map(static fn ($country) => strtoupper($country), $this->normalizeStringList($filters['countries'])),
-                    $constraints['countries']
-                ));
-        }
-
-        return $filters;
+        return [
+            'ad_revenue' => $row === null ? 0.0 : (float) ($row->ad_revenue ?? 0),
+            'ad_spend_cost' => $row === null ? 0.0 : (float) ($row->ad_spend_cost ?? 0),
+            'profit' => $row === null ? 0.0 : (float) ($row->profit ?? 0),
+        ];
     }
 
     /**
      * Attach formatted day-over-day ratio values to one report row.
      */
-    private function attachDailyDayOverDayMetricValues(object $row, ?object $previousRow): void
+    private function attachDailyDayOverDayMetricValues(object $row, ?object $currentRow, ?object $previousRow): void
     {
+        $current = $this->extractDailyDayOverDayMetrics($currentRow);
+        $previous = $previousRow === null ? null : $this->extractDailyDayOverDayMetrics($previousRow);
+
         $row->ad_revenue_day_over_day = $this->calculateDayOverDayRatio(
-            (float) ($row->ad_revenue ?? 0),
-            $previousRow === null ? null : (float) ($previousRow->ad_revenue ?? 0)
+            $current['ad_revenue'],
+            $previous['ad_revenue'] ?? null
         );
         $row->ad_spend_cost_day_over_day = $this->calculateDayOverDayRatio(
-            (float) ($row->ad_spend_cost ?? 0),
-            $previousRow === null ? null : (float) ($previousRow->ad_spend_cost ?? 0)
+            $current['ad_spend_cost'],
+            $previous['ad_spend_cost'] ?? null
         );
         $row->profit_day_over_day = $this->calculateDayOverDayRatio(
-            (float) ($row->profit ?? 0),
-            $previousRow === null ? null : (float) ($previousRow->profit ?? 0)
+            $current['profit'],
+            $previous['profit'] ?? null
         );
     }
 
@@ -2168,9 +2213,23 @@ class ProjectReportService
     /**
      * Format a day-over-day ratio from current and previous values.
      */
-    private function dayOverDayRatio(float $current, $previous): ?string
+    private function dayOverDayRatio($current, $previous): ?string
     {
+        if ($current === null || $current === '') {
+            return null;
+        }
+
         return $this->formatDecimal($this->calculateDayOverDayRatio($current, $previous));
+    }
+
+    /**
+     * Get the last complete Asia/Shanghai hour for same-time day-over-day comparisons.
+     */
+    private function currentDayOverDayHourTo(?Carbon $now = null): ?int
+    {
+        $hour = (int) ($now ?? now('Asia/Shanghai'))->format('G');
+
+        return $hour === 0 ? null : $hour - 1;
     }
 
     /**
