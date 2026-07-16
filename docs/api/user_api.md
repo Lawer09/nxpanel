@@ -186,6 +186,28 @@ POST /api/v3/admin/user/generate
 
 ---
 
+## 按筛选条件封禁用户
+
+`POST /api/v3/admin/user/ban`
+
+该接口按用户列表通用 `filter` 条件批量将匹配用户的 `banned` 更新为 `1`。
+
+### 请求示例
+
+```json
+POST /api/v3/admin/user/ban
+{
+    "filter": [
+        {"id": "id", "value": "1133821"},
+        {"id": "id", "value": "1133459"}
+    ]
+}
+```
+
+说明：当 `filter` 中包含多个 `id` 条件时，服务端会按精确 ID 合并为 `WHERE id IN (...)`，避免多个不同 ID 被按 `AND` 条件组合导致没有用户命中。
+
+---
+
 ## 批量封禁用户并记录注册 IP
 
 `POST /api/v3/admin/user/batchBan`

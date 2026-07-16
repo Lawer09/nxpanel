@@ -145,6 +145,26 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
+    public function test_admin_ban_can_match_multiple_id_filters(): void
+    {
+        $admin = $this->createUser('admin-ban@example.com', ['is_admin' => 1]);
+        $firstUser = $this->createUser('ban-first@example.com');
+        $secondUser = $this->createUser('ban-second@example.com');
+        $keptUser = $this->createUser('ban-kept@example.com');
+
+        $this->postJson($this->adminUserUri('ban'), [
+            'filter' => [
+                ['id' => 'id', 'value' => (string) $firstUser->id],
+                ['id' => 'id', 'value' => (string) $secondUser->id],
+            ],
+        ], $this->adminHeaders($admin))->assertOk()
+            ->assertJsonPath('data', true);
+
+        $this->assertTrue((bool) $firstUser->refresh()->banned);
+        $this->assertTrue((bool) $secondUser->refresh()->banned);
+        $this->assertFalse((bool) $keptUser->refresh()->banned);
+    }
+
     public function test_admin_user_fetch_can_filter_by_banned_status(): void
     {
         $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);

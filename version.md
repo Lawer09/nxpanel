@@ -995,3 +995,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复环比查询为 `project_daily_aggregates` 与 `ad_spend_platform_daily_reports` 的整日昨日口径，并将缓存 key 和文档说明回退即可。
+
+## 2026-07-16 用户封禁多 ID 筛选修复
+- 日期：2026-07-16
+- 变更摘要：修复 V3 管理端 `POST /api/v3/{secure_path}/user/ban` 在 `filter` 中传入多个 `id` 条件时被组合为互斥 `AND` 条件导致未封禁任何用户的问题；现在会将多个精确 ID 筛选合并为 `WHERE id IN (...)`，其余筛选条件仍沿用原通用筛选逻辑。
+- 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `UserController::applyBanIdFilters()` 调用和方法，并删除对应测试与文档说明即可。

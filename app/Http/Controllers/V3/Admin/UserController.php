@@ -196,6 +196,7 @@ class UserController extends V2UserController
         $sortType = in_array($request->input('sort_type'), ['ASC', 'DESC']) ? $request->input('sort_type') : 'DESC';
         $sort     = $request->input('sort') ?: 'created_at';
         $builder  = User::orderBy($sort, $sortType);
+        $this->applyBanIdFilters($request, $builder);
         $this->applyFiltersPublic($request, $builder);
         try {
             $builder->update(['banned' => 1]);
@@ -790,6 +791,45 @@ class UserController extends V2UserController
         $ref = new \ReflectionMethod(V2UserController::class, 'applyFilters');
         $ref->setAccessible(true);
         $ref->invoke($this, $request, $builder);
+    }
+
+    /**
+     * Merge repeated id filters into a single exact ID scope for the ban action.
+     */
+    protected function applyBanIdFilters(Request $request, Builder $builder): void
+    {
+        $filters = collect((array) $request->input('filter', []));
+        if ($filters->isEmpty()) {
+            return;
+        }
+
+        $userIds = [];
+        $remainingFilters = [];
+
+        foreach ($filters as $filter) {
+            if (!is_array($filter) || ($filter['id'] ?? null) !== 'id' || !array_key_exists('value', $filter)) {
+                $remainingFilters[] = $filter;
+                continue;
+            }
+
+            $values = is_array($filter['value']) ? $filter['value'] : explode(',', (string) $filter['value']);
+            foreach ($values as $value) {
+                $value = trim((string) $value);
+                if ($value === '' || !ctype_digit($value)) {
+                    $remainingFilters[] = $filter;
+                    continue 2;
+                }
+
+                $userIds[] = (int) $value;
+            }
+        }
+
+        $userIds = array_values(array_unique($userIds));
+        if ($userIds !== []) {
+            $builder->whereIn('id', $userIds);
+        }
+
+        $request->merge(['filter' => $remainingFilters]);
     }
 
     /**
