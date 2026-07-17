@@ -36,6 +36,11 @@
 | POST | `/projects/app-infos/create` | 新增应用信息 | `ProjectAppInfoController::store` |
 | POST | `/projects/app-infos/update` | 修改应用信息 | `ProjectAppInfoController::update` |
 | POST | `/projects/app-infos/delete` | 删除应用信息 | `ProjectAppInfoController::destroy` |
+| GET | `/projects/version-records` | 项目版本记录列表 | `ProjectVersionRecordController::index` |
+| GET | `/projects/version-records/detail` | 项目版本记录详情 | `ProjectVersionRecordController::detail` |
+| POST | `/projects/version-records/create` | 新增项目版本记录 | `ProjectVersionRecordController::store` |
+| POST | `/projects/version-records/update` | 修改项目版本记录 | `ProjectVersionRecordController::update` |
+| POST | `/projects/version-records/delete` | 删除项目版本记录 | `ProjectVersionRecordController::destroy` |
 
 所有路径前缀均为 `/api/v3/admin/{securePath}`。
 
@@ -864,6 +869,67 @@
 | imageUrls | string[] | 其他应用图片 URL 列表，单项最大 255 字符 |
 | storeUrl | string/null | 应用商店 URL，最大 255 字符 |
 | enabled | int | `1` 启用，`0` 停用 |
+| remark | string/null | 备注，最大 255 字符 |
+
+## 项目版本记录管理
+
+项目版本记录基于 `project_version_records` 表维护，按项目挂载。项目列表和详情接口不内嵌版本记录，前端按需调用以下独立接口。
+
+### 项目版本记录列表
+
+- **方法/路径**：`GET /api/v3/admin/{securePath}/projects/version-records`
+- **控制器**：`ProjectVersionRecordController::index`
+- **Request**：`ProjectVersionRecordIndexRequest`
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectId | int | 否 | 按项目 ID 精确筛选 |
+| projectCode | string | 否 | 按项目代号快照精确筛选 |
+| keyword | string | 否 | 模糊匹配 `version/content` |
+| releaseTimeFrom | string | 否 | 上线时间起始值，日期或日期时间 |
+| releaseTimeTo | string | 否 | 上线时间结束值，必须大于等于 `releaseTimeFrom` |
+| page | int | 否 | 默认 1 |
+| pageSize | int | 否 | 默认 20，最大 200 |
+
+#### 返回示例
+
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "total": 1,
+  "data": [
+    {
+      "id": 1,
+      "projectId": 12,
+      "projectCode": "A001",
+      "version": "1.0.0",
+      "content": "首次上线",
+      "releaseTime": "2026-07-17T10:00:00.000000Z",
+      "remark": null,
+      "createdAt": "2026-07-17T10:00:00.000000Z",
+      "updatedAt": "2026-07-17T10:00:00.000000Z"
+    }
+  ]
+}
+```
+
+### 新增/修改项目版本记录
+
+- **新增**：`POST /api/v3/admin/{securePath}/projects/version-records/create`
+- **修改**：`POST /api/v3/admin/{securePath}/projects/version-records/update`
+- **删除**：`POST /api/v3/admin/{securePath}/projects/version-records/delete`
+- **详情**：`GET /api/v3/admin/{securePath}/projects/version-records/detail?id=1`
+
+新增时必须传 `projectId/version/content/releaseTime`，服务端根据 `projectId` 自动写入 `projectCode` 快照；修改时必须传 `id`，其他字段未传不修改，修改 `projectId` 时会同步刷新 `projectCode` 快照。删除和详情只需要 `id`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 版本记录 ID，修改/删除/详情时使用 |
+| projectId | int | 项目 ID，新增必填，修改可选 |
+| version | string | 版本号或版本名称，最大 100 字符 |
+| content | string | 版本内容 |
+| releaseTime | string | 上线时间，日期或日期时间 |
 | remark | string/null | 备注，最大 255 字符 |
 
 ## 通用说明

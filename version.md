@@ -1002,3 +1002,10 @@
 - 影响范围：`app/Http/Controllers/V3/Admin/UserController.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `UserController::applyBanIdFilters()` 调用和方法，并删除对应测试与文档说明即可。
+
+## 2026-07-17 项目版本记录管理
+- 日期：2026-07-17
+- 变更摘要：项目管理新增按项目挂载的版本记录子资源，支持版本记录列表、详情、新增、修改和删除；记录字段包含项目 ID、项目代号快照、版本、内容、上线时间和备注。
+- 影响范围：`database/migrations/2026_07_17_120000_create_project_version_records_table.php`、`app/Models/Project.php`、`app/Models/ProjectVersionRecord.php`、`app/Services/ProjectVersionRecordService.php`、`app/Http/Controllers/V3/Admin/Project/ProjectVersionRecordController.php`、`app/Http/Requests/Admin/ProjectVersionRecord*Request.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 创建 `project_version_records` 表。
+- 回滚说明：回滚新增 migration，并移除项目版本记录模型、Service、Request、Controller、路由和项目 API 文档说明即可。

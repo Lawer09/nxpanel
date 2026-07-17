@@ -35,4 +35,9 @@ class Project extends Model
     {
         return $this->hasMany(ProjectUserAppMap::class, 'project_code', 'project_code');
     }
+
+    public function versionRecords(): HasMany
+    {
+        return $this->hasMany(ProjectVersionRecord::class, 'project_id');
+    }
 }

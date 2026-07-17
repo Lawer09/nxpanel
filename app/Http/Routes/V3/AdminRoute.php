@@ -23,6 +23,7 @@ use App\Http\Controllers\V3\Admin\AdSpendPlatform\AdSpendPlatformController;
 use App\Http\Controllers\V3\Admin\Project\ProjectAggregateController;
 use App\Http\Controllers\V3\Admin\Project\ProjectController;
 use App\Http\Controllers\V3\Admin\Project\ProjectAppInfoController;
+use App\Http\Controllers\V3\Admin\Project\ProjectVersionRecordController;
 use App\Http\Controllers\V3\Admin\Project\ProjectTrafficAccountController;
 use App\Http\Controllers\V3\Admin\Project\ProjectAdAccountController;
 use App\Http\Controllers\V3\Admin\Project\ProjectUserAppMapController;
@@ -412,6 +413,12 @@ class AdminRoute
                 $router->post('/app-infos/create',                   [ProjectAppInfoController::class, 'store']);
                 $router->post('/app-infos/update',                   [ProjectAppInfoController::class, 'update']);
                 $router->post('/app-infos/delete',                   [ProjectAppInfoController::class, 'destroy']);
+
+                $router->get('/version-records',                     [ProjectVersionRecordController::class, 'index']);
+                $router->get('/version-records/detail',              [ProjectVersionRecordController::class, 'detail']);
+                $router->post('/version-records/create',             [ProjectVersionRecordController::class, 'store']);
+                $router->post('/version-records/update',             [ProjectVersionRecordController::class, 'update']);
+                $router->post('/version-records/delete',             [ProjectVersionRecordController::class, 'destroy']);
 
             });
 
