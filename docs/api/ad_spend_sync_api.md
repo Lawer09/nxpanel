@@ -9,7 +9,7 @@
 自 `2026-06-06` 起，手动同步接口与定时命令统一复用 `App\Services\AdSpendSyncService`，共享以下步骤：
 
 1. 创建 `ad_spend_platform_sync_jobs` 任务记录
-2. 调用 `AdSpendPlatformService::fetchDailyRecords()` 拉取平台日报
+2. 调用 `AdSpendPlatformService::fetchDailyRecordPages()` 分页流式拉取平台日报
 3. 加载 `project_projects.project_code` 映射
 4. 使用 `groupName/groupId -> project_code` 规则匹配项目
 5. 写入或更新 `ad_spend_platform_daily_reports`
@@ -47,6 +47,9 @@
 - 仅允许同步已启用账号，未找到账号返回 `404`，账号已禁用返回 `422`
 - 接口内部不再重复实现写库逻辑，只做参数校验和账号可用性校验
 - 实际同步由 `AdSpendSyncService::syncAccount(..., source=manual)` 执行
+- 拉取接口：`GET /report/day/overall`
+- 请求维度：`date`、`group_name`、`group_id`、`country`、`platform`
+- 返回记录中的 `platform` / `platform_name` / `devicePlatform` / `device_platform` 会统一写入日报表 `platform` 字段，缺失或字符串 `null` 时写入空字符串
 
 ### 2.4 成功响应
 
@@ -118,7 +121,7 @@
 | status | string | 任务状态 |
 | totalRecords | int | 拉取到并参与处理的总记录数 |
 | matchedRecords | int | 成功匹配项目并落库的记录数 |
-| unmatchedRecords | int | 未匹配统计；日报同步固定不累计，小时同步会累计无法匹配项目或缺少关键字段的记录数 |
+| unmatchedRecords | int | 未匹配统计；日报和小时同步都会累计无法匹配项目或缺少关键字段的记录数 |
 | errorMessage | string/null | 失败原因 |
 | createdAt | string | 创建时间 |
 | updatedAt | string | 更新时间 |
@@ -141,7 +144,7 @@
 - 使用 `project_projects.project_code` 作为候选项目编码集合
 - 优先取 `groupName`，若为空则回退 `group_name`、`groupId`、`group_id`
 - 当分组名称中存在完整项目编码片段时，判定为匹配成功
-- 未匹配到项目编码时，不写入日报表或小时表，也不写入未匹配明细表。日报同步直接忽略且不累计 `unmatched_records`；小时同步仅累计 `unmatched_records` 用于观察匹配失败比例
+- 未匹配到项目编码时，不写入日报表或小时表，也不写入未匹配明细表；日报和小时同步都会累计 `unmatched_records` 用于观察匹配失败比例
 
 ### 4.2 日报写入
 
@@ -151,10 +154,12 @@
   - `project_code`
   - `report_date`
   - `country`
+  - `platform`
 - 使用分批 `upsert()`，因此重复同步同一维度数据时会更新而不是新增重复行
 
 会被更新的核心字段：
 
+- `platform_code`
 - `impressions`
 - `clicks`
 - `spend`
@@ -162,6 +167,15 @@
 - `cpm`
 - `cpc`
 - `raw_group_name`
+
+### 4.2.1 日报查询平台维度
+
+日报查询接口 `GET /api/v3/admin/{securePath}/ad-spend-platform/reports/daily` 支持远程平台维度：
+
+- 列表返回新增 `platform` 字段，表示远程日报返回的平台维度，不等同于本地账号 `platformCode`
+- `groupBy[]` 可传 `platform`，按远程平台聚合
+- `filters.platforms[]` 可按远程平台过滤
+- `filters.platformCodes[]` 保持原语义，仍用于过滤本地投放平台账号编码 `platform_code`
 
 
 ### 4.3 小时写入

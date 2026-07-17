@@ -66,6 +66,7 @@ class AdSpendSyncServiceTest extends TestCase
             'project_code' => 'A003',
             'report_date' => '2026-06-06',
             'country' => 'US',
+            'platform' => '',
             'impressions' => 100,
             'clicks' => 10,
             'raw_group_name' => 'A003 campaign',
@@ -108,10 +109,174 @@ class AdSpendSyncServiceTest extends TestCase
             'project_code' => 'A003',
             'report_date' => '2026-06-06',
             'country' => 'US',
+            'platform' => '',
             'impressions' => 200,
             'clicks' => 25,
             'raw_group_name' => 'A003 campaign',
         ]);
+    }
+
+    public function test_sync_service_persists_remote_platform_dimension(): void
+    {
+        $service = app(AdSpendSyncService::class);
+        $platformService = $this->mockPlatformService([
+            $this->matchedRecord('2026-06-06', 'A003', platform: 'android'),
+        ]);
+
+        $job = $service->syncAccount(
+            $this->account,
+            '2026-06-06',
+            '2026-06-06',
+            $platformService,
+            AdSpendSyncService::SOURCE_SCHEDULED
+        );
+
+        $this->assertContains('platform', $job->request_params['dims']);
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-06',
+            'country' => 'US',
+            'platform' => 'android',
+            'impressions' => 100,
+            'clicks' => 10,
+        ]);
+    }
+
+    public function test_sync_service_keeps_different_remote_platforms_separate(): void
+    {
+        $service = app(AdSpendSyncService::class);
+        $platformService = $this->mockPlatformService([
+            $this->matchedRecord('2026-06-06', 'A003', impressions: 100, clicks: 10, platform: 'android'),
+            $this->matchedRecord('2026-06-06', 'A003', impressions: 200, clicks: 20, platform: 'ios'),
+        ]);
+
+        $service->syncAccount(
+            $this->account,
+            '2026-06-06',
+            '2026-06-06',
+            $platformService,
+            AdSpendSyncService::SOURCE_SCHEDULED
+        );
+
+        $this->assertSame(2, AdSpendDailyReport::count());
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-06',
+            'country' => 'US',
+            'platform' => 'android',
+            'impressions' => 100,
+        ]);
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-06',
+            'country' => 'US',
+            'platform' => 'ios',
+            'impressions' => 200,
+        ]);
+    }
+
+    public function test_sync_service_normalizes_remote_platform_candidates_and_null_string(): void
+    {
+        $service = app(AdSpendSyncService::class);
+        $platformService = $this->mockPlatformService([
+            array_merge(
+                $this->matchedRecord('2026-06-06', 'A003', impressions: 101),
+                ['platform' => '', 'platform_name' => 'ios']
+            ),
+            array_merge(
+                $this->matchedRecord('2026-06-07', 'A003', impressions: 102),
+                ['devicePlatform' => 'android']
+            ),
+            array_merge(
+                $this->matchedRecord('2026-06-08', 'A003', impressions: 103),
+                ['device_platform' => 'web']
+            ),
+            $this->matchedRecord('2026-06-09', 'A003', impressions: 104, platform: 'null'),
+        ]);
+
+        $service->syncAccount(
+            $this->account,
+            '2026-06-06',
+            '2026-06-09',
+            $platformService,
+            AdSpendSyncService::SOURCE_SCHEDULED
+        );
+
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-06',
+            'country' => 'US',
+            'platform' => 'ios',
+            'impressions' => 101,
+        ]);
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-07',
+            'country' => 'US',
+            'platform' => 'android',
+            'impressions' => 102,
+        ]);
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-08',
+            'country' => 'US',
+            'platform' => 'web',
+            'impressions' => 103,
+        ]);
+        $this->assertDatabaseHas('ad_spend_platform_daily_reports', [
+            'platform_account_id' => $this->account->id,
+            'project_code' => 'A003',
+            'report_date' => '2026-06-09',
+            'country' => 'US',
+            'platform' => '',
+            'impressions' => 104,
+        ]);
+    }
+
+    public function test_daily_query_supports_platform_list_filter_and_grouping(): void
+    {
+        AdSpendDailyReport::create($this->dailyReportRow([
+            'platform' => 'android',
+            'impressions' => 100,
+            'clicks' => 10,
+            'spend' => '20.000000',
+        ]));
+        AdSpendDailyReport::create($this->dailyReportRow([
+            'platform' => 'ios',
+            'impressions' => 200,
+            'clicks' => 20,
+            'spend' => '40.000000',
+        ]));
+
+        $service = app(AdSpendPlatformService::class);
+        $filtered = $service->queryDaily([
+            'dateFrom' => '2026-06-06',
+            'dateTo' => '2026-06-06',
+            'filters' => ['platforms' => ['android']],
+            'page' => 1,
+            'pageSize' => 20,
+        ]);
+
+        $this->assertSame(1, $filtered['total']);
+        $this->assertSame('android', $filtered['data'][0]->platform);
+
+        $grouped = $service->queryDaily([
+            'dateFrom' => '2026-06-06',
+            'dateTo' => '2026-06-06',
+            'groupBy' => ['platform'],
+            'page' => 1,
+            'pageSize' => 20,
+        ]);
+
+        $platformRows = collect($grouped['data'])->keyBy('platform');
+        $this->assertSame(100, (int) $platformRows['android']->impressions);
+        $this->assertSame(200, (int) $platformRows['ios']->impressions);
     }
 
     public function test_command_sync_uses_shared_service_and_updates_today_data(): void
@@ -247,9 +412,10 @@ class AdSpendSyncServiceTest extends TestCase
         string $projectCode,
         int $impressions = 100,
         int $clicks = 10,
-        string $spend = '20.500000'
+        string $spend = '20.500000',
+        ?string $platform = null
     ): array {
-        return [
+        $record = [
             'date' => $date,
             'groupName' => $projectCode . ' campaign',
             'country' => 'US',
@@ -260,6 +426,12 @@ class AdSpendSyncServiceTest extends TestCase
             'cpm' => '5.000000',
             'cpc' => '2.050000',
         ];
+
+        if ($platform !== null) {
+            $record['platform'] = $platform;
+        }
+
+        return $record;
     }
 
     private function unmatchedRecord(string $date): array
@@ -275,5 +447,24 @@ class AdSpendSyncServiceTest extends TestCase
             'cpm' => '4.000000',
             'cpc' => '1.333333',
         ];
+    }
+
+    private function dailyReportRow(array $overrides = []): array
+    {
+        return array_merge([
+            'platform_account_id' => $this->account->id,
+            'platform_code' => $this->account->platform_code,
+            'platform' => '',
+            'project_code' => 'A003',
+            'report_date' => '2026-06-06',
+            'country' => 'US',
+            'impressions' => 1,
+            'clicks' => 1,
+            'spend' => '1.000000',
+            'ctr' => '1.000000',
+            'cpm' => '1.000000',
+            'cpc' => '1.000000',
+            'raw_group_name' => 'A003 campaign',
+        ], $overrides);
     }
 }

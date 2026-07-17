@@ -1009,3 +1009,17 @@
 - 影响范围：`database/migrations/2026_07_17_120000_create_project_version_records_table.php`、`app/Models/Project.php`、`app/Models/ProjectVersionRecord.php`、`app/Services/ProjectVersionRecordService.php`、`app/Http/Controllers/V3/Admin/Project/ProjectVersionRecordController.php`、`app/Http/Requests/Admin/ProjectVersionRecord*Request.php`、`app/Http/Routes/V3/AdminRoute.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration 创建 `project_version_records` 表。
 - 回滚说明：回滚新增 migration，并移除项目版本记录模型、Service、Request、Controller、路由和项目 API 文档说明即可。
+
+## 2026-07-17 投放日报远程平台维度
+- 日期：2026-07-17
+- 变更摘要：投放日报同步切换为调用 `{base_url}/report/day/overall`，请求维度新增 `dims=platform`；日报表新增远程 `platform` 维度并纳入唯一键，日报查询支持返回、筛选和按 `platform` 分组，同时修正日报未匹配记录统计。
+- 影响范围：`database/migrations/2026_07_17_130000_add_platform_to_ad_spend_daily_reports.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`app/Http/Requests/Admin/AdSpendPlatformDailyQueryRequest.php`、`app/Http/Controllers/V3/Admin/AdSpendPlatform/AdSpendPlatformController.php`、`tests/Feature/AdSpendSyncServiceTest.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 为 `ad_spend_platform_daily_reports` 增加 `platform` 字段并重建日报唯一索引。
+- 回滚说明：回滚新增 migration 会移除 `platform` 字段并恢复旧唯一键；同时将日报远程接口路径、请求维度、写入唯一键、查询校验和文档恢复即可。
+
+## 2026-07-17 项目日报投放支出平台组成
+- 日期：2026-07-17
+- 变更摘要：项目日报 JSON 查询返回行新增 `adSpendPlatformComposition`，基于 `ad_spend_platform_daily_reports.platform` 和 `spend` 按当前行日期、项目、国家维度批量聚合投放支出平台组成及占比；查询缓存 key 升级到 v14，CSV 导出不新增列。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，依赖既有 `ad_spend_platform_daily_reports.platform` 字段。
+- 回滚说明：移除 `ProjectReportService` 中投放支出平台组成批量聚合与返回字段，并将项目报表查询缓存 key 和文档说明回退即可。

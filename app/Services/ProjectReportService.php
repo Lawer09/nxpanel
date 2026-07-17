@@ -79,6 +79,7 @@ class ProjectReportService
             'dateTo' => $definition['dateTo'],
             'filters' => $definition['filters'] ?? [],
         ]);
+        $this->applyAdSpendPlatformComposition($rows, $definition);
 
         $data = $rows->map(fn ($row) => $this->formatDailyRow($row));
 
@@ -517,7 +518,7 @@ class ProjectReportService
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $version = (int) Cache::get(self::QUERY_CACHE_VERSION_KEY, 1);
 
-        return sprintf('project_report:%s_query:v13:%d:%s', $scope, $version, md5((string) $payload));
+        return sprintf('project_report:%s_query:v14:%d:%s', $scope, $version, md5((string) $payload));
     }
 
     /**
@@ -1490,6 +1491,18 @@ class ProjectReportService
     }
 
     /**
+     * Build a stable key for daily report row-level companion metrics.
+     */
+    private function makeReportScopeKey($reportDate, $projectCode, $country): string
+    {
+        return implode("\t", [
+            $reportDate === null || $reportDate === '' ? '*' : (string) $reportDate,
+            $projectCode === null || $projectCode === '' ? '*' : (string) $projectCode,
+            $country === null || $country === '' ? '*' : $this->normalizeCountry((string) $country),
+        ]);
+    }
+
+    /**
      * Format the top three revenue countries and each country's revenue ratio.
      */
     private function formatTopRevenueCountries(array $countries, float $totalRevenue): array
@@ -1506,6 +1519,129 @@ class ProjectReportService
                 'country' => (string) $country,
                 'adRevenue' => $this->formatDecimal($amount),
                 'ratio' => $this->formatDecimal($amount / $totalRevenue),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Attach daily ad spend composition by remote platform using one batched aggregate query.
+     */
+    private function applyAdSpendPlatformComposition($rows, array $definition): void
+    {
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $dateFrom = (string) ($definition['dateFrom'] ?? now()->subDays(1)->toDateString());
+        $dateTo = (string) ($definition['dateTo'] ?? now()->toDateString());
+        $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : [];
+        $hasReportDate = $this->rowsContainProperty($rows, 'report_date');
+        $hasProjectCode = $this->rowsContainProperty($rows, 'project_code');
+        $hasCountry = $this->rowsContainProperty($rows, 'country');
+
+        $reportDates = $hasReportDate ? $this->collectRowValues($rows, 'report_date') : [];
+        $projectCodes = $hasProjectCode ? $this->collectRowValues($rows, 'project_code') : [];
+        $rowCountries = $hasCountry
+            ? $this->collectRowValues($rows, 'country', fn ($country) => $this->normalizeCountry((string) $country))
+            : [];
+
+        $countryExpression = $this->normalizedCountrySql('ad_spend_platform_daily_reports.country');
+        $query = DB::table('ad_spend_platform_daily_reports')
+            ->where('ad_spend_platform_daily_reports.report_date', '>=', $dateFrom)
+            ->where('ad_spend_platform_daily_reports.report_date', '<=', $dateTo);
+
+        if (!empty($reportDates)) {
+            $query->whereIn('ad_spend_platform_daily_reports.report_date', $reportDates);
+        }
+
+        $effectiveFilters = $filters;
+        if (!empty($projectCodes)) {
+            $effectiveFilters['projectCodes'] = $projectCodes;
+        }
+        if (!empty($rowCountries)) {
+            $effectiveFilters['countries'] = $rowCountries;
+        }
+        $this->applyProjectCodeCountryFilters(
+            $query,
+            'ad_spend_platform_daily_reports.project_code',
+            DB::raw($countryExpression),
+            $effectiveFilters
+        );
+        $this->applyProjectAdStatusFilter($query, 'ad_spend_platform_daily_reports.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($query, 'ad_spend_platform_daily_reports.project_code', $filters);
+        $this->applyProjectDepartmentFilter($query, 'ad_spend_platform_daily_reports.project_code', $filters);
+
+        $query->selectRaw('ad_spend_platform_daily_reports.platform as platform')
+            ->selectRaw('SUM(ad_spend_platform_daily_reports.spend) as ad_spend_cost');
+
+        if ($hasReportDate) {
+            $query->selectRaw('ad_spend_platform_daily_reports.report_date as report_date')
+                ->groupBy('ad_spend_platform_daily_reports.report_date');
+        }
+        if ($hasProjectCode) {
+            $query->selectRaw('ad_spend_platform_daily_reports.project_code as project_code')
+                ->groupBy('ad_spend_platform_daily_reports.project_code');
+        }
+        if ($hasCountry) {
+            $query->selectRaw($countryExpression . ' as country')
+                ->groupBy(DB::raw($countryExpression));
+        }
+
+        $aggregateRows = $query
+            ->groupBy('ad_spend_platform_daily_reports.platform')
+            ->get();
+
+        $buckets = [];
+        foreach ($aggregateRows as $aggregateRow) {
+            $key = $this->makeReportScopeKey(
+                $hasReportDate ? ($aggregateRow->report_date ?? null) : null,
+                $hasProjectCode ? ($aggregateRow->project_code ?? null) : null,
+                $hasCountry ? ($aggregateRow->country ?? null) : null
+            );
+            $platform = trim((string) ($aggregateRow->platform ?? ''));
+            $amount = (float) ($aggregateRow->ad_spend_cost ?? 0);
+
+            $buckets[$key]['total'] = ($buckets[$key]['total'] ?? 0.0) + $amount;
+            $buckets[$key]['platforms'][$platform] = ($buckets[$key]['platforms'][$platform] ?? 0.0) + $amount;
+        }
+
+        $formattedBuckets = [];
+        foreach ($buckets as $key => $bucket) {
+            $formattedBuckets[$key] = $this->formatAdSpendPlatformComposition(
+                $bucket['platforms'] ?? [],
+                (float) ($bucket['total'] ?? 0)
+            );
+        }
+
+        foreach ($rows as $row) {
+            $key = $this->makeReportScopeKey(
+                $hasReportDate ? ($row->report_date ?? null) : null,
+                $hasProjectCode ? ($row->project_code ?? null) : null,
+                $hasCountry ? ($row->country ?? null) : null
+            );
+            $row->ad_spend_platform_composition = $formattedBuckets[$key] ?? [];
+        }
+    }
+
+    /**
+     * Format ad spend platform composition sorted by spend descending.
+     */
+    private function formatAdSpendPlatformComposition(array $platforms, float $totalSpend): array
+    {
+        if ($totalSpend <= 0.0 || empty($platforms)) {
+            return [];
+        }
+
+        arsort($platforms, SORT_NUMERIC);
+        $result = [];
+        foreach ($platforms as $platform => $amount) {
+            $amount = (float) $amount;
+            $result[] = [
+                'platform' => (string) $platform,
+                'adSpendCost' => $this->formatDecimal($amount),
+                'ratio' => $this->formatDecimal($amount / $totalSpend),
             ];
         }
 
@@ -2100,6 +2236,10 @@ class ProjectReportService
 
         if (property_exists($row, 'top_revenue_countries')) {
             $data['topRevenueCountries'] = $row->top_revenue_countries;
+        }
+
+        if (property_exists($row, 'ad_spend_platform_composition')) {
+            $data['adSpendPlatformComposition'] = $row->ad_spend_platform_composition;
         }
 
         if (property_exists($row, 'recent_hourly_ad_match_rates')) {

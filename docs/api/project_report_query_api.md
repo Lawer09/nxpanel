@@ -334,6 +334,14 @@ axios.post(url, payload, { responseType: 'blob' })
 - 无收益或总收益小于等于 0 时返回空数组 `[]`。
 - 该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
 
+## 投放支出平台组成说明
+
+- 项目日报 JSON 查询返回行新增 `adSpendPlatformComposition` 字段，表示该行对应维度范围内投放支出按远程平台维度的组成。
+- 字段结构为数组：`platform` 为 `ad_spend_platform_daily_reports.platform`，`adSpendCost` 为该平台投放支出，`ratio` 为该平台支出占当前行维度范围总投放支出的比例，金额和比例均保留 6 位小数。
+- 计算来源为 `ad_spend_platform_daily_reports.spend`，按当前返回行可确定的 `reportDate`、`projectCode`、`country` 维度以及请求 `dateFrom/dateTo`、筛选条件批量聚合；不对每一行单独查询。
+- 结果按 `adSpendCost` 从高到低排序；无投放支出或总投放支出小于等于 0 时返回空数组 `[]`。
+- 该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
+
 ## 国家维度查询性能
 
 - 项目日报按国家维度查询时，分页 `total` 基于过滤后的基础日报维度计数，不再重复执行完整列表指标聚合。
@@ -344,7 +352,7 @@ axios.post(url, payload, { responseType: 'blob' })
 
 - `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前筛选范围中排除指定项目或国家。
 - 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
-- 日报 JSON、`summary`、`topRevenueCountries` 和 CSV 导出均使用相同排除筛选口径。
+- 日报 JSON、`summary`、`topRevenueCountries`、`adSpendPlatformComposition` 和 CSV 导出均使用相同排除筛选口径。
 
 ## 广告收入、投放支出、利润环比字段
 

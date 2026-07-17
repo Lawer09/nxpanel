@@ -486,9 +486,10 @@ class AdSpendPlatformController extends Controller
                 'account_id' => 'nullable|integer',
                 'project_code' => 'nullable|string|max:100',
                 'country' => 'nullable|string|max:50',
+                'platform' => 'nullable|string|max:50',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date|after_or_equal:start_date',
-                'group_by' => 'nullable|string|in:project,account,country,date',
+                'group_by' => 'nullable|string|in:project,account,country,date,platform',
             ]);
 
             $groupBy = $request->input('group_by', 'project');
@@ -503,6 +504,9 @@ class AdSpendPlatformController extends Controller
             } elseif ($groupBy === 'country') {
                 $base->addSelect(DB::raw('country as dimension_value'));
                 $base->groupBy('country');
+            } elseif ($groupBy === 'platform') {
+                $base->addSelect(DB::raw('platform as dimension_value'));
+                $base->groupBy('platform');
             } else {
                 $base->addSelect(DB::raw('report_date as dimension_value'));
                 $base->groupBy('report_date');
@@ -527,6 +531,8 @@ class AdSpendPlatformController extends Controller
                     $result['accountName'] = $row->account_name;
                 } elseif ($groupBy === 'country') {
                     $result['country'] = $row->dimension_value;
+                } elseif ($groupBy === 'platform') {
+                    $result['platform'] = $row->dimension_value;
                 } else {
                     $result['date'] = (string) $row->dimension_value;
                 }
@@ -597,6 +603,7 @@ class AdSpendPlatformController extends Controller
                 'account_id' => 'nullable|integer',
                 'project_code' => 'nullable|string|max:100',
                 'country' => 'nullable|string|max:50',
+                'platform' => 'nullable|string|max:50',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'page' => 'nullable|integer|min:1',
@@ -613,6 +620,7 @@ class AdSpendPlatformController extends Controller
                     'ad_spend_platform_daily_reports.report_date',
                     'ad_spend_platform_daily_reports.platform_account_id',
                     'ad_spend_platform_daily_reports.platform_code',
+                    'ad_spend_platform_daily_reports.platform',
                     'a.account_name',
                     'ad_spend_platform_daily_reports.project_code',
                     'ad_spend_platform_daily_reports.country',
@@ -639,6 +647,7 @@ class AdSpendPlatformController extends Controller
                         'reportDate' => (string) $row->report_date,
                         'platformAccountId' => (int) $row->platform_account_id,
                         'platformCode' => $row->platform_code,
+                        'platform' => $row->platform,
                         'accountName' => $row->account_name ?? '',
                         'projectCode' => $row->project_code,
                         'country' => $row->country,
@@ -676,6 +685,7 @@ class AdSpendPlatformController extends Controller
                 'account_id' => 'nullable|integer',
                 'project_code' => 'nullable|string|max:100',
                 'country' => 'nullable|string|max:50',
+                'platform' => 'nullable|string|max:50',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'dimension' => 'nullable|string|in:day,month',
@@ -755,6 +765,10 @@ class AdSpendPlatformController extends Controller
 
         if ($request->has('country')) {
             $query->where('ad_spend_platform_daily_reports.country', (string) $request->input('country', ''));
+        }
+
+        if ($request->has('platform')) {
+            $query->where('ad_spend_platform_daily_reports.platform', (string) $request->input('platform', ''));
         }
 
         if ($request->filled('start_date')) {

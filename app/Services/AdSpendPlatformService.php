@@ -24,6 +24,7 @@ class AdSpendPlatformService
             ->whereBetween('ad_spend_platform_daily_reports.report_date', [$dateFrom, $dateTo]);
 
         $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.platform_code', $filters['platformCodes'] ?? null);
+        $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.platform', $filters['platforms'] ?? null);
         $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.platform_account_id', $filters['accountIds'] ?? null);
         $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.project_code', $filters['projectCodes'] ?? null);
         $this->applyWhereIn($query, 'ad_spend_platform_daily_reports.country', $filters['countries'] ?? null);
@@ -65,6 +66,7 @@ class AdSpendPlatformService
                 'ad_spend_platform_daily_reports.report_date as date',
                 'ad_spend_platform_daily_reports.platform_account_id',
                 'ad_spend_platform_daily_reports.platform_code',
+                'ad_spend_platform_daily_reports.platform',
                 'a.account_name',
                 'ad_spend_platform_daily_reports.project_code',
                 'ad_spend_platform_daily_reports.country',
@@ -269,13 +271,14 @@ class AdSpendPlatformService
             'dims=group_name',
             'dims=group_id',
             'dims=country',
+            'dims=platform',
             'startDate=' . urlencode($startDate),
             'endDate=' . urlencode($endDate),
             'current=' . $current,
             'size=' . $size,
         ]);
         
-        $url = rtrim((string) $account->base_url, '/') . '/api/v2/report/group/overall?' . $queryString;
+        $url = rtrim((string) $account->base_url, '/') . '/report/day/overall?' . $queryString;
 
         $token = $this->login($account, false);
         $response = Http::timeout(30)
@@ -295,7 +298,7 @@ class AdSpendPlatformService
             throw new \RuntimeException('拉取报表失败: ' . $response->body());
         }
         $body = is_array($response->json()) ? $response->json() : [];
-        if($body['success'] == false) {
+        if (($body['success'] ?? false) == false) {
             throw new \RuntimeException('拉取报表失败:  ' . $url . ' 投放平台返回错误，' . ($body['errorMessage'] ?? '未知错误'));
         }
         return $body;
@@ -472,13 +475,14 @@ class AdSpendPlatformService
 
     private function normalizeDailyGroupBy(array $groupBy): array
     {
-        $allowed = ['date', 'platform_code', 'platform_account_id', 'project_code', 'country'];
+        $allowed = ['date', 'platform_code', 'platform_account_id', 'project_code', 'country', 'platform'];
         $columnMap = [
             'date' => 'ad_spend_platform_daily_reports.report_date',
             'platform_code' => 'ad_spend_platform_daily_reports.platform_code',
             'platform_account_id' => 'ad_spend_platform_daily_reports.platform_account_id',
             'project_code' => 'ad_spend_platform_daily_reports.project_code',
             'country' => 'ad_spend_platform_daily_reports.country',
+            'platform' => 'ad_spend_platform_daily_reports.platform',
         ];
         $normalized = [];
 

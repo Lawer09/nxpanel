@@ -26,7 +26,7 @@ class AdSpendSyncService
     ): AdSpendSyncJob {
         $requestParams = [
             'objectName' => 'account',
-            'dims' => ['date', 'group_name', 'group_id', 'country'],
+            'dims' => ['date', 'group_name', 'group_id', 'country', 'platform'],
             'startDate' => $startDate,
             'endDate' => $endDate,
             'size' => self::FETCH_PAGE_SIZE,
@@ -72,6 +72,7 @@ class AdSpendSyncService
 
                     $row = $this->buildReportRow($account, $record, $projectCodeLookup, $now);
                     if ($row === null) {
+                        $unmatchedRecords++;
                         continue;
                     }
 
@@ -281,6 +282,7 @@ class AdSpendSyncService
         return [
             'platform_account_id' => $account->id,
             'platform_code' => $account->platform_code,
+            'platform' => $this->normalizeRemotePlatform($record),
             'project_code' => $projectCode,
             'report_date' => $reportDate,
             'country' => $country,
@@ -352,6 +354,7 @@ class AdSpendSyncService
             $row['project_code'],
             $row['report_date'],
             $row['country'],
+            $row['platform'],
         ]);
     }
 
@@ -411,7 +414,7 @@ class AdSpendSyncService
         foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
             DB::table('ad_spend_platform_daily_reports')->upsert(
                 $chunk,
-                ['platform_account_id', 'project_code', 'report_date', 'country'],
+                ['platform_account_id', 'project_code', 'report_date', 'country', 'platform'],
                 [
                     'platform_code',
                     'impressions',
@@ -425,6 +428,25 @@ class AdSpendSyncService
                 ]
             );
         }
+    }
+
+    /**
+     * Normalize the remote platform dimension returned by the daily report API.
+     */
+    private function normalizeRemotePlatform(array $record): string
+    {
+        foreach (['platform', 'platform_name', 'devicePlatform', 'device_platform'] as $field) {
+            if (!array_key_exists($field, $record)) {
+                continue;
+            }
+
+            $platform = trim((string) $record[$field]);
+            if ($platform !== '' && strtolower($platform) !== 'null') {
+                return $platform;
+            }
+        }
+
+        return '';
     }
 
     /**
