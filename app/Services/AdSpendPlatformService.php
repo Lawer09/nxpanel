@@ -278,7 +278,7 @@ class AdSpendPlatformService
             'size=' . $size,
         ]);
         
-        $url = rtrim((string) $account->base_url, '/') . '/report/day/overall?' . $queryString;
+        $url = rtrim((string) $account->base_url, '/') . '/api/v2/report/day/overall?' . $queryString;
 
         $token = $this->login($account, false);
         $response = Http::timeout(30)

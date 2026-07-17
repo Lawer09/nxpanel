@@ -1012,7 +1012,7 @@
 
 ## 2026-07-17 投放日报远程平台维度
 - 日期：2026-07-17
-- 变更摘要：投放日报同步切换为调用 `{base_url}/report/day/overall`，请求维度新增 `dims=platform`；日报表新增远程 `platform` 维度并纳入唯一键，日报查询支持返回、筛选和按 `platform` 分组，同时修正日报未匹配记录统计。
+- 变更摘要：投放日报同步切换为调用 `{base_url}/api/v2/report/day/overall`，请求维度新增 `dims=platform`；日报表新增远程 `platform` 维度并纳入唯一键，日报查询支持返回、筛选和按 `platform` 分组，同时修正日报未匹配记录统计。
 - 影响范围：`database/migrations/2026_07_17_130000_add_platform_to_ad_spend_daily_reports.php`、`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`app/Http/Requests/Admin/AdSpendPlatformDailyQueryRequest.php`、`app/Http/Controllers/V3/Admin/AdSpendPlatform/AdSpendPlatformController.php`、`tests/Feature/AdSpendSyncServiceTest.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration 为 `ad_spend_platform_daily_reports` 增加 `platform` 字段并重建日报唯一索引。
 - 回滚说明：回滚新增 migration 会移除 `platform` 字段并恢复旧唯一键；同时将日报远程接口路径、请求维度、写入唯一键、查询校验和文档恢复即可。
