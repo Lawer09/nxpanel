@@ -86,9 +86,10 @@
 
 - 仅允许同步已启用账号。
 - 实际同步由 `AdSpendSyncService::syncHourlyAccount(..., source=manual)` 执行。
-- 拉取接口：`GET /api/fb/report/hour/overall`。
+- 拉取接口：`GET /api/v2/report/group/hour/overall`。
+- 调用方式：使用 URL query 参数传递维度、指标和分页参数，不使用 GET body。
 - 分页完整性：服务端读取远程 `data.total`、`data.current`、`data.size`，持续分页直到 `current * size >= total`；如果提前空页、页码异常或超过页数安全上限，本次同步任务标记为 `failed`。
-- 请求维度：`date`、`hour`、`group_name`、`group_id`、`agency_id`、`user_id`。
+- 请求维度：`date`、`hour`、`group_name`、`group_id`、`country`、`platform`。
 - 请求指标：`impressions`、`clicks`、`spend`、`ctr`、`cpm`、`cpc`、`roas`。
 - 成功响应同日报同步，返回 `jobId`。
 
@@ -196,6 +197,7 @@
 - 使用分批 `upsert()`，重复同步同一维度数据会更新而不是新增重复行。
 - 同一账号、项目、日期、小时、国家维度内返回多条记录时，服务端会先累加 `impressions`、`clicks`、`spend`，再重算 `ctr`、`cpm`、`cpc` 后写入。
 - `groupName` 为空时回退使用 `groupId` 参与项目代号匹配。
+- 远端小时接口返回的 `platform` 维度当前仅用于跨平台完整拉取；`ad_spend_report_hourly` 暂不单独保存平台字段，同一项目、日期、小时、国家、分组维度下的多平台数据会在写入前合并。
 
 会被更新的核心字段：
 

@@ -303,18 +303,17 @@ class AdSpendPlatformService
     }
 
     /**
-     * Request one page of hourly ad spend records.
+     * Request one page of cross-platform project group hourly ad spend records.
      */
     private function requestHourlyReportPage(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $current, int $size): array
     {
         $queryString = implode('&', [
-            'objectName=account',
             'dims=date',
             'dims=hour',
             'dims=group_name',
             'dims=group_id',
-            'dims=agency_id',
-            'dims=user_id',
+            'dims=country',
+            'dims=platform',
             'metrics=impressions',
             'metrics=clicks',
             'metrics=spend',
@@ -327,7 +326,7 @@ class AdSpendPlatformService
             'current=' . $current,
             'size=' . $size,
         ]);
-        $url = rtrim((string) $account->base_url, '/') . '/api/fb/report/hour/overall?' . $queryString;
+        $url = rtrim((string) $account->base_url, '/') . '/api/v2/report/group/hour/overall?' . $queryString;
 
         $token = $this->login($account, false);
         $response = Http::timeout(30)

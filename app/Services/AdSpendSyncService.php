@@ -142,8 +142,8 @@ class AdSpendSyncService
     ): AdSpendSyncJob {
         $requestParams = [
             'granularity' => 'hourly',
-            'objectName' => 'account',
-            'dims' => ['date', 'hour', 'group_name', 'group_id', 'agency_id', 'user_id'],
+            'endpoint' => '/api/v2/report/group/hour/overall',
+            'dims' => ['date', 'hour', 'group_name', 'group_id', 'country', 'platform'],
             'metrics' => ['impressions', 'clicks', 'spend', 'ctr', 'cpm', 'cpc', 'roas'],
             'startDate' => $startDate,
             'endDate' => $endDate,

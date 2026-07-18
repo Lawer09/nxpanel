@@ -1037,3 +1037,10 @@
 - 影响范围：`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更；线上需清理 2026-07-17 至 2026-07-18 已产生的空平台重复数据。
 - 回滚说明：移除 `AdSpendSyncService` 中空平台去重和清理逻辑，并同步回退文档说明即可。
+
+## 2026-07-18 投放小时跨平台项目组汇总接口切换
+- 日期：2026-07-18
+- 变更摘要：投放小时同步从旧的 `/api/fb/report/hour/overall` 切换为跨平台项目组小时汇总接口 `/api/v2/report/group/hour/overall`，按 query string 传递 `dims=date&dims=hour&dims=group_name&dims=group_id&dims=country&dims=platform` 和投放指标；任务请求参数同步记录新 endpoint 和维度。小时投放表暂不保存平台字段，同一项目、日期、小时、国家、分组维度下的多平台记录继续在写入前合并。
+- 影响范围：`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将 `AdSpendPlatformService::requestHourlyReportPage()` 远端路径和 dims 恢复为旧小时接口，并同步回退任务请求参数和文档说明即可。
