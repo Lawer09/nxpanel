@@ -52,6 +52,7 @@
 - 请求维度：`date`、`group_id`、`country`、`platform`
 - 项目匹配优先使用返回记录中的 `groupName` / `group_name`，缺失时才回退 `groupId` / `group_id`
 - 返回记录中的 `platform` / `platform_name` / `devicePlatform` / `device_platform` 会统一写入日报表 `platform` 字段，缺失或字符串 `null` 时写入空字符串
+- 为避免历史空平台数据和后续非空平台数据重复计入，同一 `platform_account_id + project_code + report_date + country` 下，只要存在非空 `platform` 行，同维度空 `platform` 行会被清理；后续同步也不会再写入同维度空平台重复行
 
 ### 2.4 成功响应
 

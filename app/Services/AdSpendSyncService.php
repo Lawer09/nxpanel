@@ -411,22 +411,153 @@ class AdSpendSyncService
     private function upsertReports(array $rows): void
     {
         foreach (array_chunk($rows, self::UPSERT_BATCH_SIZE) as $chunk) {
-            DB::table('ad_spend_platform_daily_reports')->upsert(
-                $chunk,
-                ['platform_account_id', 'project_code', 'report_date', 'country', 'platform'],
-                [
-                    'platform_code',
-                    'impressions',
-                    'clicks',
-                    'spend',
-                    'ctr',
-                    'cpm',
-                    'cpc',
-                    'raw_group_name',
-                    'updated_at',
-                ]
-            );
+            $chunk = $this->filterBlankPlatformDuplicateRows($chunk);
+            if (empty($chunk)) {
+                continue;
+            }
+
+            DB::transaction(function () use ($chunk) {
+                $this->deleteBlankPlatformRowsForNonBlankRows($chunk);
+
+                DB::table('ad_spend_platform_daily_reports')->upsert(
+                    $chunk,
+                    ['platform_account_id', 'project_code', 'report_date', 'country', 'platform'],
+                    [
+                        'platform_code',
+                        'impressions',
+                        'clicks',
+                        'spend',
+                        'ctr',
+                        'cpm',
+                        'cpc',
+                        'raw_group_name',
+                        'updated_at',
+                    ]
+                );
+            });
         }
+    }
+
+    /**
+     * Drop blank-platform rows when the same dimension already has a real platform.
+     */
+    private function filterBlankPlatformDuplicateRows(array $rows): array
+    {
+        $nonBlankKeys = [];
+        $blankRows = [];
+
+        foreach ($rows as $row) {
+            if (($row['platform'] ?? '') !== '') {
+                $nonBlankKeys[$this->platformAgnosticReportRowKey($row)] = true;
+                continue;
+            }
+
+            $blankRows[] = $row;
+        }
+
+        if (empty($blankRows)) {
+            return $rows;
+        }
+
+        $existingNonBlankKeys = $this->findExistingNonBlankPlatformKeys($blankRows);
+        $filteredRows = [];
+        foreach ($rows as $row) {
+            if (($row['platform'] ?? '') !== '') {
+                $filteredRows[] = $row;
+                continue;
+            }
+
+            $key = $this->platformAgnosticReportRowKey($row);
+            if (isset($nonBlankKeys[$key]) || isset($existingNonBlankKeys[$key])) {
+                continue;
+            }
+
+            $filteredRows[] = $row;
+        }
+
+        return $filteredRows;
+    }
+
+    /**
+     * Remove historical blank-platform rows before writing non-blank platform rows.
+     */
+    private function deleteBlankPlatformRowsForNonBlankRows(array $rows): void
+    {
+        $keys = [];
+        foreach ($rows as $row) {
+            if (($row['platform'] ?? '') === '') {
+                continue;
+            }
+
+            $keys[$this->platformAgnosticReportRowKey($row)] = $row;
+        }
+
+        if (empty($keys)) {
+            return;
+        }
+
+        DB::table('ad_spend_platform_daily_reports')
+            ->where('platform', '=', '')
+            ->where(function ($query) use ($keys) {
+                foreach ($keys as $row) {
+                    $query->orWhere(function ($subQuery) use ($row) {
+                        $subQuery->where('platform_account_id', '=', $row['platform_account_id'])
+                            ->where('project_code', '=', $row['project_code'])
+                            ->where('report_date', '=', $row['report_date'])
+                            ->where('country', '=', $row['country']);
+                    });
+                }
+            })
+            ->delete();
+    }
+
+    /**
+     * Find dimensions that already have at least one non-blank platform row.
+     */
+    private function findExistingNonBlankPlatformKeys(array $rows): array
+    {
+        $keys = [];
+        foreach ($rows as $row) {
+            $keys[$this->platformAgnosticReportRowKey($row)] = $row;
+        }
+
+        if (empty($keys)) {
+            return [];
+        }
+
+        $existingRows = DB::table('ad_spend_platform_daily_reports')
+            ->where('platform', '!=', '')
+            ->where(function ($query) use ($keys) {
+                foreach ($keys as $row) {
+                    $query->orWhere(function ($subQuery) use ($row) {
+                        $subQuery->where('platform_account_id', '=', $row['platform_account_id'])
+                            ->where('project_code', '=', $row['project_code'])
+                            ->where('report_date', '=', $row['report_date'])
+                            ->where('country', '=', $row['country']);
+                    });
+                }
+            })
+            ->get(['platform_account_id', 'project_code', 'report_date', 'country']);
+
+        $existingKeys = [];
+        foreach ($existingRows as $row) {
+            $existingKeys[$this->platformAgnosticReportRowKey((array) $row)] = true;
+        }
+
+        return $existingKeys;
+    }
+
+    /**
+     * Build a uniqueness key without the platform dimension for blank-platform deduplication.
+     */
+    private function platformAgnosticReportRowKey(array $row): string
+    {
+        return implode('|', [
+            $row['platform_account_id'] ?? '',
+            $row['project_code'] ?? '',
+            $row['report_date'] ?? '',
+            $row['country'] ?? '',
+        ]);
     }
 
     /**

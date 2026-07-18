@@ -1030,3 +1030,10 @@
 - 影响范围：`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：如需回滚，将 `AdSpendPlatformService::requestReportPage()` 的远端路径和 dims 恢复为旧日报接口，并同步恢复任务请求参数和文档说明即可。
+
+## 2026-07-18 投放日报空平台重复数据防护
+- 日期：2026-07-18
+- 变更摘要：修复投放日报在引入远程 `platform` 维度后，同一账号、项目、日期、国家下历史空平台行与后续非空平台行同时存在导致投放支出被重复统计的问题；同步写库前会跳过已有非空平台维度的空平台行，并在写入非空平台行时清理同维度历史空平台行。
+- 影响范围：`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更；线上需清理 2026-07-17 至 2026-07-18 已产生的空平台重复数据。
+- 回滚说明：移除 `AdSpendSyncService` 中空平台去重和清理逻辑，并同步回退文档说明即可。
