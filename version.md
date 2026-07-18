@@ -1023,3 +1023,10 @@
 - 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，依赖既有 `ad_spend_platform_daily_reports.platform` 字段。
 - 回滚说明：移除 `ProjectReportService` 中投放支出平台组成批量聚合与返回字段，并将项目报表查询缓存 key 和文档说明回退即可。
+
+## 2026-07-18 投放日报项目组汇总接口修正
+- 日期：2026-07-18
+- 变更摘要：修复投放日报同步请求远端 `/api/v2/report/day/overall` 导致 A002 等项目组汇总数据缺失的问题；日报同步改为调用 `/api/v2/report/group/overall`，移除无实际意义的 `objectName=account`，并按 query string 传递 `dims=date&dims=group_id&dims=country&dims=platform`。
+- 影响范围：`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：如需回滚，将 `AdSpendPlatformService::requestReportPage()` 的远端路径和 dims 恢复为旧日报接口，并同步恢复任务请求参数和文档说明即可。

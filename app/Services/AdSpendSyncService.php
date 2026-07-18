@@ -25,8 +25,7 @@ class AdSpendSyncService
         string $source = self::SOURCE_SCHEDULED
     ): AdSpendSyncJob {
         $requestParams = [
-            'objectName' => 'account',
-            'dims' => ['date', 'group_name', 'group_id', 'country', 'platform'],
+            'dims' => ['date', 'group_id', 'country', 'platform'],
             'startDate' => $startDate,
             'endDate' => $endDate,
             'size' => self::FETCH_PAGE_SIZE,

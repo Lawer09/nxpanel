@@ -266,9 +266,7 @@ class AdSpendPlatformService
     private function requestReportPage(AdSpendPlatformAccount $account, string $startDate, string $endDate, int $current, int $size): array
     {
         $queryString = implode('&', [
-            'objectName=account',
             'dims=date',
-            'dims=group_name',
             'dims=group_id',
             'dims=country',
             'dims=platform',
@@ -278,7 +276,7 @@ class AdSpendPlatformService
             'size=' . $size,
         ]);
         
-        $url = rtrim((string) $account->base_url, '/') . '/api/v2/report/day/overall?' . $queryString;
+        $url = rtrim((string) $account->base_url, '/') . '/api/v2/report/group/overall?' . $queryString;
 
         $token = $this->login($account, false);
         $response = Http::timeout(30)

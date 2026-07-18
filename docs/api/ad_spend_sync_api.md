@@ -47,8 +47,10 @@
 - 仅允许同步已启用账号，未找到账号返回 `404`，账号已禁用返回 `422`
 - 接口内部不再重复实现写库逻辑，只做参数校验和账号可用性校验
 - 实际同步由 `AdSpendSyncService::syncAccount(..., source=manual)` 执行
-- 拉取接口：`GET /api/v2/report/day/overall`
-- 请求维度：`date`、`group_name`、`group_id`、`country`、`platform`
+- 拉取接口：`GET /api/v2/report/group/overall`
+- 请求参数通过 query string 传递，不使用 GET body JSON
+- 请求维度：`date`、`group_id`、`country`、`platform`
+- 项目匹配优先使用返回记录中的 `groupName` / `group_name`，缺失时才回退 `groupId` / `group_id`
 - 返回记录中的 `platform` / `platform_name` / `devicePlatform` / `device_platform` 会统一写入日报表 `platform` 字段，缺失或字符串 `null` 时写入空字符串
 
 ### 2.4 成功响应
