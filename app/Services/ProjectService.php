@@ -133,7 +133,12 @@ class ProjectService
             'remark'       => $params['remark'] ?? null,
         ];
 
-        $project = Project::create(array_merge($attributes, $this->extractMetadataAttributes($params)));
+        $metadataAttributes = $this->extractMetadataAttributes($params);
+        if (!array_key_exists('adStatus', $params)) {
+            $metadataAttributes['ad_status'] = Project::AD_STATUS_NOT_LAUNCHED;
+        }
+
+        $project = Project::create(array_merge($attributes, $metadataAttributes));
 
         $this->forgetProjectCodeCache();
         if ($this->hasDisplayDepartment($project->department)) {
@@ -450,7 +455,12 @@ class ProjectService
             'remark' => $params['remark'] ?? null,
         ];
 
-        return array_merge($attributes, $this->extractMetadataAttributes($params));
+        $metadataAttributes = $this->extractMetadataAttributes($params);
+        if (!array_key_exists('adStatus', $params)) {
+            $metadataAttributes['ad_status'] = Project::AD_STATUS_NOT_LAUNCHED;
+        }
+
+        return array_merge($attributes, $metadataAttributes);
     }
 
     /**

@@ -319,7 +319,7 @@
 | ownerName | string | 否 | 负责人 |
 | department | string | 否 | 所属部门 |
 | status | string | 否 | 默认 `active`，可选：`active` / `inactive` / `archived` |
-| adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符 |
+| adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符；未传时默认 `未上线` |
 | appPlatform | string | 否 | 应用平台，自定义字符串，最大 50 字符 |
 | adspowerEnv | string | 否 | Adspower 环境，最大 100 字符 |
 | developerGmail | string | 否 | 开发者 Gmail，最大 191 字符 |
@@ -1018,7 +1018,7 @@
 | items[].ownerName | string/null | 否 | 负责人；更新时未传不修改，传 `null` 可清空 |
 | items[].department | string/null | 否 | 部门；更新时未传不修改，传 `null` 可清空 |
 | items[].status | string | 否 | `active` / `inactive` / `archived`；新建默认 `active` |
-| items[].adStatus | string/null | 否 | 投放状态；更新时未传不修改，传 `null` 可清空 |
+| items[].adStatus | string/null | 否 | 投放状态；新建时未传默认 `未上线`；更新时未传不修改，传 `null` 可清空 |
 | items[].appPlatform | string/null | 否 | 应用平台；更新时未传不修改，传 `null` 可清空 |
 | items[].remark | string/null | 否 | 备注；更新时未传不修改，传 `null` 可清空 |
 
@@ -1035,7 +1035,7 @@
       "ownerName": "Alice",
       "department": "技术部",
       "status": "active",
-      "adStatus": "running",
+      "adStatus": "未上线",
       "appPlatform": "android",
       "packageName": "com.example.app",
       "remark": "optional"
@@ -1069,6 +1069,16 @@
   ]
 }
 ```
+
+### 5.10 商店页上线状态自动检测
+
+- **命令**：`project:check-store-online-status --limit=200`
+- **调度**：每 30 分钟执行一次，使用 `onOneServer()` 和 `withoutOverlapping(25)` 防止重复调度。
+- **检测范围**：`project_projects.ad_status = 未上线` 且 `store_page_url` 非空的项目。
+- **检测方式**：服务端以 `GET` 请求访问 `storePageUrl`，请求超时时间为 10 秒。
+- **更新规则**：仅当最终响应状态码等于 `200` 时，将 `adStatus` 更新为 `白包在线`；非 200、空链接或请求异常均不修改项目状态。
+- **并发保护**：更新时会再次限定当前投放状态仍为 `未上线`，避免覆盖人工修改。
+
 ## 2026-06-29 项目小时报表手动同步
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/aggregate-hourly`

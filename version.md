@@ -1051,3 +1051,10 @@
 - 影响范围：`database/migrations/2026_07_21_120000_add_version_name_to_project_version_records_table.php`、`app/Http/Requests/Admin/ProjectVersionRecordStoreRequest.php`、`app/Http/Requests/Admin/ProjectVersionRecordUpdateRequest.php`、`app/Services/ProjectVersionRecordService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration 为 `project_version_records` 添加 nullable `version_name` 字段。
 - 回滚说明：回滚新增 migration 移除 `version_name` 字段，并移除 Request、Service 和项目 API 文档中的 `versionName` 字段支持即可。
+
+## 2026-07-21 项目投放状态默认值与商店上线检测
+- 日期：2026-07-21
+- 变更摘要：项目创建和批量保存新建项目时，未传 `adStatus` 默认写入 `未上线`；新增 `project:check-store-online-status` 命令，每 30 分钟检测未上线项目的商店页链接，GET 最终响应状态码为 200 时自动将投放状态更新为 `白包在线`。
+- 影响范围：`app/Models/Project.php`、`app/Services/ProjectService.php`、`app/Console/Commands/CheckProjectStoreOnlineStatus.php`、`app/Console/Kernel.php`、`docs/api/project_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除项目投放状态常量、创建默认值逻辑、新增命令和 Kernel 调度，并同步回退项目 API 文档、命令手册和本版本记录即可。

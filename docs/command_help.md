@@ -351,6 +351,37 @@ php artisan project:send-yesterday-traffic-report --date=2026-06-29
 
 ---
 
+### 8.2 project:check-store-online-status
+
+每 30 分钟检测一次未上线项目的商店页链接，商店页可访问时自动更新投放状态。
+
+```bash
+# 默认最多检测 200 个未上线项目
+php artisan project:check-store-online-status
+
+# 指定单次检测上限
+php artisan project:check-store-online-status --limit=100
+```
+
+检测口径：
+
+- 项目范围：`project_projects.ad_status = 未上线` 且 `store_page_url` 非空。
+- 请求方式：使用 `GET` 访问商店页链接，超时时间 10 秒。
+- 上线判定：仅最终响应状态码等于 `200` 时，将 `ad_status` 更新为 `白包在线`。
+- 失败处理：非 200 或请求异常不修改状态；异常会写入 warning 日志并继续检测后续项目。
+
+调度说明：
+
+- 已在 `app/Console/Kernel.php` 配置为每 30 分钟执行。
+- 使用 `onOneServer()` 和 `withoutOverlapping(25)` 防止重复调度。
+
+回滚说明：
+
+- 移除 `project:check-store-online-status` 命令、Kernel 调度和文档即可。
+- 无数据库结构变更，不需要执行 migration 回滚。
+
+---
+
 ## 9. AID channel_type 异步刷新命令
 
 ### 9.1 aid-channel-type:flush
