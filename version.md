@@ -1044,3 +1044,10 @@
 - 影响范围：`app/Services/AdSpendPlatformService.php`、`app/Services/AdSpendSyncService.php`、`docs/api/ad_spend_sync_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将 `AdSpendPlatformService::requestHourlyReportPage()` 远端路径和 dims 恢复为旧小时接口，并同步回退任务请求参数和文档说明即可。
+
+## 2026-07-21 项目版本记录版本名称字段
+- 日期：2026-07-21
+- 变更摘要：项目版本记录新增 `versionName` 版本名称字段，数据库保存为 `project_version_records.version_name`；版本记录创建、更新、列表和详情响应均支持该字段，列表 `keyword` 同步支持匹配版本名称。
+- 影响范围：`database/migrations/2026_07_21_120000_add_version_name_to_project_version_records_table.php`、`app/Http/Requests/Admin/ProjectVersionRecordStoreRequest.php`、`app/Http/Requests/Admin/ProjectVersionRecordUpdateRequest.php`、`app/Services/ProjectVersionRecordService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 为 `project_version_records` 添加 nullable `version_name` 字段。
+- 回滚说明：回滚新增 migration 移除 `version_name` 字段，并移除 Request、Service 和项目 API 文档中的 `versionName` 字段支持即可。

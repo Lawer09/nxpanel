@@ -885,7 +885,7 @@
 | --- | --- | --- | --- |
 | projectId | int | 否 | 按项目 ID 精确筛选 |
 | projectCode | string | 否 | 按项目代号快照精确筛选 |
-| keyword | string | 否 | 模糊匹配 `version/content` |
+| keyword | string | 否 | 模糊匹配 `version/versionName/content` |
 | releaseTimeFrom | string | 否 | 上线时间起始值，日期或日期时间 |
 | releaseTimeTo | string | 否 | 上线时间结束值，必须大于等于 `releaseTimeFrom` |
 | page | int | 否 | 默认 1 |
@@ -904,6 +904,7 @@
       "projectId": 12,
       "projectCode": "A001",
       "version": "1.0.0",
+      "versionName": "首发版本",
       "content": "首次上线",
       "releaseTime": "2026-07-17T10:00:00.000000Z",
       "remark": null,
@@ -921,13 +922,14 @@
 - **删除**：`POST /api/v3/admin/{securePath}/projects/version-records/delete`
 - **详情**：`GET /api/v3/admin/{securePath}/projects/version-records/detail?id=1`
 
-新增时必须传 `projectId/version/content/releaseTime`，服务端根据 `projectId` 自动写入 `projectCode` 快照；修改时必须传 `id`，其他字段未传不修改，修改 `projectId` 时会同步刷新 `projectCode` 快照。删除和详情只需要 `id`。
+新增时必须传 `projectId/version/content/releaseTime`，可选传 `versionName`；服务端根据 `projectId` 自动写入 `projectCode` 快照。修改时必须传 `id`，其他字段未传不修改，修改 `projectId` 时会同步刷新 `projectCode` 快照。删除和详情只需要 `id`。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | int | 版本记录 ID，修改/删除/详情时使用 |
 | projectId | int | 项目 ID，新增必填，修改可选 |
-| version | string | 版本号或版本名称，最大 100 字符 |
+| version | string | 版本号，最大 100 字符 |
+| versionName | string/null | 版本名称，最大 191 字符 |
 | content | string | 版本内容 |
 | releaseTime | string | 上线时间，日期或日期时间 |
 | remark | string/null | 备注，最大 255 字符 |

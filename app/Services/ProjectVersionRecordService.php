@@ -25,6 +25,7 @@ class ProjectVersionRecordService
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($query) use ($keyword): void {
                 $query->where('version', 'like', "%{$keyword}%")
+                    ->orWhere('version_name', 'like', "%{$keyword}%")
                     ->orWhere('content', 'like', "%{$keyword}%");
             });
         }
@@ -124,6 +125,7 @@ class ProjectVersionRecordService
             'projectId' => (int) $record->project_id,
             'projectCode' => $record->project_code,
             'version' => $record->version,
+            'versionName' => $record->version_name,
             'content' => $record->content,
             'releaseTime' => $record->release_time,
             'remark' => $record->remark,
@@ -139,6 +141,7 @@ class ProjectVersionRecordService
     {
         $map = [
             'version' => 'version',
+            'versionName' => 'version_name',
             'content' => 'content',
             'releaseTime' => 'release_time',
             'remark' => 'remark',
@@ -152,6 +155,7 @@ class ProjectVersionRecordService
 
             $attributes[$column] = match ($requestKey) {
                 'version' => $this->normalizeRequiredString($data[$requestKey], '版本不能为空'),
+                'versionName' => $this->normalizeOptionalString($data[$requestKey]),
                 'content' => $this->normalizeRequiredString($data[$requestKey], '版本内容不能为空'),
                 'remark' => $this->normalizeOptionalString($data[$requestKey]),
                 default => $data[$requestKey],

@@ -17,6 +17,7 @@ class ProjectVersionRecordUpdateRequest extends FormRequest
             'id' => 'required|integer|min:1|exists:project_version_records,id',
             'projectId' => 'sometimes|required|integer|min:1|exists:project_projects,id',
             'version' => 'sometimes|required|string|max:100',
+            'versionName' => 'nullable|string|max:191',
             'content' => 'sometimes|required|string',
             'releaseTime' => 'sometimes|required|date',
             'remark' => 'nullable|string|max:255',

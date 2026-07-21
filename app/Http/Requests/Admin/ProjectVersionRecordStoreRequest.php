@@ -16,6 +16,7 @@ class ProjectVersionRecordStoreRequest extends FormRequest
         return [
             'projectId' => 'required|integer|min:1|exists:project_projects,id',
             'version' => 'required|string|max:100',
+            'versionName' => 'nullable|string|max:191',
             'content' => 'required|string',
             'releaseTime' => 'required|date',
             'remark' => 'nullable|string|max:255',
