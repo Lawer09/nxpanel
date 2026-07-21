@@ -1058,3 +1058,10 @@
 - 影响范围：`app/Models/Project.php`、`app/Services/ProjectService.php`、`app/Console/Commands/CheckProjectStoreOnlineStatus.php`、`app/Console/Kernel.php`、`docs/api/project_api.md`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除项目投放状态常量、创建默认值逻辑、新增命令和 Kernel 调度，并同步回退项目 API 文档、命令手册和本版本记录即可。
+
+## 2026-07-21 项目版本记录批量新增
+- 日期：2026-07-21
+- 变更摘要：项目版本记录新增 `POST /projects/version-records/batch-create` 批量创建接口，请求体使用 `items` 数组，每项字段与单条新增一致；服务端批量加载项目并自动写入 `projectCode` 快照，整批在事务中创建。
+- 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectVersionRecordController.php`、`app/Http/Requests/Admin/ProjectVersionRecordBatchStoreRequest.php`、`app/Services/ProjectVersionRecordService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除批量新增 Request、Controller 方法、Service 批量创建逻辑和路由，并同步回退项目 API 文档与本版本记录即可。

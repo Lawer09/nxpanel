@@ -39,6 +39,7 @@
 | GET | `/projects/version-records` | 项目版本记录列表 | `ProjectVersionRecordController::index` |
 | GET | `/projects/version-records/detail` | 项目版本记录详情 | `ProjectVersionRecordController::detail` |
 | POST | `/projects/version-records/create` | 新增项目版本记录 | `ProjectVersionRecordController::store` |
+| POST | `/projects/version-records/batch-create` | 批量新增项目版本记录 | `ProjectVersionRecordController::batchStore` |
 | POST | `/projects/version-records/update` | 修改项目版本记录 | `ProjectVersionRecordController::update` |
 | POST | `/projects/version-records/delete` | 删除项目版本记录 | `ProjectVersionRecordController::destroy` |
 
@@ -918,11 +919,12 @@
 ### 新增/修改项目版本记录
 
 - **新增**：`POST /api/v3/admin/{securePath}/projects/version-records/create`
+- **批量新增**：`POST /api/v3/admin/{securePath}/projects/version-records/batch-create`
 - **修改**：`POST /api/v3/admin/{securePath}/projects/version-records/update`
 - **删除**：`POST /api/v3/admin/{securePath}/projects/version-records/delete`
 - **详情**：`GET /api/v3/admin/{securePath}/projects/version-records/detail?id=1`
 
-新增时必须传 `projectId/version/content/releaseTime`，可选传 `versionName`；服务端根据 `projectId` 自动写入 `projectCode` 快照。修改时必须传 `id`，其他字段未传不修改，修改 `projectId` 时会同步刷新 `projectCode` 快照。删除和详情只需要 `id`。
+新增时必须传 `projectId/version/content/releaseTime`，可选传 `versionName`；服务端根据 `projectId` 自动写入 `projectCode` 快照。批量新增请求体为 `items` 数组，每项字段与单条新增一致，整批在事务中创建，任一条失败则整批不写入。修改时必须传 `id`，其他字段未传不修改，修改 `projectId` 时会同步刷新 `projectCode` 快照。删除和详情只需要 `id`。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -933,6 +935,65 @@
 | content | string | 版本内容 |
 | releaseTime | string | 上线时间，日期或日期时间 |
 | remark | string/null | 备注，最大 255 字符 |
+
+#### 批量新增请求示例
+
+```json
+{
+  "items": [
+    {
+      "projectId": 12,
+      "version": "1.0.0",
+      "versionName": "首发版本",
+      "content": "首次上线",
+      "releaseTime": "2026-07-21 10:00:00",
+      "remark": null
+    },
+    {
+      "projectId": 12,
+      "version": "1.0.1",
+      "versionName": "修复版本",
+      "content": "修复已知问题",
+      "releaseTime": "2026-07-21 12:00:00"
+    }
+  ]
+}
+```
+
+#### 批量新增返回示例
+
+```json
+{
+  "created": 2,
+  "total": 2,
+  "items": [
+    {
+      "id": 1,
+      "projectId": 12,
+      "projectCode": "A001",
+      "version": "1.0.0",
+      "versionName": "首发版本",
+      "content": "首次上线",
+      "releaseTime": "2026-07-21T10:00:00.000000Z",
+      "remark": null,
+      "createdAt": "2026-07-21T10:00:00.000000Z",
+      "updatedAt": "2026-07-21T10:00:00.000000Z"
+    },
+    {
+      "id": 2,
+      "projectId": 12,
+      "projectCode": "A001",
+      "version": "1.0.1",
+      "versionName": "修复版本",
+      "content": "修复已知问题",
+      "releaseTime": "2026-07-21T12:00:00.000000Z",
+      "remark": null,
+      "createdAt": "2026-07-21T12:00:00.000000Z",
+      "updatedAt": "2026-07-21T12:00:00.000000Z"
+    }
+  ]
+}
+```
 
 ## 通用说明
 

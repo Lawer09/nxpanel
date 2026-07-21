@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V3\Admin\Project;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IdRequest;
+use App\Http\Requests\Admin\ProjectVersionRecordBatchStoreRequest;
 use App\Http\Requests\Admin\ProjectVersionRecordIndexRequest;
 use App\Http\Requests\Admin\ProjectVersionRecordStoreRequest;
 use App\Http\Requests\Admin\ProjectVersionRecordUpdateRequest;
@@ -68,6 +69,26 @@ class ProjectVersionRecordController extends Controller
             return $this->error([$e->getCode(), $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('ProjectVersionRecord store error: ' . $e->getMessage());
+            return $this->error([500, $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Create multiple project version records.
+     */
+    public function batchStore(ProjectVersionRecordBatchStoreRequest $request): JsonResponse
+    {
+        try {
+            $result = $this->service->batchStore($request->validated()['items']);
+            $result['items'] = collect($result['items'])
+                ->map(fn ($item) => ProjectVersionRecordService::format($item))
+                ->values();
+
+            return $this->ok($result);
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        } catch (\Exception $e) {
+            Log::error('ProjectVersionRecord batchStore error: ' . $e->getMessage());
             return $this->error([500, $e->getMessage()]);
         }
     }

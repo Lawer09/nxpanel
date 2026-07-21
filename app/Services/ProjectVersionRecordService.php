@@ -5,9 +5,12 @@ namespace App\Services;
 use App\Exceptions\BusinessException;
 use App\Models\Project;
 use App\Models\ProjectVersionRecord;
+use Illuminate\Support\Facades\DB;
 
 class ProjectVersionRecordService
 {
+    private const BATCH_CREATE_CHUNK_SIZE = 100;
+
     /**
      * Query project version records with pagination.
      */
@@ -80,6 +83,62 @@ class ProjectVersionRecordService
             ],
             $this->extractAttributes($data)
         ));
+    }
+
+    /**
+     * Create multiple project version records in batches.
+     *
+     * @return array{created: int, total: int, items: array<int, ProjectVersionRecord>}
+     */
+    public function batchStore(array $items): array
+    {
+        if (empty($items)) {
+            throw new BusinessException([422, '版本记录不能为空']);
+        }
+
+        $projectIds = collect($items)
+            ->pluck('projectId')
+            ->map(fn ($projectId) => (int) $projectId)
+            ->filter(fn ($projectId) => $projectId > 0)
+            ->unique()
+            ->values();
+
+        $projects = Project::query()
+            ->whereIn('id', $projectIds->all())
+            ->get(['id', 'project_code'])
+            ->keyBy('id');
+
+        if ($projects->count() !== $projectIds->count()) {
+            throw new BusinessException([404, '项目不存在']);
+        }
+
+        $records = DB::transaction(function () use ($items, $projects) {
+            $createdRecords = [];
+            foreach (array_chunk($items, self::BATCH_CREATE_CHUNK_SIZE) as $itemChunk) {
+                foreach ($itemChunk as $item) {
+                    $project = $projects->get((int) $item['projectId']);
+                    if (!$project) {
+                        throw new BusinessException([404, '项目不存在']);
+                    }
+
+                    $createdRecords[] = ProjectVersionRecord::create(array_merge(
+                        [
+                            'project_id' => (int) $project->id,
+                            'project_code' => (string) $project->project_code,
+                        ],
+                        $this->extractAttributes($item)
+                    ));
+                }
+            }
+
+            return $createdRecords;
+        });
+
+        return [
+            'created' => count($records),
+            'total' => count($items),
+            'items' => $records,
+        ];
     }
 
     /**

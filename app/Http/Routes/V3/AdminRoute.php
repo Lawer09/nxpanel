@@ -417,6 +417,7 @@ class AdminRoute
                 $router->get('/version-records',                     [ProjectVersionRecordController::class, 'index']);
                 $router->get('/version-records/detail',              [ProjectVersionRecordController::class, 'detail']);
                 $router->post('/version-records/create',             [ProjectVersionRecordController::class, 'store']);
+                $router->post('/version-records/batch-create',       [ProjectVersionRecordController::class, 'batchStore']);
                 $router->post('/version-records/update',             [ProjectVersionRecordController::class, 'update']);
                 $router->post('/version-records/delete',             [ProjectVersionRecordController::class, 'destroy']);
 
