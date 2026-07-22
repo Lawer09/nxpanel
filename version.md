@@ -1093,3 +1093,10 @@
 - 影响范围：`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 V3 管理员登录中的 `ensureAdminUser()` fallback 和对应测试、文档记录即可。
+
+## 2026-07-22 V3 Refresh 明确作为 Token 登录
+- 日期：2026-07-22
+- 变更摘要：`POST /api/v3/passport/auth/refresh` 明确按 token 登录返回与邮箱密码登录一致的本地登录数据，支持仅在请求体传 `auth_data`，并新增 `authData` 兼容参数；管理员投放平台登录信息继续优先使用请求传入的投放 token，其次使用最近一次密码登录缓存。
+- 影响范围：`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 refresh token 登录构造方法和 `authData` 兼容参数，并回退对应测试、文档记录即可。

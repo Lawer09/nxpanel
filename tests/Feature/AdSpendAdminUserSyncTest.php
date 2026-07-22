@@ -385,6 +385,47 @@ class AdSpendAdminUserSyncTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_v3_refresh_with_only_auth_data_returns_login_response_shape(): void
+    {
+        $this->createUser('refresh-body-admin@example.com', ['is_admin' => 1]);
+        $this->enableSync();
+
+        Http::fake([
+            self::BASE_URL . '/api/auth/login' => Http::response([
+                'success' => true,
+                'data' => [
+                    'token' => 'body-cached-remote-token',
+                    'userId' => 'body-cached-remote-user-id',
+                    'username' => 'refresh-body-admin@example.com',
+                ],
+            ]),
+        ]);
+
+        $login = $this->postJson('/api/v3/passport/auth/login', [
+            'email' => 'refresh-body-admin@example.com',
+            'password' => 'password123',
+        ])->assertOk();
+
+        Http::fake();
+
+        $response = $this->postJson('/api/v3/passport/auth/refresh', [
+            'auth_data' => $login->json('data.auth_data'),
+        ])->assertOk();
+
+        $response->assertJsonPath('code', 0)
+            ->assertJsonPath('data.is_admin', 1)
+            ->assertJsonPath('data.secure_path', 'admin')
+            ->assertJsonPath('data.user_type', 'global')
+            ->assertJsonPath('data.menus', [])
+            ->assertJsonPath('data.ad_spend_platform_login.token', 'body-cached-remote-token')
+            ->assertJsonPath('data.ad_spend_platform_login.userId', 'body-cached-remote-user-id');
+
+        $this->assertIsString($response->json('data.token'));
+        $this->assertIsString($response->json('data.auth_data'));
+        $this->assertStringStartsWith('Bearer ', $response->json('data.auth_data'));
+        Http::assertNothingSent();
+    }
+
     public function test_v3_refresh_accepts_client_held_ad_spend_platform_token(): void
     {
         $admin = $this->createUser('refresh-token-admin@example.com', ['is_admin' => 1]);

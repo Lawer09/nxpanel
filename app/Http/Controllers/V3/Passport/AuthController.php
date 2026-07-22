@@ -110,23 +110,34 @@ class AuthController extends V1AuthController
             return $this->error([400, __('Your account has been suspended')]);
         }
 
-        $data = $this->buildPasswordLoginData($user);
-        if ((bool) $user->is_admin) {
-            $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
-            $remoteToken = $this->resolveAdSpendPlatformToken($request);
+        return $this->ok($this->buildTokenLoginData($user, $request));
+    }
 
-            $data['ad_spend_platform_login'] = $remoteToken
-                ? $adSpendAdminUserSyncService->rememberTokenLoginData((int) $user->id, $remoteToken)
-                : $adSpendAdminUserSyncService->cachedUserLoginData((int) $user->id);
+    /**
+     * Build the same local response shape as password login for token login.
+     */
+    private function buildTokenLoginData($user, Request $request): array
+    {
+        $data = $this->buildPasswordLoginData($user);
+        if (!(bool) $user->is_admin) {
+            return $data;
         }
 
-        return $this->ok($data);
+        $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
+        $remoteToken = $this->resolveAdSpendPlatformToken($request);
+
+        $data['ad_spend_platform_login'] = $remoteToken
+            ? $adSpendAdminUserSyncService->rememberTokenLoginData((int) $user->id, $remoteToken)
+            : $adSpendAdminUserSyncService->cachedUserLoginData((int) $user->id);
+
+        return $data;
     }
 
     private function resolveRefreshAuthorization(Request $request): ?string
     {
         $authorization = $request->header('authorization')
             ?: $request->input('auth_data')
+            ?: $request->input('authData')
             ?: $request->input('authorization')
             ?: $request->input('token');
 
