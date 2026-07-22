@@ -46,21 +46,49 @@ class AuthController extends V1AuthController
         $data = $this->buildPasswordLoginData($result);
         if ((bool) $result->is_admin) {
             $data['ad_spend_platform_login'] = null;
+            $data['ad_spend_platform_login'] = $this->loginAdSpendPlatformAdmin(
+                app(AdSpendAdminUserSyncService::class),
+                (int) $result->id,
+                $email,
+                $password
+            );
+        }
+
+        return $this->ok($data);
+    }
+
+    /**
+     * Login the matching ad-spend platform account, creating it once when missing.
+     */
+    private function loginAdSpendPlatformAdmin(
+        AdSpendAdminUserSyncService $adSpendAdminUserSyncService,
+        int $userId,
+        string $email,
+        string $password
+    ): ?array {
+        try {
+            return $adSpendAdminUserSyncService->rememberUserLoginData(
+                $userId,
+                $adSpendAdminUserSyncService->loginUser($email, $password)
+            );
+        } catch (\Throwable $firstLoginException) {
             try {
-                $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
-                $data['ad_spend_platform_login'] = $adSpendAdminUserSyncService->rememberUserLoginData(
-                    (int) $result->id,
+                $adSpendAdminUserSyncService->ensureAdminUser($email, $password);
+
+                return $adSpendAdminUserSyncService->rememberUserLoginData(
+                    $userId,
                     $adSpendAdminUserSyncService->loginUser($email, $password)
                 );
             } catch (\Throwable $e) {
                 Log::warning('Ad spend platform user login failed', [
-                    'user_id' => $result->id,
-                    'error' => $e->getMessage(),
+                    'user_id' => $userId,
+                    'login_error' => $firstLoginException->getMessage(),
+                    'sync_error' => $e->getMessage(),
                 ]);
+
+                return null;
             }
         }
-
-        return $this->ok($data);
     }
 
 

@@ -273,6 +273,85 @@ class AdSpendAdminUserSyncTest extends TestCase
             && $request['password'] === 'password123');
     }
 
+    public function test_v3_admin_login_creates_remote_user_when_missing_then_returns_login_data(): void
+    {
+        $this->createUser('login-missing-admin@example.com', ['is_admin' => 1]);
+        $this->enableSync();
+        $userLoginAttempts = 0;
+
+        Http::fake(function ($request) use (&$userLoginAttempts) {
+            if ($request->url() === self::BASE_URL . '/api/auth/login'
+                && $request['username'] === 'login-missing-admin@example.com'
+            ) {
+                $userLoginAttempts++;
+
+                if ($userLoginAttempts === 1) {
+                    return Http::response([
+                        'success' => false,
+                        'errorMessage' => 'user not found',
+                    ]);
+                }
+
+                return Http::response([
+                    'success' => true,
+                    'data' => [
+                        'token' => 'remote-created-user-token',
+                        'userId' => 'remote-created-user-id',
+                        'username' => 'login-missing-admin@example.com',
+                    ],
+                ]);
+            }
+
+            if ($request->url() === self::BASE_URL . '/api/auth/login'
+                && $request['username'] === 'provision-admin'
+            ) {
+                return Http::response([
+                    'success' => true,
+                    'data' => ['token' => 'admin-token'],
+                ]);
+            }
+
+            if (str_starts_with($request->url(), self::BASE_URL . '/api/sys/user/page')) {
+                return Http::response([
+                    'success' => true,
+                    'data' => ['records' => []],
+                ]);
+            }
+
+            if ($request->url() === self::BASE_URL . '/api/sys/user'
+                && $request->method() === 'POST'
+            ) {
+                return Http::response(['success' => true]);
+            }
+
+            return Http::response(['success' => false], 500);
+        });
+
+        $this->postJson('/api/v3/passport/auth/login', [
+            'email' => 'login-missing-admin@example.com',
+            'password' => 'password123',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.ad_spend_platform_login.token', 'remote-created-user-token')
+            ->assertJsonPath('data.ad_spend_platform_login.userId', 'remote-created-user-id');
+
+        $this->assertSame(2, $userLoginAttempts);
+
+        Http::assertSent(fn($request) => str_starts_with($request->url(), self::BASE_URL . '/api/sys/user/page')
+            && str_contains($request->url(), 'username=login-missing-admin%40example.com')
+            && $request->header('Authorization') === ['Bearer admin-token']
+            && $request->header('Cookie') === ['Authorization=admin-token']);
+
+        Http::assertSent(fn($request) => $request->url() === self::BASE_URL . '/api/sys/user'
+            && $request->method() === 'POST'
+            && $request['username'] === 'login-missing-admin@example.com'
+            && $request['password'] === 'password123'
+            && $request['nickname'] === 'login-missing-admin@example.com'
+            && $request['status'] === 1
+            && $request['teamId'] === 'team-id-placeholder'
+            && $request['roleIds'] === ['role-id-placeholder']);
+    }
+
     public function test_v3_refresh_returns_cached_ad_spend_platform_login_data_without_password(): void
     {
         $this->createUser('refresh-admin@example.com', ['is_admin' => 1]);

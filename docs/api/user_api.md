@@ -158,6 +158,8 @@ POST /api/v3/admin/user/fetch
 
 非管理员登录不返回该字段；投放平台登录失败不会阻断本地管理员登录。
 
+管理员本地登录成功后，服务端会先使用相同用户名和密码调用投放平台 `/api/auth/login`。若首次投放登录失败，会使用环境变量中的投放平台管理凭据确保远端同名账号存在，创建成功后重试一次投放登录并返回 `ad_spend_platform_login`。若远端账号已存在但密码不一致，当前不会修改远端密码，重试失败后该字段仍为 `null`。
+
 ### V3 Token 刷新登录
 
 `POST /api/v3/passport/auth/refresh`

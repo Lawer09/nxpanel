@@ -1086,3 +1086,10 @@
 - 影响范围：`config/services.php`、`.env.example`、`app/Services/AdSpendAdminUserSyncService.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更；上线需在环境变量中补充投放平台管理凭据、团队 ID 和角色 ID。
 - 回滚说明：将 `AdSpendAdminUserSyncService` 的管理 token 获取方式恢复为账号表读取，并恢复对应配置、测试和文档说明即可。
+
+## 2026-07-22 管理员登录缺失投放账号自动补建
+- 日期：2026-07-22
+- 变更摘要：V3 管理员邮箱密码登录时，若首次投放平台同用户名密码登录失败，会使用环境变量中的投放平台管理凭据确保远端账号存在并重试一次登录；成功后继续返回 `ad_spend_platform_login`，失败时仍不阻断本地登录。
+- 影响范围：`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 V3 管理员登录中的 `ensureAdminUser()` fallback 和对应测试、文档记录即可。
