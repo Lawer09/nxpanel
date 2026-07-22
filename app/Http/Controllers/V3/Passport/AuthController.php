@@ -126,9 +126,24 @@ class AuthController extends V1AuthController
         $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
         $remoteToken = $this->resolveAdSpendPlatformToken($request);
 
-        $data['ad_spend_platform_login'] = $remoteToken
-            ? $adSpendAdminUserSyncService->rememberTokenLoginData((int) $user->id, $remoteToken)
-            : $adSpendAdminUserSyncService->cachedUserLoginData((int) $user->id);
+        if (!$remoteToken) {
+            $data['ad_spend_platform_login'] = $adSpendAdminUserSyncService->cachedUserLoginData((int) $user->id);
+
+            return $data;
+        }
+
+        try {
+            $data['ad_spend_platform_login'] = $adSpendAdminUserSyncService->rememberTokenLoginData(
+                (int) $user->id,
+                $remoteToken
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Ad spend platform token info failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+            $data['ad_spend_platform_login'] = null;
+        }
 
         return $data;
     }

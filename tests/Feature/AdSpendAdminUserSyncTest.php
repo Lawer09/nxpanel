@@ -430,7 +430,18 @@ class AdSpendAdminUserSyncTest extends TestCase
     {
         $admin = $this->createUser('refresh-token-admin@example.com', ['is_admin' => 1]);
         $this->enableSync();
-        Http::fake();
+        Http::fake([
+            self::BASE_URL . '/api/auth/info' => Http::response([
+                'success' => true,
+                'data' => [
+                    'token' => 'client-held-remote-token',
+                    'userId' => 'client-held-remote-user-id',
+                    'username' => 'refresh-token-admin@example.com',
+                    'permissions' => ['*'],
+                    'roles' => ['ADMIN'],
+                ],
+            ]),
+        ]);
 
         $this->postJson('/api/v3/passport/auth/refresh', [
             'ad_spend_platform_token' => 'client-held-remote-token',
@@ -438,9 +449,16 @@ class AdSpendAdminUserSyncTest extends TestCase
             'Authorization' => (new AuthService($admin))->generateAuthData()['auth_data'],
         ])
             ->assertOk()
-            ->assertJsonPath('data.ad_spend_platform_login.token', 'client-held-remote-token');
+            ->assertJsonPath('data.ad_spend_platform_login.token', 'client-held-remote-token')
+            ->assertJsonPath('data.ad_spend_platform_login.userId', 'client-held-remote-user-id')
+            ->assertJsonPath('data.ad_spend_platform_login.username', 'refresh-token-admin@example.com')
+            ->assertJsonPath('data.ad_spend_platform_login.permissions', ['*'])
+            ->assertJsonPath('data.ad_spend_platform_login.roles', ['ADMIN']);
 
-        Http::assertNothingSent();
+        Http::assertSent(fn($request) => $request->url() === self::BASE_URL . '/api/auth/info'
+            && $request->method() === 'GET'
+            && $request->header('Authorization') === ['Bearer client-held-remote-token']
+            && $request->header('Cookie') === ['Authorization=client-held-remote-token']);
     }
 
     public function test_v3_non_admin_login_does_not_return_ad_spend_platform_login_data(): void

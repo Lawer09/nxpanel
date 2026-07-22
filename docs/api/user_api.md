@@ -174,13 +174,13 @@ POST /api/v3/admin/user/fetch
 | `authData` | `string` | 否 | `auth_data` 的 camelCase 兼容参数 |
 | `authorization` | `string` | 否 | 同 `auth_data` |
 | `token` | `string` | 否 | 同 `auth_data`，作为无法设置请求头时的兼容参数 |
-| `ad_spend_platform_token` | `string` | 否 | 前端已持有的投放平台 token；传入后返回为 `ad_spend_platform_login.token` |
+| `ad_spend_platform_token` | `string` | 否 | 前端已持有的投放平台 token；传入后服务端会调用投放平台 `/api/auth/info` 补全 `ad_spend_platform_login` |
 | `adSpendPlatformToken` | `string` | 否 | `ad_spend_platform_token` 的 camelCase 兼容参数 |
 
 处理规则：
 
 - token 校验通过后，接口返回与普通邮箱密码登录一致的本地登录数据，并生成新的 `auth_data`。
-- 管理员用户会返回 `ad_spend_platform_login`：优先使用请求传入的投放平台 token；未传时返回最近一次管理员密码登录缓存的投放平台登录 `data`；无缓存时为 `null`。
+- 管理员用户会返回 `ad_spend_platform_login`：优先使用请求传入的投放平台 token 调用投放平台 `/api/auth/info` 获取完整登录信息；未传时返回最近一次管理员密码登录缓存的投放平台登录 `data`；无缓存时为 `null`。
 - token 登录接口不会使用用户名密码调用投放平台登录接口，也不会在仅传本地 `auth_data` 时自动补建投放平台账号；因为服务端无法从本地 token 或密码哈希还原明文密码。
 - 非管理员用户不返回 `ad_spend_platform_login`。
 
@@ -207,7 +207,11 @@ Authorization: Bearer xxxxxx
         "user_type": "global",
         "menus": [],
         "ad_spend_platform_login": {
-            "token": "remote-token"
+            "token": "remote-token",
+            "userId": "remote-user-id",
+            "username": "admin@example.com",
+            "permissions": ["*"],
+            "roles": ["ADMIN"]
         }
     }
 }

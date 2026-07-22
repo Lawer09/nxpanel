@@ -99,10 +99,41 @@ class AdSpendAdminUserSyncService
      */
     public function rememberTokenLoginData(int $userId, string $token): array
     {
-        $loginData = ['token' => $token];
+        $loginData = $this->loginDataByToken($token);
         $this->rememberUserLoginData($userId, $loginData);
 
         return $loginData;
+    }
+
+    /**
+     * Resolve ad-spend platform login data from an existing platform token.
+     */
+    public function loginDataByToken(string $token): array
+    {
+        if (!$this->isEnabled()) {
+            return ['token' => $token];
+        }
+
+        $token = trim($token);
+        if ($token === '') {
+            throw new \InvalidArgumentException('ad spend platform token is empty');
+        }
+
+        $response = Http::timeout($this->timeoutSeconds())
+            ->acceptJson()
+            ->withToken($token)
+            ->withHeaders(['Cookie' => 'Authorization=' . $token])
+            ->get($this->baseUrl() . '/api/auth/info');
+
+        $body = $this->assertSuccessfulRemoteResponse($response, 'token info');
+        $data = $body['data'] ?? null;
+        if (!is_array($data)) {
+            throw new \RuntimeException('ad spend platform token info missing data');
+        }
+
+        $data['token'] = (string) ($data['token'] ?? $token);
+
+        return $data;
     }
 
     private function findUserByUsername(array $config, string $username): ?array

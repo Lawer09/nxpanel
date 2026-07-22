@@ -1100,3 +1100,10 @@
 - 影响范围：`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 refresh token 登录构造方法和 `authData` 兼容参数，并回退对应测试、文档记录即可。
+
+## 2026-07-22 投放平台 Token 信息补全
+- 日期：2026-07-22
+- 变更摘要：V3 token 登录传入 `ad_spend_platform_token` 时，改为调用投放平台 `GET /api/auth/info` 使用该 token 获取完整投放平台登录信息，并缓存到 `ad_spend_platform_login`，不再只返回最小 token 结构。
+- 影响范围：`app/Services/AdSpendAdminUserSyncService.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：将 `rememberTokenLoginData()` 恢复为只缓存 `{token}`，并移除 `/api/auth/info` 调用及对应测试、文档记录即可。
