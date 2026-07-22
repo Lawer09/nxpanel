@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdSpendPlatformAccount;
 use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
@@ -25,10 +25,12 @@ class AdSpendAdminUserSyncTest extends TestCase
         parent::setUp();
 
         Queue::fake();
+        Cache::flush();
         Setting::createOrUpdate('secure_path', 'admin');
         config()->set('services.ad_spend_admin_user_sync.enabled', false);
-        config()->set('services.ad_spend_admin_user_sync.account_id', null);
-        config()->set('services.ad_spend_admin_user_sync.platform_code', 'adsmakeup');
+        config()->set('services.ad_spend_admin_user_sync.base_url', '');
+        config()->set('services.ad_spend_admin_user_sync.admin_username', '');
+        config()->set('services.ad_spend_admin_user_sync.admin_password', '');
         config()->set('services.ad_spend_admin_user_sync.team_id', '');
         config()->set('services.ad_spend_admin_user_sync.role_ids', []);
         $this->createPlan();
@@ -377,22 +379,15 @@ class AdSpendAdminUserSyncTest extends TestCase
         Http::assertNothingSent();
     }
 
-    private function enableSync(): AdSpendPlatformAccount
+    private function enableSync(): void
     {
         config()->set('services.ad_spend_admin_user_sync.enabled', true);
-        config()->set('services.ad_spend_admin_user_sync.platform_code', 'adsmakeup');
+        config()->set('services.ad_spend_admin_user_sync.base_url', self::BASE_URL);
+        config()->set('services.ad_spend_admin_user_sync.admin_username', 'provision-admin');
+        config()->set('services.ad_spend_admin_user_sync.admin_password', 'provision-password123');
         config()->set('services.ad_spend_admin_user_sync.team_id', 'team-id-placeholder');
         config()->set('services.ad_spend_admin_user_sync.role_ids', ['role-id-placeholder']);
         config()->set('services.ad_spend_admin_user_sync.timeout_seconds', 5);
-
-        return AdSpendPlatformAccount::create([
-            'platform_code' => 'adsmakeup',
-            'account_name' => 'Provision Admin',
-            'base_url' => self::BASE_URL,
-            'username' => 'provision-admin',
-            'password' => 'provision-password123',
-            'enabled' => 1,
-        ]);
     }
 
     private function createUser(string $email, array $overrides = []): User

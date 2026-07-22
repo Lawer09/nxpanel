@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\AdSpendPlatformAccount;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -10,10 +9,7 @@ use Illuminate\Support\Facades\Http;
 class AdSpendAdminUserSyncService
 {
     private const LOGIN_CACHE_TTL_SECONDS = 3600;
-
-    public function __construct(private readonly AdSpendPlatformService $platformService)
-    {
-    }
+    private const ADMIN_TOKEN_CACHE_TTL_SECONDS = 3600;
 
     /**
      * Whether remote admin user synchronization is enabled.
@@ -35,14 +31,13 @@ class AdSpendAdminUserSyncService
             return;
         }
 
-        $account = $this->resolveAccount();
-        $defaults = $this->resolveCreateDefaults();
+        $config = $this->resolveProvisionConfig();
 
-        if ($this->findUserByUsername($account, $username) !== null) {
+        if ($this->findUserByUsername($config, $username) !== null) {
             return;
         }
 
-        $this->createUser($account, $username, $password, $defaults);
+        $this->createUser($config, $username, $password);
     }
 
     /**
@@ -54,10 +49,9 @@ class AdSpendAdminUserSyncService
             return null;
         }
 
-        $account = $this->resolveAccount();
         $response = Http::timeout($this->timeoutSeconds())
             ->acceptJson()
-            ->post($this->baseUrl($account) . '/api/auth/login', [
+            ->post($this->baseUrl() . '/api/auth/login', [
                 'username' => $username,
                 'password' => $password,
             ]);
@@ -111,14 +105,14 @@ class AdSpendAdminUserSyncService
         return $loginData;
     }
 
-    private function findUserByUsername(AdSpendPlatformAccount $account, string $username): ?array
+    private function findUserByUsername(array $config, string $username): ?array
     {
-        $response = $this->sendWithAdminToken($account, function (string $token) use ($account, $username) {
+        $response = $this->sendWithAdminToken($config, function (string $token) use ($config, $username) {
             return Http::timeout($this->timeoutSeconds())
                 ->acceptJson()
                 ->withToken($token)
                 ->withHeaders(['Cookie' => 'Authorization=' . $token])
-                ->get($this->baseUrl($account) . '/api/sys/user/page', [
+                ->get($config['base_url'] . '/api/sys/user/page', [
                     'current' => 1,
                     'size' => 20,
                     'username' => $username,
@@ -135,75 +129,94 @@ class AdSpendAdminUserSyncService
         return null;
     }
 
-    private function createUser(AdSpendPlatformAccount $account, string $username, string $password, array $defaults): void
+    private function createUser(array $config, string $username, string $password): void
     {
         $payload = [
             'username' => $username,
             'password' => $password,
             'nickname' => $username,
-            'teamId' => $defaults['team_id'],
+            'teamId' => $config['team_id'],
             'status' => 1,
-            'roleIds' => $defaults['role_ids'],
+            'roleIds' => $config['role_ids'],
         ];
 
-        $response = $this->sendWithAdminToken($account, function (string $token) use ($account, $payload) {
+        $response = $this->sendWithAdminToken($config, function (string $token) use ($config, $payload) {
             return Http::timeout($this->timeoutSeconds())
                 ->acceptJson()
                 ->withToken($token)
                 ->withHeaders(['Cookie' => 'Authorization=' . $token])
-                ->post($this->baseUrl($account) . '/api/sys/user', $payload);
+                ->post($config['base_url'] . '/api/sys/user', $payload);
         });
 
         $this->assertSuccessfulRemoteResponse($response, 'create user');
     }
 
-    private function sendWithAdminToken(AdSpendPlatformAccount $account, callable $send): Response
+    private function sendWithAdminToken(array $config, callable $send): Response
     {
-        $token = $this->platformService->login($account, false);
+        $token = $this->adminToken($config);
         $response = $send($token);
 
         if ($response->status() !== 401) {
             return $response;
         }
 
-        $token = $this->platformService->login($account, true);
+        $token = $this->adminToken($config, true);
 
         return $send($token);
     }
 
-    private function resolveAccount(): AdSpendPlatformAccount
+    private function adminToken(array $config, bool $forceRefresh = false): string
     {
-        $accountId = config('services.ad_spend_admin_user_sync.account_id');
-        $query = AdSpendPlatformAccount::query()->where('enabled', 1);
+        $cacheKey = $this->adminTokenCacheKey($config);
 
-        if ($accountId !== null && (string) $accountId !== '') {
-            $query->whereKey((int) $accountId);
-        } else {
-            $platformCode = (string) config('services.ad_spend_admin_user_sync.platform_code', 'adsmakeup');
-            $query->where('platform_code', $platformCode);
+        if (!$forceRefresh) {
+            $token = Cache::get($cacheKey);
+            if (is_string($token) && trim($token) !== '') {
+                return $token;
+            }
         }
 
-        $account = $query->orderBy('id')->first();
-        if (!$account || !$account->base_url || !$account->username || !$account->password) {
-            throw new \InvalidArgumentException('ad spend admin user sync account is not configured');
+        Cache::forget($cacheKey);
+
+        $response = Http::timeout($this->timeoutSeconds())
+            ->acceptJson()
+            ->post($config['base_url'] . '/api/auth/login', [
+                'username' => $config['admin_username'],
+                'password' => $config['admin_password'],
+            ]);
+
+        $body = $this->assertSuccessfulRemoteResponse($response, 'admin login');
+        $token = $body['data']['token'] ?? null;
+
+        if (!is_string($token) || trim($token) === '') {
+            throw new \RuntimeException('ad spend platform admin login missing token');
         }
 
-        return $account;
+        Cache::put($cacheKey, $token, now()->addSeconds(self::ADMIN_TOKEN_CACHE_TTL_SECONDS));
+
+        return $token;
     }
 
-    private function resolveCreateDefaults(): array
+    private function resolveProvisionConfig(): array
     {
-        $teamId = trim((string) config('services.ad_spend_admin_user_sync.team_id', ''));
-        $roleIds = $this->roleIds();
+        $config = [
+            'base_url' => $this->baseUrl(),
+            'admin_username' => trim((string) config('services.ad_spend_admin_user_sync.admin_username', '')),
+            'admin_password' => (string) config('services.ad_spend_admin_user_sync.admin_password', ''),
+            'team_id' => trim((string) config('services.ad_spend_admin_user_sync.team_id', '')),
+            'role_ids' => $this->roleIds(),
+        ];
 
-        if ($teamId === '' || empty($roleIds)) {
-            throw new \InvalidArgumentException('ad spend admin user sync defaults are not configured');
+        if (
+            $config['admin_username'] === ''
+            || $config['admin_password'] === ''
+            || $config['team_id'] === ''
+            || empty($config['role_ids'])
+        ) {
+            throw new \InvalidArgumentException('ad spend admin user sync config is incomplete');
         }
 
-        return [
-            'team_id' => $teamId,
-            'role_ids' => $roleIds,
-        ];
+        return $config;
     }
 
     private function assertSuccessfulRemoteResponse(Response $response, string $action): array
@@ -251,13 +264,23 @@ class AdSpendAdminUserSyncService
         return max(1, (int) config('services.ad_spend_admin_user_sync.timeout_seconds', 20));
     }
 
-    private function baseUrl(AdSpendPlatformAccount $account): string
+    private function baseUrl(): string
     {
-        return rtrim((string) $account->base_url, '/');
+        $baseUrl = rtrim((string) config('services.ad_spend_admin_user_sync.base_url', ''), '/');
+        if ($baseUrl === '') {
+            throw new \InvalidArgumentException('ad spend platform base_url is not configured');
+        }
+
+        return $baseUrl;
     }
 
     private function loginCacheKey(int $userId): string
     {
         return 'ad_spend_platform_login:' . $userId;
+    }
+
+    private function adminTokenCacheKey(array $config): string
+    {
+        return 'ad_spend_platform_admin_token:' . sha1($config['base_url'] . '|' . $config['admin_username']);
     }
 }

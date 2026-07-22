@@ -1079,3 +1079,10 @@
 - 影响范围：`app/Http/Routes/V3/PassportRoute.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Services/AdSpendAdminUserSyncService.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 V3 refresh 路由、Controller 刷新方法、投放登录 data 缓存方法、相关测试和文档记录即可。
+
+## 2026-07-22 投放平台管理员同步凭据改为环境配置
+- 日期：2026-07-22
+- 变更摘要：投放平台管理员账号同步不再复用 `ad_spend_platform_accounts` 报表账号，改为通过 `AD_SPEND_ADMIN_USER_SYNC_BASE_URL`、`AD_SPEND_ADMIN_USER_SYNC_ADMIN_USERNAME`、`AD_SPEND_ADMIN_USER_SYNC_ADMIN_PASSWORD` 等环境变量获取投放平台管理 token；V3 管理员登录仍直接使用投放平台 `/api/auth/login` 校验本地管理员同用户名密码。
+- 影响范围：`config/services.php`、`.env.example`、`app/Services/AdSpendAdminUserSyncService.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更；上线需在环境变量中补充投放平台管理凭据、团队 ID 和角色 ID。
+- 回滚说明：将 `AdSpendAdminUserSyncService` 的管理 token 获取方式恢复为账号表读取，并恢复对应配置、测试和文档说明即可。

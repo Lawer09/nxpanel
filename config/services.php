@@ -48,8 +48,9 @@ return [
 
     'ad_spend_admin_user_sync' => [
         'enabled' => env('AD_SPEND_ADMIN_USER_SYNC_ENABLED', false),
-        'account_id' => env('AD_SPEND_ADMIN_USER_SYNC_ACCOUNT_ID'),
-        'platform_code' => env('AD_SPEND_ADMIN_USER_SYNC_PLATFORM_CODE', 'adsmakeup'),
+        'base_url' => env('AD_SPEND_ADMIN_USER_SYNC_BASE_URL', ''),
+        'admin_username' => env('AD_SPEND_ADMIN_USER_SYNC_ADMIN_USERNAME', ''),
+        'admin_password' => env('AD_SPEND_ADMIN_USER_SYNC_ADMIN_PASSWORD', ''),
         'team_id' => env('AD_SPEND_ADMIN_USER_SYNC_TEAM_ID', ''),
         'role_ids' => array_values(array_filter(array_map(
             'trim',

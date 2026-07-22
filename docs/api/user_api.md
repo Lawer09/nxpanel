@@ -109,7 +109,7 @@ POST /api/v3/admin/user/fetch
 
 - 仅 V3 管理端生效，V1/V2 不变。
 - `is_admin=true` 时只支持单用户生成，必须使用 `email_prefix + email_suffix`；批量生成管理员返回 `422`。
-- 开启 `AD_SPEND_ADMIN_USER_SYNC_ENABLED` 后，系统会使用已配置的投放平台管理员账号先查询远端用户；远端 `username` 精确存在时跳过创建，不存在时调用远端 `POST /api/sys/user` 创建。
+- 开启 `AD_SPEND_ADMIN_USER_SYNC_ENABLED` 后，系统会使用环境变量中配置的投放平台管理凭据先查询远端用户；远端 `username` 精确存在时跳过创建，不存在时调用远端 `POST /api/sys/user` 创建。
 - 远端创建使用本地管理员相同用户名和明文密码，`nickname=username`，`status=1`，`teamId` 与 `roleIds` 来自环境配置占位项。
 - 同步配置不完整返回 `422`；投放平台接口失败返回 `502`，本地管理员不会创建。
 
@@ -214,14 +214,15 @@ Authorization: Bearer xxxxxx
 
 ```dotenv
 AD_SPEND_ADMIN_USER_SYNC_ENABLED=false
-AD_SPEND_ADMIN_USER_SYNC_ACCOUNT_ID=
-AD_SPEND_ADMIN_USER_SYNC_PLATFORM_CODE=adsmakeup
+AD_SPEND_ADMIN_USER_SYNC_BASE_URL=https://console.example.com
+AD_SPEND_ADMIN_USER_SYNC_ADMIN_USERNAME=
+AD_SPEND_ADMIN_USER_SYNC_ADMIN_PASSWORD=
 AD_SPEND_ADMIN_USER_SYNC_TEAM_ID=
 AD_SPEND_ADMIN_USER_SYNC_ROLE_IDS=
 AD_SPEND_ADMIN_USER_SYNC_TIMEOUT_SECONDS=20
 ```
 
-投放平台管理员 `base_url`、登录用户名、密码复用 `ad_spend_platform_accounts` 中的已启用账号；真实密码继续加密存储，不应写入代码或文档。
+投放平台管理员 `base_url`、登录用户名和密码均来自环境变量；该配置仅用于管理员账号同步时获取投放平台管理 token，不复用 `ad_spend_platform_accounts` 报表同步账号。真实凭据不应写入代码、文档、测试或日志。
 
 ## 更新用户
 
