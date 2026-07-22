@@ -20,6 +20,7 @@ class UserGenerate extends FormRequest
             'email_prefix' => 'nullable',
             'email_suffix' => 'required',
             'password' => 'nullable',
+            'is_admin' => 'nullable|boolean',
             'user_type' => 'nullable|string|max:32',
             'menus' => 'nullable|array'
         ];

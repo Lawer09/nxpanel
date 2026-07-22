@@ -1065,3 +1065,17 @@
 - 影响范围：`app/Http/Routes/V3/AdminRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectVersionRecordController.php`、`app/Http/Requests/Admin/ProjectVersionRecordBatchStoreRequest.php`、`app/Services/ProjectVersionRecordService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除批量新增 Request、Controller 方法、Service 批量创建逻辑和路由，并同步回退项目 API 文档与本版本记录即可。
+
+## 2026-07-22 投放平台管理员账号同步与登录返回
+- 日期：2026-07-22
+- 变更摘要：V3 管理端生成管理员、升级管理员时支持同步投放平台同用户名账号；V3 管理员邮箱密码登录成功后新增 `ad_spend_platform_login` 返回投放平台登录 `data` 信息。
+- 影响范围：`config/services.php`、`.env.example`、`app/Services/AdSpendAdminUserSyncService.php`、`app/Http/Requests/Admin/UserGenerate.php`、`app/Services/UserService.php`、`app/Http/Controllers/V3/Admin/UserController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，复用现有 `ad_spend_platform_accounts` 保存投放平台管理员账号配置。
+- 回滚说明：移除投放平台管理员用户同步服务、V3 用户生成/升级同步调用、V3 管理员登录返回字段、相关配置占位项、测试和文档记录即可。
+
+## 2026-07-22 V3 登录 Token 刷新接口
+- 日期：2026-07-22
+- 变更摘要：新增 `POST /api/v3/passport/auth/refresh`，支持使用已有本地登录 token 刷新并返回登录数据；管理员可复用缓存的投放平台登录 data，或通过 `ad_spend_platform_token` 返回投放平台 token 信息，无需再次传用户名密码。
+- 影响范围：`app/Http/Routes/V3/PassportRoute.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Services/AdSpendAdminUserSyncService.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 V3 refresh 路由、Controller 刷新方法、投放登录 data 缓存方法、相关测试和文档记录即可。

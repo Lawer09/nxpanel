@@ -255,6 +255,7 @@ class UserService
             'expired_at',
             'transfer_enable',
             'register_metadata',
+            'is_admin',
             'user_type',
             'menus',
         ];

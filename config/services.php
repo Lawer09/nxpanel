@@ -46,4 +46,16 @@ return [
         'timeout_seconds' => env('TRAFFIC_PLATFORM_SERVICE_TIMEOUT_SECONDS', 15),
     ],
 
+    'ad_spend_admin_user_sync' => [
+        'enabled' => env('AD_SPEND_ADMIN_USER_SYNC_ENABLED', false),
+        'account_id' => env('AD_SPEND_ADMIN_USER_SYNC_ACCOUNT_ID'),
+        'platform_code' => env('AD_SPEND_ADMIN_USER_SYNC_PLATFORM_CODE', 'adsmakeup'),
+        'team_id' => env('AD_SPEND_ADMIN_USER_SYNC_TEAM_ID', ''),
+        'role_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', env('AD_SPEND_ADMIN_USER_SYNC_ROLE_IDS', ''))
+        ))),
+        'timeout_seconds' => env('AD_SPEND_ADMIN_USER_SYNC_TIMEOUT_SECONDS', 20),
+    ],
+
 ];

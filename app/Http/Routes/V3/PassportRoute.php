@@ -15,6 +15,7 @@ class PassportRoute
             // Auth
             $router->post('/auth/register', [AuthController::class, 'register']);
             $router->post('/auth/login', [AuthController::class, 'login']);
+            $router->post('/auth/refresh', [AuthController::class, 'refresh']);
             $router->post('/auth/loginByAid', [AuthController::class, 'loginByAid']);
         });
     }

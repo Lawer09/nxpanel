@@ -21,6 +21,7 @@ use App\Http\Requests\Admin\IpAllowlistRuleFetchRequest;
 use App\Http\Requests\Admin\IpAllowlistRuleSaveRequest;
 use App\Http\Requests\Admin\IpAllowlistRuleUpdateRequest;
 use App\Http\Requests\Admin\UserBatchBanRequest;
+use App\Http\Requests\Admin\UserGenerate;
 use App\Models\AllowedUserIp;
 use App\Models\AidLoginBanRule;
 use App\Http\Requests\Admin\UserUpdate;
@@ -30,10 +31,12 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Services\AidLoginBanRuleService;
 use App\Services\AllowedUserIpService;
+use App\Services\AdSpendAdminUserSyncService;
 use App\Services\AuthService;
 use App\Services\BlockedUserIpService;
 use App\Services\IpAllowlistRuleService;
 use App\Services\NodeSyncService;
+use App\Services\UserService;
 use App\Http\Resources\CamelizeResource;
 use App\Utils\Helper;
 use Illuminate\Database\Eloquent\Builder;
@@ -114,6 +117,42 @@ class UserController extends V2UserController
         return $this->ok($user->load('invite_user'));
     }
 
+    /**
+     * Generate a user, and provision the ad-spend platform account for admins.
+     */
+    public function generate(UserGenerate $request)
+    {
+        if (!$request->boolean('is_admin')) {
+            return parent::generate($request);
+        }
+
+        if ($request->input('generate_count')) {
+            return $this->error([422, '管理员账号不支持批量生成']);
+        }
+
+        if (!$request->input('email_prefix')) {
+            return $this->error([422, '管理员账号需要指定邮箱前缀']);
+        }
+
+        $email = $request->input('email_prefix') . '@' . $request->input('email_suffix');
+        if (User::where('email', $email)->exists()) {
+            return $this->error([400201, '邮箱已存在于系统中']);
+        }
+
+        $password = (string) ($request->input('password') ?: $email);
+        $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
+        if ($syncError = $this->syncAdSpendAdminUser($adSpendAdminUserSyncService, $email, $password)) {
+            return $syncError;
+        }
+
+        $user = app(UserService::class)->createUser($this->buildGeneratedAdminUserData($request, $email));
+        if (!$user->save()) {
+            return $this->error([500, '生成失败']);
+        }
+
+        return $this->ok(true);
+    }
+
     public function update(UserUpdate $request): JsonResponse
     {
         $params = $request->validated();
@@ -125,12 +164,6 @@ class UserController extends V2UserController
             if (User::where('email', $params['email'])->first() && $user->email !== $params['email']) {
                 return $this->error([400201, '邮箱已被使用']);
             }
-        }
-        if (isset($params['password'])) {
-            $params['password']      = password_hash($params['password'], PASSWORD_DEFAULT);
-            $params['password_algo'] = null;
-        } else {
-            unset($params['password']);
         }
         if (isset($params['plan_id'])) {
             $plan = Plan::find($params['plan_id']);
@@ -144,11 +177,6 @@ class UserController extends V2UserController
         } else {
             $params['invite_user_id'] = null;
         }
-
-        if (isset($params['password'])) {  
-            $authService = new AuthService($user);  
-            $authService->removeAllSessions();  
-        }  
 
         if (isset($params['banned']) && (int) $params['banned'] === 1) {
             $authService = new AuthService($user);
@@ -165,6 +193,33 @@ class UserController extends V2UserController
                 $params['register_metadata'] = json_decode($params['register_metadata'], true);
             }
         }
+
+        $plainPassword = $params['password'] ?? null;
+        $promoteToAdmin = array_key_exists('is_admin', $params)
+            && (bool) $params['is_admin']
+            && !(bool) $user->is_admin;
+
+        if ($promoteToAdmin) {
+            if (!$plainPassword) {
+                return $this->error([422, '升级为管理员时必须同时设置密码']);
+            }
+
+            $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
+            $remoteUsername = (string) ($params['email'] ?? $user->email);
+            if ($syncError = $this->syncAdSpendAdminUser($adSpendAdminUserSyncService, $remoteUsername, (string) $plainPassword)) {
+                return $syncError;
+            }
+        }
+
+        if (isset($params['password'])) {
+            $authService = new AuthService($user);
+            $authService->removeAllSessions();
+            $params['password']      = password_hash($params['password'], PASSWORD_DEFAULT);
+            $params['password_algo'] = null;
+        } else {
+            unset($params['password']);
+        }
+
         try {
             $user->update($params);
         } catch (\Exception $e) {
@@ -172,6 +227,57 @@ class UserController extends V2UserController
             return $this->error([500, '保存失败']);
         }
         return $this->ok(true);
+    }
+
+    /**
+     * Build generated user data for V3 admin creation.
+     */
+    private function buildGeneratedAdminUserData(Request $request, string $email): array
+    {
+        $data = [
+            'email' => $email,
+            'password' => $request->input('password') ?: $email,
+            'plan_id' => $request->input('plan_id'),
+            'expired_at' => $request->input('expired_at'),
+            'is_admin' => 1,
+        ];
+
+        foreach (['user_type', 'menus'] as $field) {
+            if ($request->has($field)) {
+                $data[$field] = $request->input($field);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Provision the matching remote ad-spend account and map failures to API errors.
+     */
+    private function syncAdSpendAdminUser(
+        AdSpendAdminUserSyncService $adSpendAdminUserSyncService,
+        string $email,
+        string $password
+    ): ?JsonResponse {
+        try {
+            $adSpendAdminUserSyncService->ensureAdminUser($email, $password);
+
+            return null;
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Ad spend admin user sync config incomplete', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error([422, '投放平台账号同步配置不完整']);
+        } catch (\Throwable $e) {
+            Log::warning('Ad spend admin user sync failed', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error([502, '投放平台账号同步失败']);
+        }
     }
 
     /**

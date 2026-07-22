@@ -93,6 +93,136 @@ POST /api/v3/admin/user/fetch
 
 ---
 
+## 2026-07-22 补充：V3 管理员投放平台账号同步
+
+### 管理端生成管理员
+
+`POST /api/v3/{secure_path}/user/generate`
+
+新增可选参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `is_admin` | `bool` | 否 | 为 `true` 时生成本地管理员，并同步创建投放平台同名账号 |
+
+处理规则：
+
+- 仅 V3 管理端生效，V1/V2 不变。
+- `is_admin=true` 时只支持单用户生成，必须使用 `email_prefix + email_suffix`；批量生成管理员返回 `422`。
+- 开启 `AD_SPEND_ADMIN_USER_SYNC_ENABLED` 后，系统会使用已配置的投放平台管理员账号先查询远端用户；远端 `username` 精确存在时跳过创建，不存在时调用远端 `POST /api/sys/user` 创建。
+- 远端创建使用本地管理员相同用户名和明文密码，`nickname=username`，`status=1`，`teamId` 与 `roleIds` 来自环境配置占位项。
+- 同步配置不完整返回 `422`；投放平台接口失败返回 `502`，本地管理员不会创建。
+
+### 管理端升级管理员
+
+`POST /api/v3/{secure_path}/user/update`
+
+处理规则：
+
+- 当请求将非管理员用户升级为管理员时，即 `is_admin=true` 且原用户不是管理员，必须同时传入 `password`。
+- 原因是本地只保存密码哈希，无法还原明文密码同步到投放平台。
+- 远端用户已存在时跳过创建，不更新远端密码、角色或状态。
+- 普通用户更新、已有管理员更新、非管理员更新均不触发投放平台用户同步。
+
+### V3 管理员登录返回投放平台登录数据
+
+`POST /api/v3/passport/auth/login`
+
+管理员邮箱密码登录成功后，`data` 新增字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ad_spend_platform_login` | `object|null` | 投放平台 `/api/auth/login` 返回的 `data`；投放平台登录失败时为 `null` |
+
+示例：
+
+```json
+{
+    "data": {
+        "token": "subscribe-token",
+        "auth_data": "Bearer xxxxxx",
+        "is_admin": true,
+        "secure_path": "admin",
+        "user_type": "global",
+        "menus": [],
+        "ad_spend_platform_login": {
+            "token": "remote-token",
+            "userId": "remote-user-id",
+            "username": "admin@example.com",
+            "permissions": ["*"],
+            "roles": ["ADMIN"]
+        }
+    }
+}
+```
+
+非管理员登录不返回该字段；投放平台登录失败不会阻断本地管理员登录。
+
+### V3 Token 刷新登录
+
+`POST /api/v3/passport/auth/refresh`
+
+请求使用已有本地登录 token，不需要传邮箱和密码。token 可以放在 `Authorization` 请求头，也可以放在 `auth_data` / `authorization` / `token` 参数中。
+
+可选参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `auth_data` | `string` | 否 | 本地登录返回的 `auth_data`，格式支持 `Bearer xxxxxx` 或裸 token |
+| `authorization` | `string` | 否 | 同 `auth_data` |
+| `token` | `string` | 否 | 同 `auth_data`，作为无法设置请求头时的兼容参数 |
+| `ad_spend_platform_token` | `string` | 否 | 前端已持有的投放平台 token；传入后返回为 `ad_spend_platform_login.token` |
+| `adSpendPlatformToken` | `string` | 否 | `ad_spend_platform_token` 的 camelCase 兼容参数 |
+
+处理规则：
+
+- token 校验通过后，接口返回与普通邮箱密码登录一致的本地登录数据，并生成新的 `auth_data`。
+- 管理员用户会返回 `ad_spend_platform_login`：优先使用请求传入的投放平台 token；未传时返回最近一次管理员密码登录缓存的投放平台登录 `data`；无缓存时为 `null`。
+- 刷新接口不会使用用户名密码调用投放平台登录接口。
+- 非管理员用户不返回 `ad_spend_platform_login`。
+
+示例：
+
+```json
+POST /api/v3/passport/auth/refresh
+Authorization: Bearer xxxxxx
+
+{
+    "ad_spend_platform_token": "remote-token"
+}
+```
+
+成功响应：
+
+```json
+{
+    "data": {
+        "token": "subscribe-token",
+        "auth_data": "Bearer new-local-token",
+        "is_admin": true,
+        "secure_path": "admin",
+        "user_type": "global",
+        "menus": [],
+        "ad_spend_platform_login": {
+            "token": "remote-token"
+        }
+    }
+}
+```
+
+环境配置占位项：
+
+```dotenv
+AD_SPEND_ADMIN_USER_SYNC_ENABLED=false
+AD_SPEND_ADMIN_USER_SYNC_ACCOUNT_ID=
+AD_SPEND_ADMIN_USER_SYNC_PLATFORM_CODE=adsmakeup
+AD_SPEND_ADMIN_USER_SYNC_TEAM_ID=
+AD_SPEND_ADMIN_USER_SYNC_ROLE_IDS=
+AD_SPEND_ADMIN_USER_SYNC_TIMEOUT_SECONDS=20
+```
+
+投放平台管理员 `base_url`、登录用户名、密码复用 `ad_spend_platform_accounts` 中的已启用账号；真实密码继续加密存储，不应写入代码或文档。
+
 ## 更新用户
 
 `POST /api/v3/admin/user/update`

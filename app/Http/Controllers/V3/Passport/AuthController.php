@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\V3\Passport;
 
 use App\Http\Controllers\V1\Passport\AuthController as V1AuthController;
+use App\Services\AdSpendAdminUserSyncService;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Requests\Passport\AuthLogin;
 use App\Http\Requests\Passport\AuthRegister;
+use Illuminate\Support\Facades\Log;
 
 
 class AuthController extends V1AuthController
@@ -41,9 +43,83 @@ class AuthController extends V1AuthController
             return $this->error($result);
         }
 
-        return $this->ok($this->buildPasswordLoginData($result));
+        $data = $this->buildPasswordLoginData($result);
+        if ((bool) $result->is_admin) {
+            $data['ad_spend_platform_login'] = null;
+            try {
+                $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
+                $data['ad_spend_platform_login'] = $adSpendAdminUserSyncService->rememberUserLoginData(
+                    (int) $result->id,
+                    $adSpendAdminUserSyncService->loginUser($email, $password)
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Ad spend platform user login failed', [
+                    'user_id' => $result->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $this->ok($data);
     }
 
+
+    /**
+     * Refresh local login data by bearer token without the user's password.
+     */
+    public function refresh(Request $request): JsonResponse
+    {
+        $authorization = $this->resolveRefreshAuthorization($request);
+        if (!$authorization) {
+            return $this->error([401, 'Unauthorized']);
+        }
+
+        $user = AuthService::findUserByBearerToken($authorization);
+        if (!$user) {
+            return $this->error([401, 'Unauthorized']);
+        }
+        if ($user->banned) {
+            return $this->error([400, __('Your account has been suspended')]);
+        }
+
+        $data = $this->buildPasswordLoginData($user);
+        if ((bool) $user->is_admin) {
+            $adSpendAdminUserSyncService = app(AdSpendAdminUserSyncService::class);
+            $remoteToken = $this->resolveAdSpendPlatformToken($request);
+
+            $data['ad_spend_platform_login'] = $remoteToken
+                ? $adSpendAdminUserSyncService->rememberTokenLoginData((int) $user->id, $remoteToken)
+                : $adSpendAdminUserSyncService->cachedUserLoginData((int) $user->id);
+        }
+
+        return $this->ok($data);
+    }
+
+    private function resolveRefreshAuthorization(Request $request): ?string
+    {
+        $authorization = $request->header('authorization')
+            ?: $request->input('auth_data')
+            ?: $request->input('authorization')
+            ?: $request->input('token');
+
+        if (!is_string($authorization) || trim($authorization) === '') {
+            return null;
+        }
+
+        $authorization = trim($authorization);
+
+        return str_starts_with($authorization, 'Bearer ')
+            ? $authorization
+            : 'Bearer ' . $authorization;
+    }
+
+    private function resolveAdSpendPlatformToken(Request $request): ?string
+    {
+        $token = $request->input('ad_spend_platform_token')
+            ?: $request->input('adSpendPlatformToken');
+
+        return is_string($token) && trim($token) !== '' ? trim($token) : null;
+    }
 
     /**
      * 通过AID快捷登录（自动注册）- V3
