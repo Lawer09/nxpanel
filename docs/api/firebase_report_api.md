@@ -153,3 +153,45 @@
 - `app/Http/Requests/Admin/FirebaseReportNodeQueryRequest.php`
 - `app/Console/Commands/AggregateFirebaseReports.php`
 - `app/Http/Routes/V3/AdminRoute.php`
+
+---
+
+## 4) 节点日报查询
+
+- 方法/路径：`POST /report/node-daily/query`
+- 数据表：`firebase_report_node_daily_device`
+- 说明：按应用和 UTC+8 日期汇总 Firebase VPN 连接与节点测速数据，用于 Firebase 菜单下“节点报表”。
+
+请求参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| dateFrom | string | 否 | 开始日期，默认最近 15 天起始日，`YYYY-MM-DD` |
+| dateTo | string | 否 | 结束日期，默认今天，`YYYY-MM-DD` |
+| filters.appIds | string[] | 否 | 应用 ID |
+| filters.platforms | string[] | 否 | 平台 |
+| filters.appVersions | string[] | 否 | 应用版本 |
+| page | int | 否 | 页码，默认 1 |
+| pageSize | int | 否 | 每页数量，默认 100，最大 200 |
+| orderBy | string | 否 | 排序字段，支持 camelCase 或 snake_case |
+| orderDirection | string | 否 | `asc`/`desc`，默认 `desc` |
+
+返回字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| data | object[] | 明细行，按 `appId + date` 汇总 |
+| summary | object | 当前筛选条件下的汇总行 |
+| total | int | 明细行总数，不包含汇总行 |
+| page | int | 当前页 |
+| pageSize | int | 每页数量 |
+
+明细和汇总指标：
+
+- `avgPingMs`：成功测速结果 `success = 1` 且 `latency_ms IS NOT NULL` 的加权平均。
+- `clientConnectCount`：`vpn_session` 会话行数。
+- `successCount`：`vpn_session.success = 1`。
+- `failCount`：`vpn_session.success = 0`，包含客户端取消。
+- `successRate` / `failRate`：对应次数 / `clientConnectCount`。
+- `cancelRate`：`success = 0` 且 `error_stage = client_error` 且 `error_code = CLIENT_CANCEL` 的会话数 / `clientConnectCount`。
+- `activeUserCount`：明细行按日期内 `device_id` 去重；汇总行按查询范围内 `app_id + device_id` 去重。

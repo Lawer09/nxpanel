@@ -35,6 +35,7 @@ class AggregateFirebaseReports extends Command
             $this->refreshFirstSeen($windowStartMs, $windowEndMs, (bool) $this->option('rebuild-first-seen'));
             $this->aggregateUserSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
             $this->aggregateNodeSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
+            $this->aggregateNodeDailyDeviceReport($windowStart, $now, $chunkSize);
         });
 
         $this->info(sprintf('firebase report aggregated: %s - %s', $windowStart->toDateTimeString(), $now->toDateTimeString()));
@@ -248,5 +249,121 @@ class AggregateFirebaseReports extends Command
                 );
             }
         }
+    }
+
+    /**
+     * Aggregate the Firebase node report into daily device rows.
+     */
+    private function aggregateNodeDailyDeviceReport(Carbon $windowStart, Carbon $windowEnd, int $chunkSize): void
+    {
+        $dailyStart = $windowStart->copy()->startOfDay();
+        $dailyEnd = $windowEnd->copy()->endOfDay();
+        $dailyStartMs = $dailyStart->copy()->utc()->getTimestampMs();
+        $dailyEndMs = $dailyEnd->copy()->utc()->getTimestampMs();
+        $dateExpression = $this->dateFromEventMsExpression('c.event_time_ms');
+
+        DB::table('firebase_report_node_daily_device')
+            ->whereBetween('date', [$dailyStart->toDateString(), $dailyEnd->toDateString()])
+            ->delete();
+
+        $sessionRows = DB::table('firebase_event_vpn_session as s')
+            ->join('firebase_event_common as c', 'c.event_id', '=', 's.event_id')
+            ->whereBetween('c.event_time_ms', [$dailyStartMs, $dailyEndMs])
+            ->whereNotNull('c.event_time_ms')
+            ->selectRaw("{$dateExpression} as date")
+            ->selectRaw("COALESCE(c.app_id, '') as app_id")
+            ->selectRaw("COALESCE(c.platform, '') as platform")
+            ->selectRaw("COALESCE(c.app_version, '') as app_version")
+            ->selectRaw("COALESCE(c.device_id, '') as device_id")
+            ->selectRaw('COUNT(*) as client_connect_count')
+            ->selectRaw('SUM(CASE WHEN s.success = 1 THEN 1 ELSE 0 END) as success_count')
+            ->selectRaw('SUM(CASE WHEN s.success = 0 THEN 1 ELSE 0 END) as fail_count')
+            ->selectRaw("SUM(CASE WHEN s.success = 0 AND s.error_stage = 'client_error' AND s.error_code = 'CLIENT_CANCEL' THEN 1 ELSE 0 END) as cancel_count")
+            ->groupBy(['date', 'app_id', 'platform', 'app_version', 'device_id'])
+            ->get();
+
+        $recomputedAt = now();
+        $sessionUpserts = [];
+        foreach ($sessionRows as $row) {
+            $sessionUpserts[] = [
+                'date' => $row->date,
+                'app_id' => (string) $row->app_id,
+                'platform' => (string) $row->platform,
+                'app_version' => (string) $row->app_version,
+                'device_id' => (string) $row->device_id,
+                'client_connect_count' => max(0, (int) $row->client_connect_count),
+                'success_count' => max(0, (int) $row->success_count),
+                'fail_count' => max(0, (int) $row->fail_count),
+                'cancel_count' => max(0, (int) $row->cancel_count),
+                'ping_sample_count' => 0,
+                'ping_total_ms' => 0,
+                'recomputed_at' => $recomputedAt,
+                'updated_at' => $recomputedAt,
+            ];
+        }
+
+        if (!empty($sessionUpserts)) {
+            foreach (array_chunk($sessionUpserts, $chunkSize) as $chunk) {
+                DB::table('firebase_report_node_daily_device')->upsert(
+                    $chunk,
+                    ['date', 'app_id', 'platform', 'app_version', 'device_id'],
+                    ['client_connect_count', 'success_count', 'fail_count', 'cancel_count', 'recomputed_at', 'updated_at']
+                );
+            }
+        }
+
+        $probeRows = DB::table('firebase_event_vpn_probe_result as r')
+            ->join('firebase_event_common as c', 'c.event_id', '=', 'r.event_id')
+            ->whereBetween('c.event_time_ms', [$dailyStartMs, $dailyEndMs])
+            ->whereNotNull('c.event_time_ms')
+            ->where('r.success', 1)
+            ->whereNotNull('r.latency_ms')
+            ->selectRaw("{$dateExpression} as date")
+            ->selectRaw("COALESCE(c.app_id, '') as app_id")
+            ->selectRaw("COALESCE(c.platform, '') as platform")
+            ->selectRaw("COALESCE(c.app_version, '') as app_version")
+            ->selectRaw("COALESCE(c.device_id, '') as device_id")
+            ->selectRaw('COUNT(*) as ping_sample_count')
+            ->selectRaw('SUM(r.latency_ms) as ping_total_ms')
+            ->groupBy(['date', 'app_id', 'platform', 'app_version', 'device_id'])
+            ->get();
+
+        $probeUpserts = [];
+        foreach ($probeRows as $row) {
+            $probeUpserts[] = [
+                'date' => $row->date,
+                'app_id' => (string) $row->app_id,
+                'platform' => (string) $row->platform,
+                'app_version' => (string) $row->app_version,
+                'device_id' => (string) $row->device_id,
+                'client_connect_count' => 0,
+                'success_count' => 0,
+                'fail_count' => 0,
+                'cancel_count' => 0,
+                'ping_sample_count' => max(0, (int) $row->ping_sample_count),
+                'ping_total_ms' => max(0, (int) $row->ping_total_ms),
+                'recomputed_at' => $recomputedAt,
+                'updated_at' => $recomputedAt,
+            ];
+        }
+
+        if (!empty($probeUpserts)) {
+            foreach (array_chunk($probeUpserts, $chunkSize) as $chunk) {
+                DB::table('firebase_report_node_daily_device')->upsert(
+                    $chunk,
+                    ['date', 'app_id', 'platform', 'app_version', 'device_id'],
+                    ['ping_sample_count', 'ping_total_ms', 'recomputed_at', 'updated_at']
+                );
+            }
+        }
+    }
+
+    private function dateFromEventMsExpression(string $field): string
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "DATE(DATETIME({$field} / 1000, 'unixepoch', '+8 hours'))";
+        }
+
+        return "DATE(CONVERT_TZ(FROM_UNIXTIME({$field} / 1000), '+00:00', '+08:00'))";
     }
 }

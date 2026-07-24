@@ -470,6 +470,7 @@ class AdminRoute
                 $router->post('/report/sync', [FirebaseReportController::class, 'sync']);
                 $router->post('/report/user-summary/query', [FirebaseReportController::class, 'queryUserSummary']);
                 $router->post('/report/node/query', [FirebaseReportController::class, 'queryNode']);
+                $router->post('/report/node-daily/query', [FirebaseReportController::class, 'queryNodeDaily']);
             });
 
             // Sync Servers

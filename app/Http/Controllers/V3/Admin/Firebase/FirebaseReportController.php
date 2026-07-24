@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V3\Admin\Firebase;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\FirebaseReportNodeDailyQueryRequest;
 use App\Http\Requests\Admin\FirebaseReportNodeQueryRequest;
 use App\Http\Requests\Admin\FirebaseReportSyncRequest;
 use App\Http\Requests\Admin\FirebaseReportUserSummaryQueryRequest;
@@ -178,6 +179,55 @@ class FirebaseReportController extends Controller
         ]);
     }
 
+    /**
+     * Firebase node daily report query.
+     */
+    public function queryNodeDaily(FirebaseReportNodeDailyQueryRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $dateFrom = $validated['dateFrom'] ?? now()->subDays(14)->toDateString();
+        $dateTo = $validated['dateTo'] ?? now()->toDateString();
+        $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
+        $pageSize = (int) ($validated['pageSize'] ?? 100);
+        $orderBy = $validated['orderBy'] ?? null;
+        $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
+
+        $baseQuery = DB::table('firebase_report_node_daily_device')
+            ->where('date', '>=', $dateFrom)
+            ->where('date', '<=', $dateTo);
+
+        $this->applyWhereIn($baseQuery, 'app_id', $filters['appIds'] ?? null);
+        $this->applyWhereIn($baseQuery, 'platform', $filters['platforms'] ?? null);
+        $this->applyWhereIn($baseQuery, 'app_version', $filters['appVersions'] ?? null);
+
+        $query = (clone $baseQuery)
+            ->selectRaw($this->nodeDailyReportSelectSql(['app_id', 'date']))
+            ->groupBy(['app_id', 'date']);
+
+        $sortable = $this->nodeDailyReportSortableColumns();
+        if (is_string($orderBy) && isset($sortable[$orderBy])) {
+            $query->orderBy($sortable[$orderBy], $orderDirection);
+        } else {
+            $query->orderByDesc('date')->orderBy('app_id');
+        }
+
+        $summary = (clone $baseQuery)
+            ->selectRaw($this->nodeDailyReportSummarySelectSql())
+            ->first();
+
+        $page = $query->paginate($pageSize);
+        return $this->ok([
+            'data' => CamelizeResource::collection($page->items()),
+            'summary' => (new CamelizeResource($summary ?: $this->emptyNodeDailyReportSummary()))->resolve(),
+            'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'pageSize' => $page->perPage(),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+        ]);
+    }
+
     private function normalizeGroupBy(array $groupBy, array $allowed): array
     {
         $allowedMap = array_flip($allowed);
@@ -189,6 +239,89 @@ class FirebaseReportController extends Controller
         }
 
         return array_values($normalized);
+    }
+
+    private function nodeDailyReportSelectSql(array $dimensions): string
+    {
+        return implode(', ', $dimensions)
+            . ', '
+            . $this->nodeDailyReportMetricSelectSql($this->nodeDailyActiveUserDistinctExpression(false));
+    }
+
+    private function nodeDailyReportSummarySelectSql(): string
+    {
+        return "'' as app_id, NULL as date, "
+            . $this->nodeDailyReportMetricSelectSql($this->nodeDailyActiveUserDistinctExpression(true));
+    }
+
+    private function nodeDailyReportMetricSelectSql(string $activeUserExpression): string
+    {
+        return implode(', ', [
+            'CASE WHEN SUM(ping_sample_count) > 0 THEN ROUND(SUM(ping_total_ms) / SUM(ping_sample_count), 0) ELSE NULL END as avg_ping_ms',
+            'COALESCE(SUM(client_connect_count), 0) as client_connect_count',
+            'COALESCE(SUM(success_count), 0) as success_count',
+            'CASE WHEN SUM(client_connect_count) > 0 THEN ROUND(SUM(success_count) / SUM(client_connect_count), 4) ELSE 0 END as success_rate',
+            'COALESCE(SUM(fail_count), 0) as fail_count',
+            'CASE WHEN SUM(client_connect_count) > 0 THEN ROUND(SUM(fail_count) / SUM(client_connect_count), 4) ELSE 0 END as fail_rate',
+            'COALESCE(SUM(cancel_count), 0) as cancel_count',
+            'CASE WHEN SUM(client_connect_count) > 0 THEN ROUND(SUM(cancel_count) / SUM(client_connect_count), 4) ELSE 0 END as cancel_rate',
+            "{$activeUserExpression} as active_user_count",
+        ]);
+    }
+
+    private function nodeDailyActiveUserDistinctExpression(bool $includeApp): string
+    {
+        if (!$includeApp) {
+            return "COUNT(DISTINCT CASE WHEN device_id <> '' AND client_connect_count > 0 THEN device_id END)";
+        }
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "COUNT(DISTINCT CASE WHEN device_id <> '' AND client_connect_count > 0 THEN app_id || char(0) || device_id END)";
+        }
+
+        return "COUNT(DISTINCT CASE WHEN device_id <> '' AND client_connect_count > 0 THEN CONCAT(app_id, CHAR(0), device_id) END)";
+    }
+
+    private function nodeDailyReportSortableColumns(): array
+    {
+        return [
+            'appId' => 'app_id',
+            'app_id' => 'app_id',
+            'date' => 'date',
+            'avgPingMs' => 'avg_ping_ms',
+            'avg_ping_ms' => 'avg_ping_ms',
+            'clientConnectCount' => 'client_connect_count',
+            'client_connect_count' => 'client_connect_count',
+            'successCount' => 'success_count',
+            'success_count' => 'success_count',
+            'successRate' => 'success_rate',
+            'success_rate' => 'success_rate',
+            'failCount' => 'fail_count',
+            'fail_count' => 'fail_count',
+            'failRate' => 'fail_rate',
+            'fail_rate' => 'fail_rate',
+            'cancelRate' => 'cancel_rate',
+            'cancel_rate' => 'cancel_rate',
+            'activeUserCount' => 'active_user_count',
+            'active_user_count' => 'active_user_count',
+        ];
+    }
+
+    private function emptyNodeDailyReportSummary(): object
+    {
+        return (object) [
+            'app_id' => '',
+            'date' => null,
+            'avg_ping_ms' => null,
+            'client_connect_count' => 0,
+            'success_count' => 0,
+            'success_rate' => 0,
+            'fail_count' => 0,
+            'fail_rate' => 0,
+            'cancel_count' => 0,
+            'cancel_rate' => 0,
+            'active_user_count' => 0,
+        ];
     }
 
     private function applyTimeRange($query, string $dateFrom, string $dateTo, $hourFrom = null, $hourTo = null): void
