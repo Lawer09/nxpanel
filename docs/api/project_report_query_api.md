@@ -217,6 +217,56 @@
 - `impressionsPerUser = adImpressions / dauUsers`
 - `arpu = adRevenue / dauUsers`
 
+## 项目留存分析接口
+
+- 管理端路径：`POST /api/v3/{secure_path}/report/project/retention`
+- 控制器：`ReportController::queryProjectRetention`
+- Service：`ProjectReportService::queryProjectRetention`
+
+### 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCode | string | 是 | 项目代号 |
+| dateFrom | string | 否 | cohort 开始日期，格式 `Y-m-d`，默认最近 15 天开始日期 |
+| dateTo | string | 否 | cohort 结束日期，格式 `Y-m-d`，默认今天 |
+
+### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "projectCode": "A003",
+    "dateFrom": "2026-07-10",
+    "dateTo": "2026-07-24",
+    "retentionDays": [1, 3, 7, 14, 30],
+    "data": [
+      {
+        "date": "2026-07-10",
+        "projectCode": "A003",
+        "activeUsers": 120,
+        "retention": {
+          "day1": { "count": 45, "rate": 37.5 },
+          "day3": { "count": 32, "rate": 26.67 },
+          "day7": { "count": 18, "rate": 15 },
+          "day14": null,
+          "day30": null
+        }
+      }
+    ]
+  }
+}
+```
+
+### 指标口径
+
+- cohort 用户：`v3_user_report_count` 中指定 `projectCode` 通过 `project_user_app_map` 映射到的启用 app 下，当日有上报记录的去重 `user_id`。
+- Day+N 留存：cohort 用户在目标日期 `cohort date + N` 仍在同一项目的任一启用 app 下有上报记录。
+- 多 app 项目按项目维度去重用户，使用 `COUNT(DISTINCT user_id)`，避免同一用户多时间桶或多 app 重复计数。
+- 目标日期晚于当前日期时，对应 Day+N 返回 `null`。
+
 ## CSV 导出接口
 
 ### 请求参数

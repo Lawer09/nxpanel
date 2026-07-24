@@ -17,6 +17,8 @@ class ProjectReportService
 
     private const RECENT_HOURLY_AD_MATCH_RATE_CACHE_TTL = 120;
 
+    private const RETENTION_DAYS = [1, 3, 7, 14, 30];
+
     private const PROJECT_METADATA_COLUMNS = [
         'ad_status' => 'adStatus',
         'app_platform' => 'appPlatform',
@@ -211,6 +213,121 @@ class ProjectReportService
             'projectCode' => $projectCode,
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * Query project-level user retention cohorts.
+     */
+    public function queryProjectRetention(array $validated): array
+    {
+        $params = [
+            'projectCode' => trim((string) $validated['projectCode']),
+            'dateFrom' => $validated['dateFrom'] ?? now()->subDays(14)->toDateString(),
+            'dateTo' => $validated['dateTo'] ?? now()->toDateString(),
+        ];
+
+        return $this->rememberProjectReportQuery('retention', $params, fn () => $this->executeProjectRetentionQuery($params));
+    }
+
+    /**
+     * Execute project-level user retention query in two aggregate passes.
+     */
+    private function executeProjectRetentionQuery(array $validated): array
+    {
+        $projectCode = trim((string) $validated['projectCode']);
+        $dateFrom = (string) $validated['dateFrom'];
+        $dateTo = (string) $validated['dateTo'];
+        $today = now()->toDateString();
+
+        $cohorts = DB::table('v3_user_report_count as urc')
+            ->join('project_user_app_map as puam', function ($join) use ($projectCode) {
+                $join->on('puam.app_id', '=', 'urc.app_id')
+                    ->where('puam.enabled', '=', 1)
+                    ->where('puam.project_code', '=', $projectCode);
+            })
+            ->whereBetween('urc.date', [$dateFrom, $dateTo])
+            ->selectRaw('urc.date as date')
+            ->selectRaw('COUNT(DISTINCT urc.user_id) as active_users')
+            ->groupBy('urc.date')
+            ->orderBy('urc.date')
+            ->get();
+
+        $targetDates = [];
+        foreach ($cohorts as $cohort) {
+            foreach (self::RETENTION_DAYS as $day) {
+                $targetDate = Carbon::parse((string) $cohort->date)->addDays($day)->toDateString();
+                if ($targetDate <= $today) {
+                    $targetDates[$targetDate] = $targetDate;
+                }
+            }
+        }
+
+        $retainedMap = [];
+        if ($cohorts->isNotEmpty() && $targetDates !== []) {
+            $retainedQuery = DB::table('v3_user_report_count as a')
+                ->join('project_user_app_map as cohort_map', function ($join) use ($projectCode) {
+                    $join->on('cohort_map.app_id', '=', 'a.app_id')
+                        ->where('cohort_map.enabled', '=', 1)
+                        ->where('cohort_map.project_code', '=', $projectCode);
+                })
+                ->join('v3_user_report_count as b', 'a.user_id', '=', 'b.user_id')
+                ->join('project_user_app_map as retained_map', function ($join) use ($projectCode) {
+                    $join->on('retained_map.app_id', '=', 'b.app_id')
+                        ->where('retained_map.enabled', '=', 1)
+                        ->where('retained_map.project_code', '=', $projectCode);
+                })
+                ->whereBetween('a.date', [$dateFrom, $dateTo])
+                ->whereIn('b.date', array_values($targetDates))
+                ->selectRaw('a.date as cohort_date')
+                ->selectRaw('b.date as target_date')
+                ->selectRaw('COUNT(DISTINCT a.user_id) as retained_users');
+            $this->whereProjectRetentionDayDiff($retainedQuery);
+
+            $retainedRows = $retainedQuery
+                ->groupBy('a.date', 'b.date')
+                ->get();
+
+            foreach ($retainedRows as $row) {
+                $retainedMap[$row->cohort_date . '|' . $row->target_date] = (int) $row->retained_users;
+            }
+        }
+
+        $data = [];
+        foreach ($cohorts as $cohort) {
+            $cohortDate = (string) $cohort->date;
+            $activeUsers = (int) ($cohort->active_users ?? 0);
+            $retention = [];
+
+            foreach (self::RETENTION_DAYS as $day) {
+                $targetDate = Carbon::parse($cohortDate)->addDays($day)->toDateString();
+                $key = $this->retentionDayKey($day);
+                if ($targetDate > $today) {
+                    $retention[$key] = null;
+                    continue;
+                }
+
+                $retained = $retainedMap[$cohortDate . '|' . $targetDate] ?? 0;
+                $retention[$key] = [
+                    'count' => $retained,
+                    'rate' => $activeUsers > 0 ? round($retained / $activeUsers * 100, 2) : 0,
+                ];
+            }
+
+            $data[] = [
+                'date' => $cohortDate,
+                'projectCode' => $projectCode,
+                'activeUsers' => $activeUsers,
+                'retention' => $retention,
+            ];
+        }
+
+        return [
+            'projectCode' => $projectCode,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'retentionDays' => self::RETENTION_DAYS,
             'data' => $data,
         ];
     }
@@ -2133,6 +2250,28 @@ class ProjectReportService
         $value = strtoupper(trim((string) ($country ?? '')));
 
         return $value === '' ? 'XX' : $value;
+    }
+
+    /**
+     * Restrict retention join rows to the configured Day+N offsets.
+     */
+    private function whereProjectRetentionDayDiff(Builder $query): void
+    {
+        $driver = DB::connection()->getDriverName();
+        $placeholders = implode(',', array_fill(0, count(self::RETENTION_DAYS), '?'));
+
+        if ($driver === 'sqlite') {
+            $query->whereRaw("CAST(julianday(b.date) - julianday(a.date) AS INTEGER) IN ({$placeholders})", self::RETENTION_DAYS);
+
+            return;
+        }
+
+        $query->whereRaw("DATEDIFF(b.date, a.date) IN ({$placeholders})", self::RETENTION_DAYS);
+    }
+
+    private function retentionDayKey(int $day): string
+    {
+        return 'day' . $day;
     }
 
     /**

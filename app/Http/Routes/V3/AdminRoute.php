@@ -299,6 +299,7 @@ class AdminRoute
                 $router->post('/project/export',          [ReportController::class, 'exportProjectReport']);
                 $router->post('/project/hourly/query',    [ReportController::class, 'queryProjectReportHourly']);
                 $router->post('/project/hourly/ad-match-rate', [ReportController::class, 'queryProjectHourlyAdMatchRate']);
+                $router->post('/project/retention',       [ReportController::class, 'queryProjectRetention']);
             });
 
             // Realtime User Reports

@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyQueryRequest;
 use App\Http\Requests\Admin\ProjectHourlyAdMatchRateRequest;
+use App\Http\Requests\Admin\ProjectRetentionQueryRequest;
 use App\Http\Requests\Admin\ProjectReportHourlyQueryRequest;
 use App\Http\Requests\Admin\UserReportHourlyQueryRequest;
 use App\Http\Requests\Admin\UserReportNodeFailQueryRequest;
@@ -165,6 +166,16 @@ class ReportController extends Controller
     {
         return $this->ok(
             $this->projectReportService->queryHourlyAdMatchRate($request->validated())
+        );
+    }
+
+    /**
+     * Query project user retention cohorts.
+     */
+    public function queryProjectRetention(ProjectRetentionQueryRequest $request): JsonResponse
+    {
+        return $this->ok(
+            $this->projectReportService->queryProjectRetention($request->validated())
         );
     }
 }
