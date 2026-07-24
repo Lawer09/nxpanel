@@ -213,6 +213,7 @@ class FirebaseReportController extends Controller
         $dateFrom = $validated['dateFrom'] ?? now()->subDays(14)->toDateString();
         $dateTo = $validated['dateTo'] ?? now()->toDateString();
         $filters = is_array($validated['filters'] ?? null) ? $validated['filters'] : [];
+        $groupBy = $this->normalizeAppConnectionGroupBy($validated['groupBy'] ?? null);
         $pageSize = (int) ($validated['pageSize'] ?? 100);
         $orderBy = $validated['orderBy'] ?? null;
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
@@ -226,14 +227,14 @@ class FirebaseReportController extends Controller
         $this->applyWhereIn($baseQuery, 'app_version', $filters['appVersions'] ?? null);
 
         $query = (clone $baseQuery)
-            ->selectRaw($this->appConnectionReportSelectSql(['app_id', 'date']))
-            ->groupBy(['app_id', 'date']);
+            ->selectRaw($this->appConnectionReportSelectSql($groupBy))
+            ->groupBy($groupBy);
 
         $sortable = $this->appConnectionReportSortableColumns();
-        if (is_string($orderBy) && isset($sortable[$orderBy])) {
+        if (is_string($orderBy) && isset($sortable[$orderBy]) && $this->canSortAppConnectionColumn($sortable[$orderBy], $groupBy)) {
             $query->orderBy($sortable[$orderBy], $orderDirection);
         } else {
-            $query->orderByDesc('date')->orderBy('app_id');
+            $this->applyDefaultAppConnectionOrder($query, $groupBy);
         }
 
         $summary = (clone $baseQuery)
@@ -249,6 +250,7 @@ class FirebaseReportController extends Controller
             'pageSize' => $page->perPage(),
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
+            'groupBy' => $groupBy,
         ]);
     }
 
@@ -312,6 +314,9 @@ class FirebaseReportController extends Controller
             'appId' => 'app_id',
             'app_id' => 'app_id',
             'date' => 'date',
+            'platform' => 'platform',
+            'appVersion' => 'app_version',
+            'app_version' => 'app_version',
             'avgPingMs' => 'avg_ping_ms',
             'avg_ping_ms' => 'avg_ping_ms',
             'clientConnectCount' => 'client_connect_count',
@@ -329,6 +334,62 @@ class FirebaseReportController extends Controller
             'activeUserCount' => 'active_user_count',
             'active_user_count' => 'active_user_count',
         ];
+    }
+
+    private function canSortAppConnectionColumn(string $column, array $groupBy): bool
+    {
+        $dimensionColumns = ['date', 'app_id', 'platform', 'app_version'];
+        if (!in_array($column, $dimensionColumns, true)) {
+            return true;
+        }
+
+        return in_array($column, $groupBy, true);
+    }
+
+    private function applyDefaultAppConnectionOrder($query, array $groupBy): void
+    {
+        $applied = false;
+        if (in_array('date', $groupBy, true)) {
+            $query->orderByDesc('date');
+            $applied = true;
+        }
+
+        foreach (['app_id', 'platform', 'app_version'] as $column) {
+            if (in_array($column, $groupBy, true)) {
+                $query->orderBy($column);
+                $applied = true;
+            }
+        }
+
+        if (!$applied) {
+            $query->orderByDesc('client_connect_count');
+        }
+    }
+
+    private function normalizeAppConnectionGroupBy($groupBy): array
+    {
+        $allowedMap = [
+            'date' => 'date',
+            'appId' => 'app_id',
+            'app_id' => 'app_id',
+            'platform' => 'platform',
+            'appVersion' => 'app_version',
+            'app_version' => 'app_version',
+        ];
+
+        $rawValues = is_array($groupBy) && !empty($groupBy) ? $groupBy : ['app_id', 'date'];
+        $normalized = [];
+        foreach ($rawValues as $field) {
+            if (is_string($field) && isset($allowedMap[$field])) {
+                $normalized[$allowedMap[$field]] = $allowedMap[$field];
+            }
+        }
+
+        if (empty($normalized)) {
+            return ['app_id', 'date'];
+        }
+
+        return array_values($normalized);
     }
 
     private function emptyAppConnectionReportSummary(): object

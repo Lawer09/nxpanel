@@ -171,16 +171,19 @@
 | filters.appIds | string[] | 否 | 应用 ID |
 | filters.platforms | string[] | 否 | 平台 |
 | filters.appVersions | string[] | 否 | 应用版本 |
+| groupBy | string[] | 否 | 分组字段，默认 `["app_id","date"]` |
 | page | int | 否 | 页码，默认 1 |
 | pageSize | int | 否 | 每页数量，默认 100，最大 200 |
 | orderBy | string | 否 | 排序字段，支持 camelCase 或 snake_case |
 | orderDirection | string | 否 | `asc`/`desc`，默认 `desc` |
 
+`groupBy` 可选值：`date`、`appId`/`app_id`、`platform`、`appVersion`/`app_version`。
+
 返回字段：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| data | object[] | 明细行，按 `appId + date` 汇总 |
+| data | object[] | 明细行，按 `groupBy` 维度汇总 |
 | summary | object | 当前筛选条件下的汇总行 |
 | total | int | 明细行总数，不包含汇总行 |
 | page | int | 当前页 |
@@ -194,7 +197,7 @@
 - `failCount`：`vpn_session.success = 0`，包含客户端取消。
 - `successRate` / `failRate`：对应次数 / `clientConnectCount`。
 - `cancelRate`：`success = 0` 且 `error_stage = client_error` 且 `error_code = CLIENT_CANCEL` 的会话数 / `clientConnectCount`。
-- `activeUserCount`：明细行按日期内 `device_id` 去重；汇总行按查询范围内 `app_id + device_id` 去重。
+- `activeUserCount`：明细行按当前 `groupBy` 维度内 `device_id` 去重；汇总行按查询范围内 `app_id + device_id` 去重。
 
 ## 5) 应用连接报表同步
 

@@ -38,9 +38,11 @@ class FirebaseReportAppConnectionQueryRequest extends FormRequest
             'filters.platforms.*' => 'string|max:32',
             'filters.appVersions' => 'nullable|array',
             'filters.appVersions.*' => 'string|max:64',
+            'groupBy' => 'nullable|array',
+            'groupBy.*' => 'string|in:date,appId,app_id,platform,appVersion,app_version',
             'page' => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
-            'orderBy' => 'nullable|string|in:appId,app_id,date,avgPingMs,avg_ping_ms,clientConnectCount,client_connect_count,successCount,success_count,successRate,success_rate,failCount,fail_count,failRate,fail_rate,cancelRate,cancel_rate,activeUserCount,active_user_count',
+            'orderBy' => 'nullable|string|in:appId,app_id,date,platform,appVersion,app_version,avgPingMs,avg_ping_ms,clientConnectCount,client_connect_count,successCount,success_count,successRate,success_rate,failCount,fail_count,failRate,fail_rate,cancelRate,cancel_rate,activeUserCount,active_user_count',
             'orderDirection' => 'nullable|string|in:asc,desc',
         ];
     }
