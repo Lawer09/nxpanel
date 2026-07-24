@@ -156,11 +156,11 @@
 
 ---
 
-## 4) 节点日报查询
+## 4) 应用连接报表查询
 
-- 方法/路径：`POST /report/node-daily/query`
-- 数据表：`firebase_report_node_daily_device`
-- 说明：按应用和 UTC+8 日期汇总 Firebase VPN 连接与节点测速数据，用于 Firebase 菜单下“节点报表”。
+- 方法/路径：`POST /report/app-connection/query`
+- 数据表：`firebase_report_app_connection_daily_device`
+- 说明：按应用和 UTC+8 日期汇总 Firebase VPN 连接与节点测速数据，用于 Firebase 菜单下“应用连接报表”。
 
 请求参数：
 
@@ -195,3 +195,21 @@
 - `successRate` / `failRate`：对应次数 / `clientConnectCount`。
 - `cancelRate`：`success = 0` 且 `error_stage = client_error` 且 `error_code = CLIENT_CANCEL` 的会话数 / `clientConnectCount`。
 - `activeUserCount`：明细行按日期内 `device_id` 去重；汇总行按查询范围内 `app_id + device_id` 去重。
+
+## 5) 应用连接报表同步
+
+- 方法/路径：`POST /report/app-connection/sync`
+- 说明：按日期范围触发应用连接报表聚合，适用于回填当前滚动窗口之前的历史数据。
+
+请求参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| dateFrom | string | 是 | 开始日期，`YYYY-MM-DD` |
+| dateTo | string | 是 | 结束日期，`YYYY-MM-DD` |
+
+同步命令等价于：
+
+```bash
+php artisan firebase_report:aggregate --date-from=YYYY-MM-DD --date-to=YYYY-MM-DD --only=app-connection
+```

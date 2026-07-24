@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\V3\Admin\Firebase;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\FirebaseReportNodeDailyQueryRequest;
+use App\Http\Requests\Admin\FirebaseReportAppConnectionQueryRequest;
 use App\Http\Requests\Admin\FirebaseReportNodeQueryRequest;
 use App\Http\Requests\Admin\FirebaseReportSyncRequest;
 use App\Http\Requests\Admin\FirebaseReportUserSummaryQueryRequest;
@@ -26,6 +26,30 @@ class FirebaseReportController extends Controller
         $exitCode = Artisan::call('firebase_report:aggregate', [
             '--date-from' => $dateFrom,
             '--date-to' => $dateTo,
+        ]);
+
+        return $this->ok([
+            'success' => $exitCode === 0,
+            'exitCode' => $exitCode,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'message' => trim((string) Artisan::output()),
+        ]);
+    }
+
+    /**
+     * Aggregate Firebase app connection report by date range.
+     */
+    public function syncAppConnection(FirebaseReportSyncRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $dateFrom = (string) $validated['dateFrom'];
+        $dateTo = (string) $validated['dateTo'];
+
+        $exitCode = Artisan::call('firebase_report:aggregate', [
+            '--date-from' => $dateFrom,
+            '--date-to' => $dateTo,
+            '--only' => 'app-connection',
         ]);
 
         return $this->ok([
@@ -180,9 +204,9 @@ class FirebaseReportController extends Controller
     }
 
     /**
-     * Firebase node daily report query.
+     * Firebase app connection report query.
      */
-    public function queryNodeDaily(FirebaseReportNodeDailyQueryRequest $request): JsonResponse
+    public function queryAppConnection(FirebaseReportAppConnectionQueryRequest $request): JsonResponse
     {
         $validated = $request->validated();
 
@@ -193,7 +217,7 @@ class FirebaseReportController extends Controller
         $orderBy = $validated['orderBy'] ?? null;
         $orderDirection = $this->normalizeOrderDirection($validated['orderDirection'] ?? null);
 
-        $baseQuery = DB::table('firebase_report_node_daily_device')
+        $baseQuery = DB::table('firebase_report_app_connection_daily_device')
             ->where('date', '>=', $dateFrom)
             ->where('date', '<=', $dateTo);
 
@@ -202,10 +226,10 @@ class FirebaseReportController extends Controller
         $this->applyWhereIn($baseQuery, 'app_version', $filters['appVersions'] ?? null);
 
         $query = (clone $baseQuery)
-            ->selectRaw($this->nodeDailyReportSelectSql(['app_id', 'date']))
+            ->selectRaw($this->appConnectionReportSelectSql(['app_id', 'date']))
             ->groupBy(['app_id', 'date']);
 
-        $sortable = $this->nodeDailyReportSortableColumns();
+        $sortable = $this->appConnectionReportSortableColumns();
         if (is_string($orderBy) && isset($sortable[$orderBy])) {
             $query->orderBy($sortable[$orderBy], $orderDirection);
         } else {
@@ -213,13 +237,13 @@ class FirebaseReportController extends Controller
         }
 
         $summary = (clone $baseQuery)
-            ->selectRaw($this->nodeDailyReportSummarySelectSql())
+            ->selectRaw($this->appConnectionReportSummarySelectSql())
             ->first();
 
         $page = $query->paginate($pageSize);
         return $this->ok([
             'data' => CamelizeResource::collection($page->items()),
-            'summary' => (new CamelizeResource($summary ?: $this->emptyNodeDailyReportSummary()))->resolve(),
+            'summary' => (new CamelizeResource($summary ?: $this->emptyAppConnectionReportSummary()))->resolve(),
             'total' => $page->total(),
             'page' => $page->currentPage(),
             'pageSize' => $page->perPage(),
@@ -241,20 +265,20 @@ class FirebaseReportController extends Controller
         return array_values($normalized);
     }
 
-    private function nodeDailyReportSelectSql(array $dimensions): string
+    private function appConnectionReportSelectSql(array $dimensions): string
     {
         return implode(', ', $dimensions)
             . ', '
-            . $this->nodeDailyReportMetricSelectSql($this->nodeDailyActiveUserDistinctExpression(false));
+            . $this->appConnectionReportMetricSelectSql($this->appConnectionActiveUserDistinctExpression(false));
     }
 
-    private function nodeDailyReportSummarySelectSql(): string
+    private function appConnectionReportSummarySelectSql(): string
     {
         return "'' as app_id, NULL as date, "
-            . $this->nodeDailyReportMetricSelectSql($this->nodeDailyActiveUserDistinctExpression(true));
+            . $this->appConnectionReportMetricSelectSql($this->appConnectionActiveUserDistinctExpression(true));
     }
 
-    private function nodeDailyReportMetricSelectSql(string $activeUserExpression): string
+    private function appConnectionReportMetricSelectSql(string $activeUserExpression): string
     {
         return implode(', ', [
             'CASE WHEN SUM(ping_sample_count) > 0 THEN ROUND(SUM(ping_total_ms) / SUM(ping_sample_count), 0) ELSE NULL END as avg_ping_ms',
@@ -269,7 +293,7 @@ class FirebaseReportController extends Controller
         ]);
     }
 
-    private function nodeDailyActiveUserDistinctExpression(bool $includeApp): string
+    private function appConnectionActiveUserDistinctExpression(bool $includeApp): string
     {
         if (!$includeApp) {
             return "COUNT(DISTINCT CASE WHEN device_id <> '' AND client_connect_count > 0 THEN device_id END)";
@@ -282,7 +306,7 @@ class FirebaseReportController extends Controller
         return "COUNT(DISTINCT CASE WHEN device_id <> '' AND client_connect_count > 0 THEN CONCAT(app_id, CHAR(0), device_id) END)";
     }
 
-    private function nodeDailyReportSortableColumns(): array
+    private function appConnectionReportSortableColumns(): array
     {
         return [
             'appId' => 'app_id',
@@ -307,7 +331,7 @@ class FirebaseReportController extends Controller
         ];
     }
 
-    private function emptyNodeDailyReportSummary(): object
+    private function emptyAppConnectionReportSummary(): object
     {
         return (object) [
             'app_id' => '',

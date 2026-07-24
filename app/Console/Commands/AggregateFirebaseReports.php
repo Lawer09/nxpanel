@@ -12,6 +12,7 @@ class AggregateFirebaseReports extends Command
         {--hours=72 : Rolling window hours to rebuild}
         {--date-from= : Start date (YYYY-MM-DD, UTC+8)}
         {--date-to= : End date (YYYY-MM-DD, UTC+8)}
+        {--only= : Limit aggregation scope. Supported: app-connection}
         {--chunk=500 : Upsert chunk size}
         {--rebuild-first-seen : Rebuild first-seen table from all history}';
 
@@ -21,6 +22,7 @@ class AggregateFirebaseReports extends Command
     {
         try {
             [$windowStart, $now] = $this->resolveRange();
+            $only = $this->normalizeOnlyOption($this->option('only'));
         } catch (\InvalidArgumentException $e) {
             $this->error($e->getMessage());
             return self::FAILURE;
@@ -31,15 +33,34 @@ class AggregateFirebaseReports extends Command
 
         $chunkSize = max(100, (int) $this->option('chunk'));
 
-        DB::transaction(function () use ($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize) {
-            $this->refreshFirstSeen($windowStartMs, $windowEndMs, (bool) $this->option('rebuild-first-seen'));
-            $this->aggregateUserSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
-            $this->aggregateNodeSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
-            $this->aggregateNodeDailyDeviceReport($windowStart, $now, $chunkSize);
+        DB::transaction(function () use ($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize, $only) {
+            if ($only === null) {
+                $this->refreshFirstSeen($windowStartMs, $windowEndMs, (bool) $this->option('rebuild-first-seen'));
+                $this->aggregateUserSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
+                $this->aggregateNodeSummary($windowStartMs, $windowEndMs, $windowStart, $now, $chunkSize);
+            }
+
+            if ($only === null || $only === 'app-connection') {
+                $this->aggregateAppConnectionDailyDeviceReport($windowStart, $now, $chunkSize);
+            }
         });
 
-        $this->info(sprintf('firebase report aggregated: %s - %s', $windowStart->toDateTimeString(), $now->toDateTimeString()));
+        $scopeLabel = $only ?? 'all';
+        $this->info(sprintf('firebase report aggregated [%s]: %s - %s', $scopeLabel, $windowStart->toDateTimeString(), $now->toDateTimeString()));
         return self::SUCCESS;
+    }
+
+    private function normalizeOnlyOption($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value === 'app-connection') {
+            return $value;
+        }
+
+        throw new \InvalidArgumentException('--only only supports app-connection');
     }
 
     /**
@@ -252,9 +273,9 @@ class AggregateFirebaseReports extends Command
     }
 
     /**
-     * Aggregate the Firebase node report into daily device rows.
+     * Aggregate the Firebase app connection report into daily device rows.
      */
-    private function aggregateNodeDailyDeviceReport(Carbon $windowStart, Carbon $windowEnd, int $chunkSize): void
+    private function aggregateAppConnectionDailyDeviceReport(Carbon $windowStart, Carbon $windowEnd, int $chunkSize): void
     {
         $dailyStart = $windowStart->copy()->startOfDay();
         $dailyEnd = $windowEnd->copy()->endOfDay();
@@ -262,7 +283,7 @@ class AggregateFirebaseReports extends Command
         $dailyEndMs = $dailyEnd->copy()->utc()->getTimestampMs();
         $dateExpression = $this->dateFromEventMsExpression('c.event_time_ms');
 
-        DB::table('firebase_report_node_daily_device')
+        DB::table('firebase_report_app_connection_daily_device')
             ->whereBetween('date', [$dailyStart->toDateString(), $dailyEnd->toDateString()])
             ->delete();
 
@@ -304,7 +325,7 @@ class AggregateFirebaseReports extends Command
 
         if (!empty($sessionUpserts)) {
             foreach (array_chunk($sessionUpserts, $chunkSize) as $chunk) {
-                DB::table('firebase_report_node_daily_device')->upsert(
+                DB::table('firebase_report_app_connection_daily_device')->upsert(
                     $chunk,
                     ['date', 'app_id', 'platform', 'app_version', 'device_id'],
                     ['client_connect_count', 'success_count', 'fail_count', 'cancel_count', 'recomputed_at', 'updated_at']
@@ -349,7 +370,7 @@ class AggregateFirebaseReports extends Command
 
         if (!empty($probeUpserts)) {
             foreach (array_chunk($probeUpserts, $chunkSize) as $chunk) {
-                DB::table('firebase_report_node_daily_device')->upsert(
+                DB::table('firebase_report_app_connection_daily_device')->upsert(
                     $chunk,
                     ['date', 'app_id', 'platform', 'app_version', 'device_id'],
                     ['ping_sample_count', 'ping_total_ms', 'recomputed_at', 'updated_at']

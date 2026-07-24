@@ -207,6 +207,7 @@ php artisan report_hourly:rebuild 2026-05-09 --keep-existing
 - `firebase_device_first_seen`
 - `firebase_report_user_summary`
 - `firebase_report_node`
+- `firebase_report_app_connection_daily_device`
 
 ```bash
 # 默认重算最近72小时
@@ -217,6 +218,9 @@ php artisan firebase_report:aggregate --hours=24
 
 # 首次全量重建 device 首见表
 php artisan firebase_report:aggregate --hours=72 --rebuild-first-seen
+
+# 只重算应用连接报表，用于历史日期回填
+php artisan firebase_report:aggregate --date-from=2026-07-10 --date-to=2026-07-24 --only=app-connection
 ```
 
 说明：

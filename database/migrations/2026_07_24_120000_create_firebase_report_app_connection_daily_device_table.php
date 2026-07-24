@@ -6,9 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private const TABLE = 'firebase_report_app_connection_daily_device';
+    private const LEGACY_TABLE = 'firebase_report_node_daily_device';
+
     public function up(): void
     {
-        Schema::create('firebase_report_node_daily_device', function (Blueprint $table) {
+        if (Schema::hasTable(self::TABLE)) {
+            return;
+        }
+
+        if (Schema::hasTable(self::LEGACY_TABLE)) {
+            Schema::rename(self::LEGACY_TABLE, self::TABLE);
+            return;
+        }
+
+        Schema::create(self::TABLE, function (Blueprint $table) {
             $table->id();
             $table->date('date')->comment('UTC+8 date');
             $table->string('app_id', 128)->default('')->comment('App ID');
@@ -25,16 +37,16 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
 
-            $table->unique(['date', 'app_id', 'platform', 'app_version', 'device_id'], 'uq_fa_node_daily_device_dim');
-            $table->index(['date', 'app_id'], 'idx_fa_node_daily_device_date_app');
-            $table->index(['app_id', 'date'], 'idx_fa_node_daily_device_app_date');
-            $table->index(['platform', 'date'], 'idx_fa_node_daily_device_platform_date');
-            $table->index(['app_version', 'date'], 'idx_fa_node_daily_device_version_date');
+            $table->unique(['date', 'app_id', 'platform', 'app_version', 'device_id'], 'uq_fa_app_conn_daily_device_dim');
+            $table->index(['date', 'app_id'], 'idx_fa_app_conn_daily_device_date_app');
+            $table->index(['app_id', 'date'], 'idx_fa_app_conn_daily_device_app_date');
+            $table->index(['platform', 'date'], 'idx_fa_app_conn_daily_device_platform_date');
+            $table->index(['app_version', 'date'], 'idx_fa_app_conn_daily_device_version_date');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('firebase_report_node_daily_device');
+        Schema::dropIfExists(self::TABLE);
     }
 };

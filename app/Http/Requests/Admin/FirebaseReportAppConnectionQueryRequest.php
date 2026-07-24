@@ -5,7 +5,7 @@ namespace App\Http\Requests\Admin;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 
-class FirebaseReportNodeDailyQueryRequest extends FormRequest
+class FirebaseReportAppConnectionQueryRequest extends FormRequest
 {
     public function authorize(): bool
     {
