@@ -436,7 +436,29 @@
 | --- | --- |
 | 404 | 项目不存在 |
 
-### 5.4 批量更新项目投放状态
+### 5.4 应用侧更新全部状态相关字段
+
+- **方法/路径**：`POST /api/v3/application/projects/update-status-fields`
+- **控制器**：`ProjectController::updateStatusFields`
+- **Request**：`ProjectUpdateStatusFieldsRequest`
+- **鉴权**：应用身份（`app` 中间件）
+- **说明**：应用侧可按 `id` 或 `projectCode` 更新 `status`、`adStatus`、`domainInfoStatus`、`facebookInfoStatus`、`admobAccountStatus`。完整请求与返回说明见 `docs/api/application_route_api.md`。
+
+#### 请求参数（body JSON）
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| id | int | 否 | 项目 ID；`id` 与 `projectCode` 至少传一个，同时传入时优先按 `id` 定位 |
+| projectCode | string | 否 | 项目代号；`id` 与 `projectCode` 至少传一个 |
+| status | string | 否 | `active` / `inactive` / `archived` |
+| adStatus | string/null | 否 | 投放状态，最大 50 字符；传 `null` 可清空 |
+| domainInfoStatus | string/null | 否 | 域名信息状态，最大 50 字符；传 `null` 可清空 |
+| facebookInfoStatus | string/null | 否 | FB 信息状态，最大 50 字符；传 `null` 可清空 |
+| admobAccountStatus | string/null | 否 | Admob 账号状态，最大 50 字符；传 `null` 可清空 |
+
+返回仅包含项目标识和上述状态字段，不返回完整项目敏感元数据。
+
+### 5.5 批量更新项目投放状态
 
 - **方法/路径**：`POST /api/v3/admin/{securePath}/projects/batch-update-ad-status`
 - **控制器**：`ProjectController::batchUpdateAdStatus`

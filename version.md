@@ -1107,3 +1107,10 @@
 - 影响范围：`app/Services/AdSpendAdminUserSyncService.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：将 `rememberTokenLoginData()` 恢复为只缓存 `{token}`，并移除 `/api/auth/info` 调用及对应测试、文档记录即可。
+
+## 2026-07-24 应用侧项目状态字段更新接口
+- 日期：2026-07-24
+- 变更摘要：在 V3 ApplicationRoute 下新增 `POST /api/v3/application/projects/update-status-fields`，支持应用身份按 `id` 或 `projectCode` 更新项目管理中的 `status`、`adStatus`、`domainInfoStatus`、`facebookInfoStatus`、`admobAccountStatus`，并只返回项目标识和状态字段。
+- 影响范围：`app/Http/Routes/V3/ApplicationRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectUpdateStatusFieldsRequest.php`、`app/Services/ProjectService.php`、`tests/Feature/ApplicationProjectStatusFieldsTest.php`、`docs/api/application_route_api.md`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除新增 Request、Controller 方法、Service 状态字段更新方法、Application 路由、对应测试和文档记录即可。

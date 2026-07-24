@@ -189,6 +189,17 @@
 | page | int | 当前页 |
 | pageSize | int | 每页数量 |
 
+明细行项目元信息字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| projectCode | string\|null | 项目代号；按 `appId` 从 `project_user_app_map` 关联 `project_projects` 获取 |
+| projectName | string\|null | 项目名称 |
+| projectOwnerName | string\|null | 负责人 |
+| projectDepartment | string\|null | 所属部门 |
+| projectAdStatus | string\|null | 投放状态 |
+| projectRemark | string\|null | 备注 |
+
 明细和汇总指标：
 
 - `avgPingMs`：成功测速结果 `success = 1` 且 `latency_ms IS NOT NULL` 的加权平均。

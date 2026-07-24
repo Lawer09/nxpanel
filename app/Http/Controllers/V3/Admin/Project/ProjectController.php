@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\ProjectAggregateHourlyRequest;
 use App\Http\Requests\Admin\ProjectAggregateRequest;
 use App\Http\Requests\Admin\ProjectSaveRequest;
 use App\Http\Requests\Admin\ProjectUpdateRequest;
+use App\Http\Requests\Admin\ProjectUpdateStatusFieldsRequest;
 use App\Http\Requests\Admin\ProjectUpdateStatusRequest;
 use App\Http\Resources\ProjectResource;
 use App\Services\ProjectReportService;
@@ -85,6 +86,18 @@ class ProjectController extends Controller
             $id = (int) $params['id'];
             $project = $this->projectService->updateStatus($id, $params['status']);
             return $this->ok(ProjectResource::make($project));
+        } catch (BusinessException $e) {
+            return $this->error([$e->getCode(), $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Update all project status-related fields exposed to application clients.
+     */
+    public function updateStatusFields(ProjectUpdateStatusFieldsRequest $request): JsonResponse
+    {
+        try {
+            return $this->ok($this->projectService->updateStatusFields($request->validated()));
         } catch (BusinessException $e) {
             return $this->error([$e->getCode(), $e->getMessage()]);
         }

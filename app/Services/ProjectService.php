@@ -57,6 +57,14 @@ class ProjectService
         'storePageUrl' => 'store_page_url',
     ];
 
+    private const PROJECT_STATUS_FIELD_MAP = [
+        'status' => 'status',
+        'adStatus' => 'ad_status',
+        'domainInfoStatus' => 'domain_info_status',
+        'facebookInfoStatus' => 'facebook_info_status',
+        'admobAccountStatus' => 'admob_account_status',
+    ];
+
     /**
      * @return array{page: int, pageSize: int, total: int, items: \Illuminate\Database\Eloquent\Collection}
      */
@@ -304,6 +312,65 @@ class ProjectService
     }
 
     /**
+     * Update project status-related fields by project ID or project code.
+     *
+     * @return array{
+     *     id: int,
+     *     projectCode: string,
+     *     status: string|null,
+     *     adStatus: string|null,
+     *     domainInfoStatus: string|null,
+     *     facebookInfoStatus: string|null,
+     *     admobAccountStatus: string|null,
+     *     updatedFields: array<int, string>,
+     *     updatedAt: mixed
+     * }
+     */
+    public function updateStatusFields(array $params): array
+    {
+        $statusAttributes = [];
+        $updatedFields = [];
+
+        foreach (self::PROJECT_STATUS_FIELD_MAP as $requestKey => $column) {
+            if (array_key_exists($requestKey, $params)) {
+                $statusAttributes[$column] = $params[$requestKey];
+                $updatedFields[] = $requestKey;
+            }
+        }
+
+        if (empty($statusAttributes)) {
+            throw new BusinessException([422, '至少需要传入一个状态相关字段']);
+        }
+
+        return DB::transaction(function () use ($params, $statusAttributes, $updatedFields) {
+            $query = Project::query();
+            if (!empty($params['id'])) {
+                $query->where('id', (int) $params['id']);
+            } else {
+                $query->where('project_code', (string) $params['projectCode']);
+            }
+
+            /** @var Project|null $project */
+            $project = $query->lockForUpdate()->first();
+            if (!$project) {
+                throw new BusinessException([404, '项目不存在']);
+            }
+
+            foreach ($statusAttributes as $column => $value) {
+                $project->{$column} = $value;
+            }
+
+            if ($project->isDirty()) {
+                $project->save();
+            }
+
+            $project->refresh();
+
+            return $this->formatProjectStatusFields($project, $updatedFields);
+        });
+    }
+
+    /**
      * Batch update project ad delivery status.
      *
      * @return array{requested: int, updated: int, missingIds: array<int>}
@@ -424,6 +491,24 @@ class ProjectService
                 'missingIds' => $missingIds,
             ];
         });
+    }
+
+    /**
+     * Format the application-facing status update response without exposing project secrets.
+     */
+    private function formatProjectStatusFields(Project $project, array $updatedFields): array
+    {
+        return [
+            'id' => (int) $project->id,
+            'projectCode' => $project->project_code,
+            'status' => $project->status,
+            'adStatus' => $project->ad_status,
+            'domainInfoStatus' => $project->domain_info_status,
+            'facebookInfoStatus' => $project->facebook_info_status,
+            'admobAccountStatus' => $project->admob_account_status,
+            'updatedFields' => array_values($updatedFields),
+            'updatedAt' => $project->updated_at,
+        ];
     }
 
     /**

@@ -242,8 +242,11 @@ class FirebaseReportController extends Controller
             ->first();
 
         $page = $query->paginate($pageSize);
+        $items = collect($page->items());
+        $this->attachAppConnectionProjectMeta($items);
+
         return $this->ok([
-            'data' => CamelizeResource::collection($page->items()),
+            'data' => CamelizeResource::collection($items),
             'summary' => (new CamelizeResource($summary ?: $this->emptyAppConnectionReportSummary()))->resolve(),
             'total' => $page->total(),
             'page' => $page->currentPage(),
@@ -265,6 +268,77 @@ class FirebaseReportController extends Controller
         }
 
         return array_values($normalized);
+    }
+
+    private function attachAppConnectionProjectMeta($rows): void
+    {
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $appIds = $rows
+            ->map(fn ($row) => trim((string) ($row->app_id ?? '')))
+            ->filter(fn (string $appId) => $appId !== '')
+            ->unique()
+            ->values();
+
+        if ($appIds->isEmpty()) {
+            return;
+        }
+
+        $projectMetaByAppId = $this->loadProjectMetaByAppId($appIds->all());
+
+        foreach ($rows as $row) {
+            $appId = trim((string) ($row->app_id ?? ''));
+            $meta = $projectMetaByAppId[$appId] ?? null;
+            if (!$meta) {
+                continue;
+            }
+
+            $row->project_code = $meta->project_code;
+            $row->project_name = $meta->project_name;
+            $row->project_owner_name = $meta->owner_name;
+            $row->project_department = $meta->department;
+            $row->project_ad_status = $meta->ad_status;
+            $row->project_remark = $meta->remark;
+        }
+    }
+
+    private function loadProjectMetaByAppId(array $appIds): array
+    {
+        if (empty($appIds)) {
+            return [];
+        }
+
+        $rows = DB::table('project_user_app_map as map')
+            ->join('project_projects as project', 'project.project_code', '=', 'map.project_code')
+            ->whereIn('map.app_id', $appIds)
+            ->whereNotNull('map.app_id')
+            ->where('map.app_id', '<>', '')
+            ->select([
+                'map.app_id',
+                'map.enabled',
+                'project.project_code',
+                'project.project_name',
+                'project.owner_name',
+                'project.department',
+                'project.ad_status',
+                'project.remark',
+            ])
+            ->orderByDesc('map.enabled')
+            ->orderBy('project.project_code')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $appId = trim((string) $row->app_id);
+            if ($appId === '' || isset($result[$appId])) {
+                continue;
+            }
+            $result[$appId] = $row;
+        }
+
+        return $result;
     }
 
     private function appConnectionReportSelectSql(array $dimensions): string

@@ -1472,7 +1472,14 @@ class FirebaseAnalyticsService
     {
         $query = $this->baseCommonQuery($params);
 
-        $apps = (clone $query)->select('c.app_id')->distinct()->orderBy('c.app_id')->get()->pluck('app_id');
+        $apps = (clone $query)
+            ->select('c.app_id')
+            ->whereNotNull('c.app_id')
+            ->where('c.app_id', '<>', '')
+            ->distinct()
+            ->orderBy('c.app_id')
+            ->get()
+            ->pluck('app_id');
         $platforms = (clone $query)->select('c.platform')->distinct()->orderBy('c.platform')->get()->pluck('platform');
         $versions = (clone $query)->select('c.app_version')->distinct()->orderBy('c.app_version')->get()->pluck('app_version');
         $countries = (clone $query)->select('c.user_country')->distinct()->orderBy('c.user_country')->get()->pluck('user_country');
@@ -1480,9 +1487,33 @@ class FirebaseAnalyticsService
         $isps = (clone $query)->select('c.isp')->distinct()->orderBy('c.isp')->get()->pluck('isp');
         $asns = (clone $query)->select('c.asn')->distinct()->orderBy('c.asn')->get()->pluck('asn');
         $eventNames = (clone $query)->select('c.event_name')->distinct()->orderBy('c.event_name')->get()->pluck('event_name');
+        $projectMetaByAppId = $this->loadProjectMetaByAppId(
+            $apps
+                ->map(fn ($item) => trim((string) $item))
+                ->filter(fn (string $item) => $item !== '')
+                ->unique()
+                ->values()
+                ->all()
+        );
 
         return [
-            'apps' => $apps->map(fn ($item) => ['label' => $item, 'value' => $item])->values(),
+            'apps' => $apps->map(function ($item) use ($projectMetaByAppId) {
+                $appId = trim((string) $item);
+                $meta = $projectMetaByAppId[$appId] ?? null;
+                $projectCode = $meta?->project_code;
+                $label = $projectCode ? "{$appId} ({$projectCode})" : $appId;
+
+                return [
+                    'label' => $label,
+                    'value' => $item,
+                    'projectCode' => $projectCode,
+                    'projectName' => $meta?->project_name,
+                    'ownerName' => $meta?->owner_name,
+                    'department' => $meta?->department,
+                    'adStatus' => $meta?->ad_status,
+                    'remark' => $meta?->remark,
+                ];
+            })->values(),
             'platforms' => $platforms->map(fn ($item) => ['label' => ucfirst($item), 'value' => $item])->values(),
             'versions' => $versions->map(fn ($item) => ['label' => $item, 'value' => $item])->values(),
             'countries' => $countries->map(fn ($item) => ['label' => $item, 'value' => $item])->values(),
@@ -1491,6 +1522,43 @@ class FirebaseAnalyticsService
             'asns' => $asns->map(fn ($item) => ['label' => $item, 'value' => $item])->values(),
             'event_names' => $eventNames->map(fn ($item) => ['label' => $this->eventNameLabel($item), 'value' => $item])->values(),
         ];
+    }
+
+    private function loadProjectMetaByAppId(array $appIds): array
+    {
+        if (empty($appIds)) {
+            return [];
+        }
+
+        $rows = DB::table('project_user_app_map as map')
+            ->join('project_projects as project', 'project.project_code', '=', 'map.project_code')
+            ->whereIn('map.app_id', $appIds)
+            ->whereNotNull('map.app_id')
+            ->where('map.app_id', '<>', '')
+            ->select([
+                'map.app_id',
+                'map.enabled',
+                'project.project_code',
+                'project.project_name',
+                'project.owner_name',
+                'project.department',
+                'project.ad_status',
+                'project.remark',
+            ])
+            ->orderByDesc('map.enabled')
+            ->orderBy('project.project_code')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $appId = trim((string) $row->app_id);
+            if ($appId === '' || isset($result[$appId])) {
+                continue;
+            }
+            $result[$appId] = $row;
+        }
+
+        return $result;
     }
 
     private function baseCommonQuery(array $params): Builder

@@ -83,6 +83,82 @@
 
 ---
 
+## 项目管理
+
+### 1) 更新项目状态相关字段
+
+- 方法/路径：`POST /api/v3/application/projects/update-status-fields`
+- 对应控制器方法：`ProjectController::updateStatusFields`
+- Request：`ProjectUpdateStatusFieldsRequest`
+- 鉴权：应用身份（`app` 中间件）
+- 说明：用于应用侧按项目 ID 或项目代号更新项目管理中的状态相关字段，仅允许修改 `project_projects` 表的状态字段，不修改项目名称、负责人、账号绑定等其他信息。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| id | int | 否 | 项目 ID；`id` 与 `projectCode` 至少传一个，同时传入时优先按 `id` 定位 |
+| projectCode | string | 否 | 项目代号；`id` 与 `projectCode` 至少传一个 |
+| status | string | 否 | 项目系统状态，可选：`active` / `inactive` / `archived` |
+| adStatus | string/null | 否 | 投放状态，最大 50 字符；传 `null` 可清空 |
+| domainInfoStatus | string/null | 否 | 域名信息状态，最大 50 字符；传 `null` 可清空 |
+| facebookInfoStatus | string/null | 否 | FB 信息状态，最大 50 字符；传 `null` 可清空 |
+| admobAccountStatus | string/null | 否 | Admob 账号状态，最大 50 字符；传 `null` 可清空 |
+
+约束：
+
+- `status`、`adStatus`、`domainInfoStatus`、`facebookInfoStatus`、`admobAccountStatus` 至少传入一个。
+- 接口返回只包含项目标识与状态字段，避免应用侧获取项目完整敏感元数据。
+
+### 请求示例
+
+```json
+{
+  "projectCode": "P001",
+  "status": "active",
+  "adStatus": "白包在线",
+  "domainInfoStatus": "completed",
+  "facebookInfoStatus": "completed",
+  "admobAccountStatus": null
+}
+```
+
+### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "projectCode": "P001",
+    "status": "active",
+    "adStatus": "白包在线",
+    "domainInfoStatus": "completed",
+    "facebookInfoStatus": "completed",
+    "admobAccountStatus": null,
+    "updatedFields": [
+      "status",
+      "adStatus",
+      "domainInfoStatus",
+      "facebookInfoStatus",
+      "admobAccountStatus"
+    ],
+    "updatedAt": "2026-07-24T10:00:00.000000Z"
+  }
+}
+```
+
+### 错误
+
+| HTTP 状态码 | 说明 |
+| --- | --- |
+| 403 | 应用鉴权失败或应用已禁用 |
+| 404 | 项目不存在 |
+| 422 | 参数校验失败，例如未传项目标识、未传任何状态字段、`status` 枚举不合法 |
+
+---
+
 ## Tg Bot
 
 ### 1) 消息上报

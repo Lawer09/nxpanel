@@ -3,6 +3,7 @@
 namespace App\Http\Routes\V3;
 
 use App\Http\Controllers\V3\Admin\AppController;
+use App\Http\Controllers\V3\Admin\Project\ProjectController;
 use App\Http\Controllers\V3\Admin\ReportController;
 use App\Http\Controllers\V3\App\TgBotController;
 use App\Http\Controllers\V3\App\WooCommerceOrderController;
@@ -30,6 +31,10 @@ class ApplicationRoute
 
             $router->group(['prefix' => 'report'], function ($router) {
                 $router->post('/project/queryDaily', [ReportController::class, 'queryProjectReport']);
+            });
+
+            $router->group(['prefix' => 'projects'], function ($router) {
+                $router->post('/update-status-fields', [ProjectController::class, 'updateStatusFields']);
             });
 
             $router->group(['prefix' => 'tg-bot'], function ($router) {
