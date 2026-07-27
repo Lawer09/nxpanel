@@ -23,6 +23,8 @@ class UserRoute
             $router->get('/plan/fetch', [PlanController::class, 'fetch']);
             // sub
             $router->get('/getSubscribe', [UserController::class, 'getSubscribe']);
+            $router->get('/profile', [UserController::class, 'profile']);
+            $router->post('/profile', [UserController::class, 'updateProfile']);
 
             $router->get('/ipInfo', [IpInfoController::class, 'getClientIpInfo']);
 

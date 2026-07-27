@@ -31,7 +31,9 @@ class AuthService
         $data = [  
             'token' => $this->user->token,  
             'auth_data' => $formattedToken,  
-            'is_admin' => $this->user->is_admin,  
+            'is_admin' => $this->user->is_admin,
+            'email' => $this->user->email,
+            'nickname' => $this->user->nickname,
         ];
 
         if ($this->user->is_admin) {  
