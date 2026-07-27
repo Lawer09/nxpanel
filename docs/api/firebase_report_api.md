@@ -171,6 +171,7 @@
 | filters.appIds | string[] | 否 | 应用 ID |
 | filters.platforms | string[] | 否 | 平台 |
 | filters.appVersions | string[] | 否 | 应用版本 |
+| filters.projectCodes | string[] | 否 | 项目代号；通过 `project_user_app_map.enabled = 1` 的应用映射过滤 |
 | groupBy | string[] | 否 | 分组字段，默认 `["app_id","date"]` |
 | page | int | 否 | 页码，默认 1 |
 | pageSize | int | 否 | 每页数量，默认 100，最大 200 |

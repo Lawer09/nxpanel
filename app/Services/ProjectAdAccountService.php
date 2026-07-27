@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\BusinessException;
 use App\Models\AdPlatformAccount;
+use App\Models\AdPlatformApp;
 use App\Models\Project;
 use App\Models\ProjectAdPlatformAccount;
 
@@ -29,10 +30,28 @@ class ProjectAdAccountService
 
         $accountIds = $items->pluck('ad_platform_account_id')->unique()->filter()->values();
         $accountMap = AdPlatformAccount::whereIn('id', $accountIds)->pluck('account_name', 'id');
+        $appIds = $items->pluck('external_app_id')
+            ->map(fn ($appId) => trim((string) $appId))
+            ->filter(fn ($appId) => $appId !== '')
+            ->unique()
+            ->values();
+        $appMap = ($accountIds->isEmpty() || $appIds->isEmpty())
+            ? collect()
+            : AdPlatformApp::query()
+                ->whereIn('account_id', $accountIds->all())
+                ->whereIn('provider_app_id', $appIds->all())
+                ->get(['account_id', 'provider_app_id', 'provider_app_name'])
+                ->mapWithKeys(fn ($app) => [
+                    $this->makeAppMapKey((int) $app->account_id, (string) $app->provider_app_id) => (string) $app->provider_app_name,
+                ]);
 
-        $list = $items->map(function ($item) use ($accountMap) {
+        $list = $items->map(function ($item) use ($accountMap, $appMap) {
             $arr = $item->toArray();
             $arr['account_name'] = $accountMap[$item->ad_platform_account_id] ?? '';
+            $arr['app_name'] = $appMap[$this->makeAppMapKey(
+                (int) $item->ad_platform_account_id,
+                (string) $item->external_app_id
+            )] ?? '';
             return $arr;
         });
 
@@ -102,5 +121,13 @@ class ProjectAdAccountService
         }
 
         $relation->delete();
+    }
+
+    /**
+     * Build a stable key for app display-name lookup.
+     */
+    private function makeAppMapKey(int $accountId, string $providerAppId): string
+    {
+        return $accountId . ':' . trim($providerAppId);
     }
 }

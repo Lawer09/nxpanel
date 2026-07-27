@@ -38,6 +38,8 @@ class FirebaseReportAppConnectionQueryRequest extends FormRequest
             'filters.platforms.*' => 'string|max:32',
             'filters.appVersions' => 'nullable|array',
             'filters.appVersions.*' => 'string|max:64',
+            'filters.projectCodes' => 'nullable|array',
+            'filters.projectCodes.*' => 'string|max:100',
             'groupBy' => 'nullable|array',
             'groupBy.*' => 'string|in:date,appId,app_id,platform,appVersion,app_version',
             'page' => 'nullable|integer|min:1',

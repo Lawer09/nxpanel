@@ -225,6 +225,7 @@ class FirebaseReportController extends Controller
         $this->applyWhereIn($baseQuery, 'app_id', $filters['appIds'] ?? null);
         $this->applyWhereIn($baseQuery, 'platform', $filters['platforms'] ?? null);
         $this->applyWhereIn($baseQuery, 'app_version', $filters['appVersions'] ?? null);
+        $this->applyAppConnectionProjectCodeFilter($baseQuery, $filters['projectCodes'] ?? null);
 
         $query = (clone $baseQuery)
             ->selectRaw($this->appConnectionReportSelectSql($groupBy))
@@ -339,6 +340,30 @@ class FirebaseReportController extends Controller
         }
 
         return $result;
+    }
+
+    private function applyAppConnectionProjectCodeFilter($query, $projectCodes): void
+    {
+        if (!is_array($projectCodes)) {
+            return;
+        }
+
+        $projectCodes = array_values(array_filter(array_unique(array_map(
+            fn ($value) => trim((string) $value),
+            $projectCodes
+        )), fn (string $value) => $value !== ''));
+
+        if (empty($projectCodes)) {
+            return;
+        }
+
+        $query->whereExists(function ($subQuery) use ($projectCodes) {
+            $subQuery->selectRaw('1')
+                ->from('project_user_app_map as map')
+                ->whereColumn('map.app_id', 'firebase_report_app_connection_daily_device.app_id')
+                ->where('map.enabled', 1)
+                ->whereIn('map.project_code', $projectCodes);
+        });
     }
 
     private function appConnectionReportSelectSql(array $dimensions): string

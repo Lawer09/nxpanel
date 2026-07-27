@@ -1114,3 +1114,10 @@
 - 影响范围：`app/Http/Routes/V3/ApplicationRoute.php`、`app/Http/Controllers/V3/Admin/Project/ProjectController.php`、`app/Http/Requests/Admin/ProjectUpdateStatusFieldsRequest.php`、`app/Services/ProjectService.php`、`tests/Feature/ApplicationProjectStatusFieldsTest.php`、`docs/api/application_route_api.md`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除新增 Request、Controller 方法、Service 状态字段更新方法、Application 路由、对应测试和文档记录即可。
+
+## 2026-07-27 项目广告关联应用名称字段
+- 日期：2026-07-27
+- 变更摘要：项目管理广告账号关联查询 `GET /projects/ad-accounts` 返回中新增 `appName` 字段，根据关联记录的 `adPlatformAccountId + externalAppId` 匹配广告平台应用表的应用名称；项目列表/详情不新增账号主表展示信息。
+- 影响范围：`app/Services/ProjectAdAccountService.php`、`docs/api/project_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `ProjectAdAccountService` 中应用名称匹配和返回字段，并同步回退项目 API 文档与本版本记录即可。

@@ -615,6 +615,7 @@
 - **方法/路径**：`GET /api/v3/admin/{securePath}/projects/ad-accounts`
 - **控制器**：`ProjectAdAccountController::index`
 - **数据来源**：`project_ad_platform_accounts`
+- **说明**：返回中的 `appName` 根据 `adPlatformAccountId + externalAppId` 匹配 `ad_platform_app.provider_app_name`，匹配不到时返回空字符串。
 
 #### 请求参数（query）
 
@@ -631,7 +632,8 @@
       "id": 1,
       "adPlatformAccountId": 1,
       "platformCode": "admob",
-      "externalAppId": null,
+      "externalAppId": "ca-app-pub-xxx~1234567890",
+      "appName": "Example VPN",
       "externalAdUnitId": null,
       "bindType": "account",
       "enabled": 1,
