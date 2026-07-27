@@ -451,10 +451,10 @@
 | id | int | 否 | 项目 ID；`id` 与 `projectCode` 至少传一个，同时传入时优先按 `id` 定位 |
 | projectCode | string | 否 | 项目代号；`id` 与 `projectCode` 至少传一个 |
 | status | string | 否 | `active` / `inactive` / `archived` |
-| adStatus | string/null | 否 | 投放状态，最大 50 字符；传 `null` 可清空 |
-| domainInfoStatus | string/null | 否 | 域名信息状态，最大 50 字符；传 `null` 可清空 |
-| facebookInfoStatus | string/null | 否 | FB 信息状态，最大 50 字符；传 `null` 可清空 |
-| admobAccountStatus | string/null | 否 | Admob 账号状态，最大 50 字符；传 `null` 可清空 |
+| adStatus | string/null | 否 | 投放状态，包含：`未上线` / `待投放` / `白包在线` / `在投` / `暂停` / `已下架` |
+| domainInfoStatus | string/null | 否 | 域名信息状态，状态：`完善` / `未完善` |
+| facebookInfoStatus | string/null | 否 | FB 信息状态，状态：`完善` / `未完善` |
+| admobAccountStatus | string/null | 否 | Admob 账号状态，状态：`完善` / `未完善` |
 
 返回仅包含项目标识和上述状态字段，不返回完整项目敏感元数据。
 

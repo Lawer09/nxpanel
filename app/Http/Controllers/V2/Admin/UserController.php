@@ -444,7 +444,7 @@ class UserController extends Controller
             'expired_at' => $request->input('expired_at'),
         ];
 
-        foreach (['user_type', 'menus'] as $field) {
+        foreach (['nickname', 'user_type', 'menus'] as $field) {
             if ($request->has($field)) {
                 $data[$field] = $request->input($field);
             }

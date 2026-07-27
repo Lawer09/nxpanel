@@ -43,11 +43,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class UserController extends V2UserController
 {
+    private const ADMIN_OPTIONS_CACHE_KEY = 'admin:user:options';
+
+    private const ADMIN_OPTIONS_CACHE_TTL = 300;
 
     public function fetch(Request $request): JsonResponse
     {
@@ -103,6 +107,32 @@ class UserController extends V2UserController
         ]);
     }
 
+    public function adminOptions(): JsonResponse
+    {
+        return $this->ok([
+            'data' => Cache::remember(self::ADMIN_OPTIONS_CACHE_KEY, self::ADMIN_OPTIONS_CACHE_TTL, function (): array {
+                return User::query()
+                    ->where('is_admin', 1)
+                    ->where('banned', 0)
+                    ->orderBy('id')
+                    ->get(['id', 'email', 'nickname'])
+                    ->map(function (User $user): array {
+                        $nickname = is_string($user->nickname) ? trim($user->nickname) : '';
+                        $email = (string) $user->email;
+
+                        return [
+                            'id' => (int) $user->id,
+                            'email' => $email,
+                            'nickname' => $nickname !== '' ? $nickname : null,
+                            'displayName' => $nickname !== '' ? $nickname : $email,
+                        ];
+                    })
+                    ->values()
+                    ->all();
+            }),
+        ]);
+    }
+
     public function getUserInfoById(Request $request): JsonResponse
     {
         $request->validate([
@@ -149,6 +179,8 @@ class UserController extends V2UserController
         if (!$user->save()) {
             return $this->error([500, '生成失败']);
         }
+
+        $this->forgetAdminOptionsCache();
 
         return $this->ok(true);
     }
@@ -226,6 +258,7 @@ class UserController extends V2UserController
             Log::error($e);
             return $this->error([500, '保存失败']);
         }
+        $this->forgetAdminOptionsCache();
         return $this->ok(true);
     }
 
@@ -242,7 +275,7 @@ class UserController extends V2UserController
             'is_admin' => 1,
         ];
 
-        foreach (['user_type', 'menus'] as $field) {
+        foreach (['nickname', 'user_type', 'menus'] as $field) {
             if ($request->has($field)) {
                 $data[$field] = $request->input($field);
             }
@@ -311,6 +344,7 @@ class UserController extends V2UserController
             return $this->error([500, '处理失败']);
         }
         NodeSyncService::notifyUsersUpdated();
+        $this->forgetAdminOptionsCache();
         return $this->ok(true);
     }
 
@@ -338,6 +372,7 @@ class UserController extends V2UserController
         }
 
         NodeSyncService::notifyUsersUpdated();
+        $this->forgetAdminOptionsCache();
 
         return $this->ok($result);
     }
@@ -671,6 +706,7 @@ class UserController extends V2UserController
             $user->tickets()->delete();
             $user->delete();
             DB::commit();
+            $this->forgetAdminOptionsCache();
             return $this->ok(true);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -991,5 +1027,10 @@ class UserController extends V2UserController
         }
 
         return in_array((string) $filter['id'], ['app_id', 'country', 'ip'], true);
+    }
+
+    private function forgetAdminOptionsCache(): void
+    {
+        Cache::forget(self::ADMIN_OPTIONS_CACHE_KEY);
     }
 }

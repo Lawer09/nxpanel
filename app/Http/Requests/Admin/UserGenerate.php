@@ -19,6 +19,7 @@ class UserGenerate extends FormRequest
             'plan_id' => 'nullable|integer',
             'email_prefix' => 'nullable',
             'email_suffix' => 'required',
+            'nickname' => 'nullable|string|max:100',
             'password' => 'nullable',
             'is_admin' => 'nullable|boolean',
             'user_type' => 'nullable|string|max:32',

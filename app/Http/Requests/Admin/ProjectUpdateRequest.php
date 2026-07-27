@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ProjectUpdateRequest extends FormRequest
 {
@@ -16,6 +17,12 @@ class ProjectUpdateRequest extends FormRequest
         return [
             'id'          => 'required|integer|min:1',
             'projectName' => 'nullable|string|max:100',
+            'ownerId'     => [
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::exists('v2_user', 'id')->where('is_admin', 1)->where('banned', 0),
+            ],
             'ownerName'   => 'nullable|string|max:100',
             'department'  => 'nullable|string|max:100',
             'status'      => 'nullable|string|in:active,inactive,archived',

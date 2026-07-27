@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Project;
 use App\Models\ProjectAppInfo;
 use App\Models\ProjectUserAppMap;
+use App\Models\User;
 use App\Exceptions\BusinessException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class ProjectService
 
     private const PROJECT_BASE_FIELD_MAP = [
         'projectName' => 'project_name',
+        'ownerId' => 'owner_id',
         'ownerName' => 'owner_name',
         'department' => 'department',
         'status' => 'status',
@@ -135,7 +137,8 @@ class ProjectService
         $attributes = [
             'project_code' => $params['projectCode'],
             'project_name' => $params['projectName'],
-            'owner_name'   => $params['ownerName'] ?? null,
+            'owner_id'     => $params['ownerId'] ?? null,
+            'owner_name'   => $params['ownerName'] ?? $this->resolveOwnerDisplayName($params['ownerId'] ?? null),
             'department'   => $params['department'] ?? null,
             'status'       => $params['status'] ?? 'active',
             'remark'       => $params['remark'] ?? null,
@@ -169,6 +172,12 @@ class ProjectService
 
         if (array_key_exists('projectName', $params)) {
             $project->project_name = $params['projectName'];
+        }
+        if (array_key_exists('ownerId', $params)) {
+            $project->owner_id = $params['ownerId'];
+            if (!array_key_exists('ownerName', $params)) {
+                $project->owner_name = $this->resolveOwnerDisplayName($params['ownerId']);
+            }
         }
         if (array_key_exists('ownerName', $params)) {
             $project->owner_name = $params['ownerName'];
@@ -534,7 +543,8 @@ class ProjectService
         $attributes = [
             'project_code' => trim((string) $params['projectCode']),
             'project_name' => $params['projectName'],
-            'owner_name' => $params['ownerName'] ?? null,
+            'owner_id' => $params['ownerId'] ?? null,
+            'owner_name' => $params['ownerName'] ?? $this->resolveOwnerDisplayName($params['ownerId'] ?? null),
             'department' => $params['department'] ?? null,
             'status' => $params['status'] ?? 'active',
             'remark' => $params['remark'] ?? null,
@@ -599,6 +609,23 @@ class ProjectService
     private function forgetProjectCodeCache(): void
     {
         Cache::forget(self::PROJECT_CODE_CACHE_KEY);
+    }
+
+    private function resolveOwnerDisplayName(mixed $ownerId): ?string
+    {
+        $ownerId = (int) ($ownerId ?? 0);
+        if ($ownerId <= 0) {
+            return null;
+        }
+
+        $user = User::query()->find($ownerId, ['email', 'nickname']);
+        if (!$user) {
+            return null;
+        }
+
+        $nickname = is_string($user->nickname) ? trim($user->nickname) : '';
+
+        return $nickname !== '' ? $nickname : (string) $user->email;
     }
 
     /**
