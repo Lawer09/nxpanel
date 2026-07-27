@@ -52,6 +52,7 @@ class TicketController extends V1TicketController
             $request->input('personal_email')
         );
         HookManager::call('ticket.create.after', $ticket);
+        $ticketService->replyBySystemAfterCreated($ticket);
         return $this->ok(true);
 
     }

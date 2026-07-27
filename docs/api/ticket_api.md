@@ -20,6 +20,7 @@
 
 - 同一用户可以同时创建多个未关闭工单。
 - `personal_email` 只保存到工单主表 `v2_ticket.personal_email`，不会修改用户账号邮箱。
+- 创建成功后会自动追加一条回复内容为 `https://pm.geekforest.ai/api/feishu/events` `极客公仔地址` 的系统回复，复用管理端工单回复逻辑写入 `v2_ticket_message` 并更新工单回复状态。
 - 创建成功后仍按现有接口约定返回布尔成功结果。
 
 ### 请求示例
