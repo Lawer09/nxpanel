@@ -1128,3 +1128,10 @@
 - 影响范围：`app/Services/TicketService.php`、`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除用户端保存工单后的自动回复调用、`TicketService::replyBySystemAfterCreated()` 及对应测试和文档记录即可。
+
+## 2026-07-28 AID 登录访问优化
+- 日期：2026-07-28
+- 变更摘要：`loginByAid` 新增 Form Request 校验，AID 登录改为复用缓存中的有效 Sanctum token，并将 `last_login_at` 写入改为 Redis 聚合后由 `aid-login-activity:flush` 每分钟批量刷库，降低高频访问下的用户表和 token 表写入压力。
+- 影响范围：`app/Http/Requests/Passport/AuthLoginByAid.php`、`app/Http/Requests/Passport/AuthLoginByAidV3.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Services/AuthService.php`、`app/Services/Auth/LoginService.php`、`app/Services/AidLoginActivityService.php`、`app/Console/Commands/FlushAidLoginActivity.php`、`app/Console/Kernel.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更；上线需确保 Redis 服务可用，Redis 异常时登录不阻断但最近登录时间写回会延迟。
+- 回滚说明：将 AID 登录恢复为每次同步生成 token 和保存 `last_login_at`，移除 AID token 缓存逻辑、Redis 聚合服务、flush 命令、Kernel 调度及对应测试和文档即可。

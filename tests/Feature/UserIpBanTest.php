@@ -15,8 +15,12 @@ use App\Models\User;
 use App\Services\AuthService;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
 
 class UserIpBanTest extends TestCase
@@ -27,6 +31,7 @@ class UserIpBanTest extends TestCase
     {
         parent::setUp();
         Queue::fake();
+        Cache::flush();
 
         Setting::createOrUpdate('secure_path', 'admin');
         $this->createPlan(['id' => 1, 'name' => 'Free']);
@@ -47,6 +52,116 @@ class UserIpBanTest extends TestCase
 
         $this->assertSame('203.0.113.10', $user->register_metadata['ip'] ?? null);
         $this->assertFalse((bool) $user->banned);
+    }
+
+    public function test_login_by_aid_reuses_cached_token_for_same_aid(): void
+    {
+        $firstResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'cached-token-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, PersonalAccessToken::query()->count());
+
+        $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'cached-token-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, PersonalAccessToken::query()->count());
+        $this->assertSame($firstResponse->json('data.auth_data'), $secondResponse->json('data.auth_data'));
+    }
+
+    public function test_login_by_aid_recreates_token_when_cached_database_token_is_missing(): void
+    {
+        $firstResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'missing-token-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        PersonalAccessToken::query()->delete();
+
+        $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'missing-token-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, PersonalAccessToken::query()->count());
+        $this->assertNotSame($firstResponse->json('data.auth_data'), $secondResponse->json('data.auth_data'));
+    }
+
+    public function test_existing_aid_user_last_login_at_is_flushed_asynchronously(): void
+    {
+        $user = $this->createAidUser('async-last-login-aid', [
+            'last_login_at' => 100,
+        ]);
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'async-last-login-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        $this->assertSame(100, (int) $user->refresh()->last_login_at);
+
+        Redis::shouldReceive('zpopmin')
+            ->once()
+            ->with('aid_login:last_login_at', 5000)
+            ->andReturn([(string) $user->id => 200]);
+
+        $this->artisan('aid-login-activity:flush')
+            ->assertExitCode(0);
+
+        $this->assertSame(200, (int) $user->refresh()->last_login_at);
+    }
+
+    public function test_aid_login_activity_flush_uses_latest_timestamp_for_duplicate_user(): void
+    {
+        $user = $this->createAidUser('activity-latest-aid', [
+            'last_login_at' => 100,
+        ]);
+
+        Redis::shouldReceive('zpopmin')
+            ->once()
+            ->with('aid_login:last_login_at', 5000)
+            ->andReturn([(string) $user->id, 180, (string) $user->id, 240]);
+
+        $this->artisan('aid-login-activity:flush')
+            ->assertExitCode(0);
+
+        $this->assertSame(240, (int) $user->refresh()->last_login_at);
+    }
+
+    public function test_aid_login_activity_flush_requeues_when_database_update_fails(): void
+    {
+        $user = $this->createAidUser('activity-requeue-aid');
+
+        Redis::shouldReceive('zpopmin')
+            ->once()
+            ->with('aid_login:last_login_at', 5000)
+            ->andReturn([(string) $user->id => 300]);
+        Redis::shouldReceive('zadd')
+            ->once()
+            ->with('aid_login:last_login_at', 300, (string) $user->id)
+            ->andReturn(1);
+        Redis::shouldReceive('expire')
+            ->once()
+            ->with('aid_login:last_login_at', 604800)
+            ->andReturn(true);
+
+        Schema::drop('v2_user');
+
+        $this->artisan('aid-login-activity:flush')
+            ->assertExitCode(1);
     }
 
     public function test_v3_login_by_aid_returns_login_data_when_ip_is_blocked(): void

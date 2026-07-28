@@ -6,6 +6,7 @@ use App\Helpers\ResponseEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Passport\AuthForget;
 use App\Http\Requests\Passport\AuthLogin;
+use App\Http\Requests\Passport\AuthLoginByAid;
 use App\Http\Requests\Passport\AuthRegister;
 use App\Services\Auth\LoginService;
 use App\Services\Auth\MailLinkService;
@@ -191,34 +192,8 @@ class AuthController extends Controller
      * 账号为 {aid}@apple.com，密码为 {aid}
      * 用户不存在时自动创建
      */
-    public function loginByAid(Request $request)
+    public function loginByAid(AuthLoginByAid $request)
     {
-        $request->validate([
-            'aid' => 'required|string|min:1|max:255',
-            'metadata' => 'nullable|array',
-            'metadata.app_id' => 'nullable|string|max:255',
-            'metadata.package_name' => 'nullable|string|max:191',
-            'metadata.packageName' => 'nullable|string|max:191',
-            'metadata.app_version' => 'nullable|string|max:50',
-            'metadata.platform' => 'nullable|string|max:100',
-            'metadata.brand' => 'nullable|string|max:100',
-            'metadata.country' => 'nullable|string|max:100',
-            'metadata.city' => 'nullable|string|max:100',
-            'metadata.device_id' => 'nullable|string|max:255',
-            'metadata.ip' => 'nullable|ip',
-            'metadata.channel' => 'nullable|string|max:100',
-            'metadata.channelType' => 'nullable|string|in:paid,organic,unknown',
-            'metadata.channel_type' => 'nullable|string|in:paid,organic,unknown',
-            'metadata.utm_source' => 'nullable|string|max:255',
-            'metadata.utm_medium' => 'nullable|string|max:255',
-            'metadata.utm_campaign' => 'nullable|string|max:255',
-            'metadata.raw_referrer' => 'nullable|string|max:2048',
-            'metadata.click_ts' => 'nullable|integer|min:0',
-            'metadata.install_begin_ts' => 'nullable|integer|min:0',
-        ], [
-            'aid.required' => 'aid参数不能为空',
-        ]);
-
         [$success, $result] = $this->loginService->loginByAid(
             $request->input('aid'),
             $request->input('metadata')
@@ -229,7 +204,7 @@ class AuthController extends Controller
         }
 
         $authService = new AuthService($result);
-        $data = $authService->generateAuthData();
+        $data = $authService->generateAidAuthData();
         $data['is_ban'] = (bool) $result->banned;
 
         return $this->success($data);

@@ -38,6 +38,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('subscription:downgrade-expired-to-free')->everyMinute()->onOneServer()->withoutOverlapping(5);
         $schedule->command('user:ban-inactive-zero-usage')->dailyAt('1:30')->onOneServer()->withoutOverlapping(30);
         $schedule->command('aid-channel-type:flush --limit=1000')->everyFiveMinutes()->onOneServer()->withoutOverlapping(4);
+        $schedule->command('aid-login-activity:flush --limit=1000')->everyMinute()->onOneServer()->withoutOverlapping(2);
         // reset
         $schedule->command('reset:traffic')->everyMinute()->onOneServer()->withoutOverlapping(10);
         $schedule->command('reset:log')->daily()->onOneServer();

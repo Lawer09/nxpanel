@@ -432,6 +432,16 @@ POST /api/v3/passport/auth/loginByAid
 - 批量任务只更新 `register_metadata.channel_type` 一个字段，不更新 `utm_source`、`utm_medium`、`utm_campaign`、`raw_referrer` 等其他 metadata。
 - 后台命令 `aid-channel-type:flush` 每 5 分钟执行一次，通常 5 分钟内落库。
 
+### AID 登录 Token 复用与登录时间异步写回
+
+`loginByAid` 为降低高频访问下的数据库写入压力，已对 AID 登录做以下优化：
+
+- 同一 AID 用户会优先复用缓存中的有效 Sanctum bearer token；缓存命中且数据库 token 仍存在、未过期时，不再新增 `personal_access_tokens` 记录。
+- 缓存缺失、缓存 token 已过期或数据库 token 已不存在时，会重新签发 token 并更新缓存，接口返回字段保持不变。
+- `v2_user.last_login_at` 不再在登录请求内同步写入，而是先聚合到 Redis，再由 `aid-login-activity:flush` 每分钟批量写回。
+- Redis 缓存或聚合异常不会阻断登录；异常时 token 会降级为重新签发，最近登录时间可能延迟或丢失少量精度。
+- V1/V3 封禁返回策略、`is_ban` 字段、AID 登录响应字段均保持兼容。
+
 ## AID 自定义封禁检测规则
 
 用于在 `loginByAid` 自动创建新用户后，根据后台配置的规则自动封禁用户，并记录该用户注册 IP，避免同类注册继续放量。

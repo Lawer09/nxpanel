@@ -405,3 +405,21 @@ php artisan aid-channel-type:flush --limit=500
 - 只更新 `register_metadata.channel_type` 一个字段，不修改其他 metadata。
 - 成功后删除队列记录；失败记录会保留并增加 `attempts`，写入 `error_message`。
 - 已在 `app/Console/Kernel.php` 配置为每 5 分钟执行一次，使用 `onOneServer()` 和 `withoutOverlapping(4)` 防止重复调度。
+
+### 9.2 aid-login-activity:flush
+
+将 `loginByAid` 聚合在 Redis 中的最近登录时间批量写回 `v2_user.last_login_at`。
+
+```bash
+# 默认最多处理 5000 个用户
+php artisan aid-login-activity:flush
+
+# 指定单次处理上限
+php artisan aid-login-activity:flush --limit=10000
+```
+
+说明：
+- 登录请求只写 Redis 聚合集合，同一用户多次登录只保留最新时间。
+- 命令使用 `ZPOPMIN` 批量取出待写回用户，并仅在新时间大于当前 `last_login_at` 时更新用户表。
+- 数据库更新失败时会把该用户重新写回 Redis，等待下次调度重试。
+- 已在 `app/Console/Kernel.php` 配置为每分钟执行一次，使用 `onOneServer()` 和 `withoutOverlapping(2)` 防止重复调度。

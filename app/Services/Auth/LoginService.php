@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\InviteCode;
 use App\Models\User;
 use App\Services\AidChannelTypeUpdateQueueService;
+use App\Services\AidLoginActivityService;
 use App\Services\AidLoginBanRuleService;
 use App\Services\BlockedUserIpService;
 use App\Services\IpAccessPolicyService;
@@ -176,9 +177,7 @@ class LoginService
             );
         }
 
-        // 更新最后登录时间
-        $user->last_login_at = $loginAt;
-        $user->save();
+        app(AidLoginActivityService::class)->record((int) $user->id, $loginAt);
 
         return [true, $user];
     }

@@ -3,11 +3,16 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthService
 {
+    private const AID_TOKEN_CACHE_PREFIX = 'aid_login_auth_token:';
+    private const TOKEN_TTL_SECONDS = 31536000;
+
     private User $user;
 
     public function __construct(User $user)
@@ -17,20 +22,22 @@ class AuthService
 
     public function generateAuthData(): array
     {
-        // Create a new Sanctum token with device info
-        $token = $this->user->createToken(
-            Str::random(20), // token name (device identifier)
-            ['*'], // abilities
-            now()->addYear() // expiration
-        );
+        return $this->buildAuthData($this->createBearerToken());
+    }
 
-        // Format token: remove ID prefix and add Bearer
-        $tokenParts = explode('|', $token->plainTextToken);
-        $formattedToken = 'Bearer ' . ($tokenParts[1] ?? $tokenParts[0]);
+    /**
+     * Generate AID login auth data, reusing the cached bearer token when it is still valid.
+     */
+    public function generateAidAuthData(): array
+    {
+        return $this->buildAuthData($this->resolveCachedAidBearerToken());
+    }
 
-        $data = [  
-            'token' => $this->user->token,  
-            'auth_data' => $formattedToken,  
+    private function buildAuthData(string $bearerToken): array
+    {
+        $data = [
+            'token' => $this->user->token,
+            'auth_data' => $bearerToken,
             'is_admin' => $this->user->is_admin,
             'email' => $this->user->email,
             'nickname' => $this->user->nickname,
@@ -41,6 +48,81 @@ class AuthService
         }  
 
         return $data;
+    }
+
+    private function createBearerToken(): string
+    {
+        $token = $this->user->createToken(
+            Str::random(20),
+            ['*'],
+            now()->addSeconds(self::TOKEN_TTL_SECONDS)
+        );
+
+        return $this->formatPlainTextToken($token->plainTextToken);
+    }
+
+    private function resolveCachedAidBearerToken(): string
+    {
+        $cacheKey = self::AID_TOKEN_CACHE_PREFIX . $this->user->id;
+
+        try {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached)) {
+                $plainToken = $cached['plain_token'] ?? null;
+                $expiresAt = (int) ($cached['expires_at'] ?? 0);
+                if (is_string($plainToken) && $this->cachedAidTokenIsValid($plainToken, $expiresAt)) {
+                    return 'Bearer ' . $plainToken;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AID auth token cache read failed', [
+                'user_id' => $this->user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $bearerToken = $this->createBearerToken();
+        $plainToken = str_replace('Bearer ', '', $bearerToken);
+        $expiresAt = now()->addSeconds(self::TOKEN_TTL_SECONDS);
+
+        try {
+            Cache::put($cacheKey, [
+                'plain_token' => $plainToken,
+                'expires_at' => $expiresAt->timestamp,
+            ], $expiresAt);
+        } catch (\Throwable $e) {
+            Log::warning('AID auth token cache write failed', [
+                'user_id' => $this->user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $bearerToken;
+    }
+
+    private function cachedAidTokenIsValid(string $plainToken, int $expiresAt): bool
+    {
+        if ($expiresAt <= time()) {
+            return false;
+        }
+
+        $accessToken = PersonalAccessToken::findToken($plainToken);
+        if (!$accessToken) {
+            return false;
+        }
+
+        if ($accessToken->tokenable_type !== User::class || (int) $accessToken->tokenable_id !== (int) $this->user->id) {
+            return false;
+        }
+
+        return $accessToken->expires_at === null || $accessToken->expires_at->timestamp > time();
+    }
+
+    private function formatPlainTextToken(string $plainTextToken): string
+    {
+        $tokenParts = explode('|', $plainTextToken);
+
+        return 'Bearer ' . ($tokenParts[1] ?? $tokenParts[0]);
     }
 
     public function getSessions(): array
