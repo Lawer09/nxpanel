@@ -1177,3 +1177,10 @@
 - 影响范围：`app/Http/Requests/User/PerformanceBatchReport.php`、`tests/Feature/UserAdValueReportTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `PerformanceBatchReport::withValidator()` 后置校验和测试中的 `User::withoutEvents()` 包装，并回退本版本记录即可。
+
+## 2026-07-28 广告价值上报测试契约对齐
+- 日期：2026-07-28
+- 变更摘要：`batchReport` 将已校验广告价值数组提前归一并复用于 raw payload 与实时缓存；广告价值 Feature 测试按项目统一响应格式断言 JSON `code=422`，并按当前用户定位实时缓存记录。
+- 影响范围：`app/Http/Controllers/V3/User/UserReportController.php`、`tests/Feature/UserAdValueReportTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 Controller 中直接读取 `$validated['ads_value_reports']` 的写法，并回退对应测试和本版本记录即可。

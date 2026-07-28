@@ -45,6 +45,7 @@ class UserReportController extends Controller
     public function batchReport(PerformanceBatchReport $request)
     {
         $validated = $request->validated();
+        $adsValueReports = $validated['ads_value_reports'] ?? [];
         try {
             NodePerformanceService::batchReportPerformance(
                 $request->user()->id,
@@ -53,7 +54,7 @@ class UserReportController extends Controller
                 $validated['user_default'] ?? [],
                 $request->getClientIp(),
                 $request,
-                $validated['ads_value_reports'] ?? []
+                $adsValueReports
             );
 
             $cacheKey = 'realtime:user_report:latest';
@@ -64,7 +65,7 @@ class UserReportController extends Controller
                 'metadata'     => $validated['metadata'] ?? [],
                 'user_default' => $validated['user_default'] ?? [],
                 'reports'      => $validated['reports'] ?? [],
-                'ads_value_reports' => $validated['ads_value_reports'] ?? [],
+                'ads_value_reports' => $adsValueReports,
                 'created_at'   => now()->toDateTimeString(),
             ];
 

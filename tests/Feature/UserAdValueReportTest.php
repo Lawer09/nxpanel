@@ -73,8 +73,9 @@ class UserAdValueReportTest extends TestCase
             $this->assertSame($adsValueReports, $payload['ads_value_reports']);
         }
 
-        $latest = Cache::get('realtime:user_report:latest', []);
-        $this->assertSame($adsValueReports, $latest[0]['ads_value_reports']);
+        $latest = collect(Cache::get('realtime:user_report:latest', []))
+            ->firstWhere('user_id', $user->id);
+        $this->assertSame($adsValueReports, $latest['ads_value_reports']);
     }
 
     /**
@@ -119,19 +120,25 @@ class UserAdValueReportTest extends TestCase
             'reports' => [],
             'ads_value_reports' => array_fill(0, 101, ['value_micros' => 1, 'currency' => 'USD']),
             'metadata' => $metadata,
-        ], $this->authHeaders($user))->assertStatus(422);
+        ], $this->authHeaders($user))
+            ->assertOk()
+            ->assertJsonPath('code', 422);
 
         $this->postJson('/api/v3/user/performance/batchReport', [
             'reports' => [],
             'ads_value_reports' => [['currency' => 'USD']],
             'metadata' => $metadata,
-        ], $this->authHeaders($user))->assertStatus(422);
+        ], $this->authHeaders($user))
+            ->assertOk()
+            ->assertJsonPath('code', 422);
 
         $this->postJson('/api/v3/user/performance/batchReport', [
             'reports' => [],
             'ads_value_reports' => [['value_micros' => 1]],
             'metadata' => $metadata,
-        ], $this->authHeaders($user))->assertStatus(422);
+        ], $this->authHeaders($user))
+            ->assertOk()
+            ->assertJsonPath('code', 422);
     }
 
     /**
