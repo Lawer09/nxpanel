@@ -10,6 +10,7 @@ use App\Services\AdRevenueService;
 use App\Services\ProjectAppInfoService;
 use App\Services\ProjectReportService;
 use App\Services\ProjectService;
+use App\Services\UserAdValueReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -127,7 +128,10 @@ class ProjectAppInfoTest extends TestCase
         $this->insertDailyAggregate('2026-07-05', 'APP003');
         $this->insertHourlyAggregate('2026-07-05', 10, 'APP003');
 
-        $service = new ProjectReportService($this->createMock(AdRevenueService::class));
+        $service = new ProjectReportService(
+            $this->createMock(AdRevenueService::class),
+            app(UserAdValueReportService::class)
+        );
         $daily = $service->queryDaily([
             'dateFrom' => '2026-07-05',
             'dateTo' => '2026-07-05',

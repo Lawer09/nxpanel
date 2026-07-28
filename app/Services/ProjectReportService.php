@@ -26,6 +26,7 @@ class ProjectReportService
 
     public function __construct(
         private readonly AdRevenueService $adRevenueService,
+        private readonly UserAdValueReportService $userAdValueReportService,
     ) {}
 
     /**
@@ -46,6 +47,40 @@ class ProjectReportService
         $params = $this->buildProjectReportCacheParams('daily', $validated);
 
         return $this->rememberProjectReportQuery('daily', $params, fn () => $this->executeDailyQuery($params));
+    }
+
+    /**
+     * Query dashboard income cards without loading paginated project report rows.
+     */
+    public function queryDashboardIncomeSummary(?string $appId = null): array
+    {
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $monthStart = $now->copy()->startOfMonth()->toDateString();
+        $normalizedAppId = is_string($appId) ? trim($appId) : '';
+        $projectCodes = null;
+
+        if ($normalizedAppId !== '') {
+            $projectCodes = $this->resolveProjectCodesByAppId($normalizedAppId);
+            if (empty($projectCodes)) {
+                return [
+                    'today' => $this->emptyDashboardIncomePeriod($today, $today),
+                    'month' => $this->emptyDashboardIncomePeriod($monthStart, $today),
+                ];
+            }
+        }
+
+        $params = [
+            'appId' => $normalizedAppId !== '' ? $normalizedAppId : null,
+            'projectCodes' => $projectCodes,
+            'today' => $today,
+            'monthStart' => $monthStart,
+        ];
+
+        return $this->rememberProjectReportQuery('dashboard_income', $params, fn () => [
+            'today' => $this->buildDashboardIncomePeriod($today, $today, $projectCodes),
+            'month' => $this->buildDashboardIncomePeriod($monthStart, $today, $projectCodes),
+        ]);
     }
 
     /**
@@ -229,6 +264,26 @@ class ProjectReportService
         ];
 
         return $this->rememberProjectReportQuery('retention', $params, fn () => $this->executeProjectRetentionQuery($params));
+    }
+
+    /**
+     * Query project ad-value composition for one value date.
+     */
+    public function queryProjectAdValueComposition(array $validated): array
+    {
+        $params = [
+            'projectCode' => trim((string) $validated['projectCode']),
+            'date' => (string) $validated['date'],
+        ];
+
+        return $this->rememberProjectReportQuery(
+            'ad_value_composition',
+            $params,
+            fn () => $this->userAdValueReportService->queryProjectCohortValueComposition(
+                $params['projectCode'],
+                $params['date']
+            )
+        );
     }
 
     /**
@@ -2235,6 +2290,28 @@ class ProjectReportService
     }
 
     /**
+     * Resolve project codes related to one user app id for dashboard filters.
+     *
+     * @return array<int, string>
+     */
+    private function resolveProjectCodesByAppId(string $appId): array
+    {
+        $normalizedAppId = trim($appId);
+        if ($normalizedAppId === '') {
+            return [];
+        }
+
+        return ProjectUserAppMap::query()
+            ->where('app_id', $normalizedAppId)
+            ->pluck('project_code')
+            ->map(static fn ($projectCode) => trim((string) $projectCode))
+            ->filter(static fn ($projectCode) => $projectCode !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Normalize country fields to the same semantics as project_daily_aggregates.
      */
     private function normalizedCountrySql(string $column): string
@@ -2250,6 +2327,67 @@ class ProjectReportService
         $value = strtoupper(trim((string) ($country ?? '')));
 
         return $value === '' ? 'XX' : $value;
+    }
+
+    private function buildDashboardIncomePeriod(string $dateFrom, string $dateTo, ?array $projectCodes): array
+    {
+        $filters = [];
+        if ($projectCodes !== null) {
+            $filters['projectCodes'] = $projectCodes;
+        }
+
+        $definition = $this->buildDailyQueryDefinition([
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'filters' => $filters,
+            'dayOverDayHourTo' => null,
+        ]);
+
+        return $this->formatDashboardIncomePeriod($this->buildDailySummary($definition), $dateFrom, $dateTo);
+    }
+
+    private function formatDashboardIncomePeriod(array $summary, string $dateFrom, string $dateTo): array
+    {
+        $adRevenue = $summary['adRevenue'] ?? $this->formatDecimal(0);
+        $adSpendCost = $summary['adSpendCost'] ?? $this->formatDecimal(0);
+        $trafficCost = $summary['trafficCost'] ?? $this->formatDecimal(0);
+        $totalCost = $summary['totalCost'] ?? $this->formatDecimal(0);
+        $profit = $summary['profit'] ?? $this->formatDecimal(0);
+
+        return [
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'income' => $profit,
+            'revenue' => $adRevenue,
+            'expense' => $totalCost,
+            'adRevenue' => $adRevenue,
+            'adSpendCost' => $adSpendCost,
+            'trafficCost' => $trafficCost,
+            'totalCost' => $totalCost,
+            'profit' => $profit,
+            'roi' => $summary['roi'] ?? $this->formatDecimal(0),
+            'updatedAt' => $summary['updatedAt'] ?? null,
+        ];
+    }
+
+    private function emptyDashboardIncomePeriod(string $dateFrom, string $dateTo): array
+    {
+        $zero = $this->formatDecimal(0);
+
+        return [
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'income' => $zero,
+            'revenue' => $zero,
+            'expense' => $zero,
+            'adRevenue' => $zero,
+            'adSpendCost' => $zero,
+            'trafficCost' => $zero,
+            'totalCost' => $zero,
+            'profit' => $zero,
+            'roi' => $zero,
+            'updatedAt' => null,
+        ];
     }
 
     /**

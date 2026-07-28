@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\NodeServerRealtimeRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyExportRequest;
 use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
+use App\Http\Requests\Admin\ProjectAdValueCompositionRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyQueryRequest;
 use App\Http\Requests\Admin\ProjectHourlyAdMatchRateRequest;
 use App\Http\Requests\Admin\ProjectRetentionQueryRequest;
@@ -166,6 +167,16 @@ class ReportController extends Controller
     {
         return $this->ok(
             $this->projectReportService->queryHourlyAdMatchRate($request->validated())
+        );
+    }
+
+    /**
+     * Query project ad-value composition by user first-report cohorts.
+     */
+    public function queryProjectAdValueComposition(ProjectAdValueCompositionRequest $request): JsonResponse
+    {
+        return $this->ok(
+            $this->projectReportService->queryProjectAdValueComposition($request->validated())
         );
     }
 

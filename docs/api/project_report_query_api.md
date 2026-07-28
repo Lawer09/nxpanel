@@ -267,6 +267,120 @@
 - 多 app 项目按项目维度去重用户，使用 `COUNT(DISTINCT user_id)`，避免同一用户多时间桶或多 app 重复计数。
 - 目标日期晚于当前日期时，对应 Day+N 返回 `null`。
 
+## 项目广告价值组成接口
+
+- 管理端路径：`POST /api/v3/{secure_path}/report/project/ad-value/composition`
+- 控制器：`ReportController::queryProjectAdValueComposition`
+- Service：`ProjectReportService::queryProjectAdValueComposition`
+
+### 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCode | string | 是 | 项目代号 |
+| date | string | 是 | 广告价值日期，格式 `Y-m-d`，按上报聚合时的 UTC+8 日期查询 |
+
+### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "projectCode": "A003",
+    "date": "2026-07-28",
+    "totalValueMicrosUsd": 1000000000,
+    "totalValueUsd": "1000.000000",
+    "keyBuckets": [
+      {
+        "cohortKey": "day0",
+        "cohortAge": 0,
+        "valueMicrosUsd": 500000000,
+        "valueUsd": "500.000000",
+        "ratio": 0.5,
+        "userCount": 120
+      },
+      {
+        "cohortKey": "day1",
+        "cohortAge": 1,
+        "valueMicrosUsd": 200000000,
+        "valueUsd": "200.000000",
+        "ratio": 0.2,
+        "userCount": 80
+      },
+      {
+        "cohortKey": "day3",
+        "cohortAge": 3,
+        "valueMicrosUsd": 0,
+        "valueUsd": "0.000000",
+        "ratio": 0,
+        "userCount": 0
+      },
+      {
+        "cohortKey": "day7",
+        "cohortAge": 7,
+        "valueMicrosUsd": 0,
+        "valueUsd": "0.000000",
+        "ratio": 0,
+        "userCount": 0
+      },
+      {
+        "cohortKey": "day14_plus",
+        "cohortAge": 14,
+        "valueMicrosUsd": 300000000,
+        "valueUsd": "300.000000",
+        "ratio": 0.3,
+        "userCount": 60
+      }
+    ],
+    "buckets": [
+      {
+        "cohortKey": "day0",
+        "cohortAge": 0,
+        "valueMicrosUsd": 500000000,
+        "valueUsd": "500.000000",
+        "ratio": 0.5,
+        "userCount": 120
+      },
+      {
+        "cohortKey": "day14",
+        "cohortAge": 14,
+        "valueMicrosUsd": 100000000,
+        "valueUsd": "100.000000",
+        "ratio": 0.1,
+        "userCount": 20
+      },
+      {
+        "cohortKey": "day20",
+        "cohortAge": 20,
+        "valueMicrosUsd": 200000000,
+        "valueUsd": "200.000000",
+        "ratio": 0.2,
+        "userCount": 40
+      }
+    ],
+    "unknown": {
+      "cohortKey": "unknown",
+      "cohortAge": null,
+      "valueMicrosUsd": 0,
+      "valueUsd": "0.000000",
+      "ratio": 0,
+      "userCount": 0
+    }
+  }
+}
+```
+
+### 指标口径
+
+- 数据来源为 `v3_user_ad_value_hourly`，仅统计 `project_user_app_map` 中当前 `projectCode` 下 `enabled=1` 的 app。
+- cohort 日期为用户在同一 app 的 `v3_user_app_first_report.first_report_date`，`dayN = date - first_report_date`。
+- `keyBuckets` 固定返回 `day0`、`day1`、`day3`、`day7`、`day14_plus`；其中 `day14_plus` 聚合所有 `cohortAge >= 14` 的价值。
+- `buckets` 返回全部实际 dayN 明细，按 `cohortAge` 升序排列，不补零；缺少首次上报日或出现负 day age 的数据进入 `unknown`。
+- `ratio = valueMicrosUsd / totalValueMicrosUsd`，保留 6 位小数；`totalValueMicrosUsd` 包含 `buckets` 与 `unknown` 的全部价值。
+- `userCount` 为当前 bucket 内去重用户数；同一用户在同一 bucket 内多个 app 或多个小时产生价值时，价值累加且用户只计一次。
+- 查询结果使用项目报表短缓存，缓存时间 60 秒。
+
 ## CSV 导出接口
 
 ### 请求参数

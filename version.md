@@ -1205,3 +1205,10 @@
 - 影响范围：`tests/Feature/PerformanceUserStatsServiceTest.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`tests/Feature/CurrencyRateTest.php`、`tests/Feature/UserAdValueReportTest.php`、`tests/Feature/UserIpBanTest.php`、`tests/Feature/ProjectAppInfoTest.php`、`tests/Feature/SendWebhookJobTest.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：如需恢复删除接口或删除场景测试，必须先保证测试环境强制使用隔离数据库和隔离 Redis，再单独恢复对应测试用例。
+
+## 2026-07-28 项目广告价值留存组成查询
+- 日期：2026-07-28
+- 变更摘要：新增管理端 `POST /api/v3/{secure_path}/report/project/ad-value/composition` 接口，按项目启用 app 和指定 UTC+8 日期查询广告价值来源组成，返回固定核心桶 `day0/day1/day3/day7/day14_plus`、全部实际 dayN 明细和 unknown 桶。
+- 影响范围：`app/Http/Requests/Admin/ProjectAdValueCompositionRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`app/Services/UserAdValueReportService.php`、`tests/Feature/ProjectAdValueCompositionTest.php`、`tests/Feature/ProjectAppInfoTest.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，直接读取现有 `v3_user_ad_value_hourly`、`v3_user_app_first_report` 和 `project_user_app_map`。
+- 回滚说明：移除新增 Request、路由、Controller 方法、ProjectReportService 委托方法、UserAdValueReportService 项目组成查询方法，并回退对应测试、文档和本版本记录即可。

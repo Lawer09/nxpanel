@@ -17,6 +17,7 @@ use App\Http\Controllers\V3\Admin\PerformanceController;
 use App\Http\Controllers\V3\Admin\VersionController;
 use App\Http\Controllers\V3\Admin\AppController;
 use App\Http\Controllers\V3\Admin\AppTrafficController;
+use App\Http\Controllers\V3\Admin\DashboardController;
 use App\Http\Controllers\V3\Admin\AdRevenuePlatform\AdAccountController;
 use App\Http\Controllers\V3\Admin\AdRevenuePlatform\AdRevenueController;
 use App\Http\Controllers\V3\Admin\AdSpendPlatform\AdSpendPlatformController;
@@ -65,6 +66,11 @@ class AdminRoute
             // Enum Options
             $router->get('/enum/options', [EnumController::class, 'getOptions']);
             $router->get('/enum/app-ids', [EnumController::class, 'getAppIds']);
+
+            // Dashboard
+            $router->group(['prefix' => 'dashboard'], function ($router) {
+                $router->post('/income-summary', [DashboardController::class, 'incomeSummary']);
+            });
 
             // Order
             $router->group(['prefix' => 'order'], function ($router) {
@@ -300,6 +306,7 @@ class AdminRoute
                 $router->post('/project/export',          [ReportController::class, 'exportProjectReport']);
                 $router->post('/project/hourly/query',    [ReportController::class, 'queryProjectReportHourly']);
                 $router->post('/project/hourly/ad-match-rate', [ReportController::class, 'queryProjectHourlyAdMatchRate']);
+                $router->post('/project/ad-value/composition', [ReportController::class, 'queryProjectAdValueComposition']);
                 $router->post('/project/retention',       [ReportController::class, 'queryProjectRetention']);
             });
 

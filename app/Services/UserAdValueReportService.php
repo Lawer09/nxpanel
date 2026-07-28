@@ -13,6 +13,8 @@ class UserAdValueReportService
 {
     private const MICROS_PER_USD = 1000000;
 
+    private const PROJECT_KEY_COHORT_AGES = [0, 1, 3, 7];
+
     public function __construct(private readonly CurrencyRateService $currencyRateService)
     {
     }
@@ -181,6 +183,120 @@ class UserAdValueReportService
             'totalValueMicrosUsd' => $totalMicros,
             'totalValueUsd' => $this->formatUsdFromMicros($totalMicros),
             'buckets' => $formattedBuckets,
+        ];
+    }
+
+    /**
+     * Query one project's ad-value composition by every actual day-N cohort.
+     */
+    public function queryProjectCohortValueComposition(string $projectCode, string $date): array
+    {
+        $projectCode = trim($projectCode);
+
+        $rows = DB::table('v3_user_ad_value_hourly as av')
+            ->join('project_user_app_map as puam', function ($join) use ($projectCode) {
+                $join->on('puam.app_id', '=', 'av.app_id')
+                    ->where('puam.enabled', '=', 1)
+                    ->where('puam.project_code', '=', $projectCode);
+            })
+            ->leftJoin('v3_user_app_first_report as fr', function ($join) {
+                $join->on('fr.user_id', '=', 'av.user_id')
+                    ->on('fr.app_id', '=', 'av.app_id');
+            })
+            ->where('av.date', '=', $date)
+            ->selectRaw('av.user_id as user_id')
+            ->selectRaw('av.date as value_date')
+            ->selectRaw('fr.first_report_date as first_report_date')
+            ->selectRaw('SUM(av.value_micros_usd) as value_micros_usd')
+            ->groupBy('av.user_id', 'av.date', 'fr.first_report_date')
+            ->get();
+
+        $buckets = [];
+        $keyBuckets = $this->emptyProjectKeyBuckets();
+        $unknown = $this->emptyCompositionBucket('unknown', null);
+        $totalMicros = 0;
+
+        foreach ($rows as $row) {
+            $userId = (int) ($row->user_id ?? 0);
+            $valueMicros = (int) ($row->value_micros_usd ?? 0);
+            $totalMicros += $valueMicros;
+
+            $age = $this->resolveCohortAge($row->value_date ?? null, $row->first_report_date ?? null);
+            if ($age === null) {
+                $this->addCompositionValue($unknown, $userId, $valueMicros);
+                continue;
+            }
+
+            $cohortKey = 'day' . $age;
+            if (!isset($buckets[$cohortKey])) {
+                $buckets[$cohortKey] = $this->emptyCompositionBucket($cohortKey, $age);
+            }
+            $this->addCompositionValue($buckets[$cohortKey], $userId, $valueMicros);
+
+            if (in_array($age, self::PROJECT_KEY_COHORT_AGES, true)) {
+                $this->addCompositionValue($keyBuckets[$cohortKey], $userId, $valueMicros);
+            } elseif ($age >= 14) {
+                $this->addCompositionValue($keyBuckets['day14_plus'], $userId, $valueMicros);
+            }
+        }
+
+        uasort($buckets, static fn (array $left, array $right): int => $left['cohortAge'] <=> $right['cohortAge']);
+
+        return [
+            'projectCode' => $projectCode,
+            'date' => $date,
+            'totalValueMicrosUsd' => $totalMicros,
+            'totalValueUsd' => $this->formatUsdFromMicros($totalMicros),
+            'keyBuckets' => array_values(array_map(
+                fn (array $bucket): array => $this->formatCompositionBucket($bucket, $totalMicros),
+                $keyBuckets
+            )),
+            'buckets' => array_values(array_map(
+                fn (array $bucket): array => $this->formatCompositionBucket($bucket, $totalMicros),
+                $buckets
+            )),
+            'unknown' => $this->formatCompositionBucket($unknown, $totalMicros),
+        ];
+    }
+
+    private function emptyProjectKeyBuckets(): array
+    {
+        return [
+            'day0' => $this->emptyCompositionBucket('day0', 0),
+            'day1' => $this->emptyCompositionBucket('day1', 1),
+            'day3' => $this->emptyCompositionBucket('day3', 3),
+            'day7' => $this->emptyCompositionBucket('day7', 7),
+            'day14_plus' => $this->emptyCompositionBucket('day14_plus', 14),
+        ];
+    }
+
+    private function emptyCompositionBucket(string $cohortKey, ?int $cohortAge): array
+    {
+        return [
+            'cohortKey' => $cohortKey,
+            'cohortAge' => $cohortAge,
+            'valueMicrosUsd' => 0,
+            'userIds' => [],
+        ];
+    }
+
+    private function addCompositionValue(array &$bucket, int $userId, int $valueMicros): void
+    {
+        $bucket['valueMicrosUsd'] += $valueMicros;
+        if ($userId > 0) {
+            $bucket['userIds'][$userId] = true;
+        }
+    }
+
+    private function formatCompositionBucket(array $bucket, int $totalMicros): array
+    {
+        return [
+            'cohortKey' => $bucket['cohortKey'],
+            'cohortAge' => $bucket['cohortAge'],
+            'valueMicrosUsd' => (int) $bucket['valueMicrosUsd'],
+            'valueUsd' => $this->formatUsdFromMicros((int) $bucket['valueMicrosUsd']),
+            'ratio' => $totalMicros > 0 ? round((int) $bucket['valueMicrosUsd'] / $totalMicros, 6) : 0.0,
+            'userCount' => count($bucket['userIds']),
         ];
     }
 
