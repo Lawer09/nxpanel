@@ -73,7 +73,7 @@ class TicketService
     /**
      * 创建工单后追加一条系统自动回复，复用管理员回复的状态流转逻辑。
      */
-    public function replyBySystemAfterCreated(Ticket $ticket, string $message = 'https://pm.geekforest.ai/api/feishu/events'): void
+    public function replyBySystemAfterCreated(Ticket $ticket, string $message = 't.me/rockspacevpntribe'): void
     {
         $this->replyByAdmin(
             $ticket->id,
