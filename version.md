@@ -1142,3 +1142,10 @@
 - 影响范围：`app/Services/AuthService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `AuthService` 中 AID token TTL 与缓存续期逻辑，并回退对应测试、接口文档和本版本记录即可。
+
+## 2026-07-28 合并 AID 登录 Request 校验
+- 日期：2026-07-28
+- 变更摘要：合并 `AuthLoginByAidV3` 到统一 `AuthLoginByAid`，按 API 版本返回 V1/V2 或 V3 校验规则，并将 V1/V3 `loginByAid` 控制器方法签名统一为相同 Form Request，避免子类覆盖方法参数类型不兼容导致 PHP fatal error。
+- 影响范围：`app/Http/Requests/Passport/AuthLoginByAid.php`、`app/Http/Requests/Passport/AuthLoginByAidV3.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/UserIpBanTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复拆分 Request 前需确保父子控制器 `loginByAid` 方法参数和返回类型兼容，否则会重新触发 PHP fatal error。

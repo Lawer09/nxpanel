@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\V3\Passport;
 
 use App\Http\Controllers\V1\Passport\AuthController as V1AuthController;
-use App\Http\Requests\Passport\AuthLoginByAidV3;
+use App\Http\Requests\Passport\AuthLoginByAid;
 use App\Services\AdSpendAdminUserSyncService;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
@@ -187,7 +187,7 @@ class AuthController extends V1AuthController
      * @param Request $request
      * @return JsonResponse
      */
-    public function loginByAid(AuthLoginByAidV3 $request): JsonResponse
+    public function loginByAid(AuthLoginByAid $request)
     {
         $metadata = $request->input('metadata', []);
         $channel = $request->input('channel', null);
