@@ -1170,3 +1170,10 @@
 - 影响范围：`.env.example`、`config/currency_rate.php`、`app/Services/CurrencyRateService.php`、`app/Services/UserAdValueReportService.php`、`app/Console/Commands/SyncCurrencyRates.php`、`app/Console/Kernel.php`、`database/migrations/2026_07_28_131000_create_currency_rates_daily_table.php`、`tests/Feature/CurrencyRateTest.php`、`tests/Feature/UserAdValueReportTest.php`、`docs/api/user_report_api.md`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration 创建 `currency_rates_daily`；上线需配置汇率同步源，必要时可用 `CURRENCY_RATE_OVERRIDE_TO_USD` 做紧急覆盖。
 - 回滚说明：移除 `CurrencyRateService`、`currency-rates:sync` 命令、Kernel 调度和 `currency_rates_daily` migration，并将 `UserAdValueReportService` 的汇率读取恢复到上一版配置逻辑，同时回退测试、文档和本版本记录即可。
+
+## 2026-07-28 用户广告价值上报校验修正
+- 日期：2026-07-28
+- 变更摘要：`PerformanceBatchReport` 增加显式数组数量后置校验，确保 `reports` 与 `ads_value_reports` 超过 100 条时稳定返回校验错误；广告价值测试创建用户时关闭模型事件，避免 Redis mock 与 Horizon 任务事件互相干扰。
+- 影响范围：`app/Http/Requests/User/PerformanceBatchReport.php`、`tests/Feature/UserAdValueReportTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除 `PerformanceBatchReport::withValidator()` 后置校验和测试中的 `User::withoutEvents()` 包装，并回退本版本记录即可。

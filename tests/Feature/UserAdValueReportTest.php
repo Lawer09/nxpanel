@@ -413,7 +413,7 @@ class UserAdValueReportTest extends TestCase
 
     private function createUser(string $email): User
     {
-        return User::query()->forceCreate([
+        return User::withoutEvents(fn(): User => User::query()->forceCreate([
             'email' => $email,
             'password' => password_hash('password123', PASSWORD_DEFAULT),
             'uuid' => Helper::guid(true),
@@ -429,7 +429,7 @@ class UserAdValueReportTest extends TestCase
             'banned' => 0,
             'created_at' => time(),
             'updated_at' => time(),
-        ]);
+        ]));
     }
 
     private function authHeaders(User $user): array

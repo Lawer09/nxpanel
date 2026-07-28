@@ -3,6 +3,7 @@
 namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class PerformanceBatchReport extends FormRequest
 {
@@ -39,6 +40,21 @@ class PerformanceBatchReport extends FormRequest
             'user_default.*.type'        => 'nullable|string|max:64',
             'user_default.*.data'        => 'nullable',
         ];
+    }
+
+    /**
+     * Enforce payload array limits explicitly for high-volume report inputs.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            foreach (['reports', 'ads_value_reports'] as $field) {
+                $value = $this->input($field);
+                if (is_array($value) && count($value) > 100) {
+                    $validator->errors()->add($field, $this->messages()[$field . '.max'] ?? $field . '最多100条');
+                }
+            }
+        });
     }
 
     public function messages(): array
