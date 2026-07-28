@@ -1212,3 +1212,10 @@
 - 影响范围：`app/Http/Requests/Admin/ProjectAdValueCompositionRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`app/Services/UserAdValueReportService.php`、`tests/Feature/ProjectAdValueCompositionTest.php`、`tests/Feature/ProjectAppInfoTest.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，直接读取现有 `v3_user_ad_value_hourly`、`v3_user_app_first_report` 和 `project_user_app_map`。
 - 回滚说明：移除新增 Request、路由、Controller 方法、ProjectReportService 委托方法、UserAdValueReportService 项目组成查询方法，并回退对应测试、文档和本版本记录即可。
+
+## 2026-07-28 项目每日新老用户广告价值查询
+- 日期：2026-07-28
+- 变更摘要：新增管理端 `POST /api/v3/{secure_path}/report/project/ad-value/daily-composition` 接口，按项目和日期范围返回每日广告总价值、本日用户价值、留存用户价值与 unknown 价值，并提供范围汇总。
+- 影响范围：`app/Http/Requests/Admin/ProjectAdValueDailyCompositionRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`app/Services/UserAdValueReportService.php`、`tests/Feature/ProjectAdValueCompositionTest.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，直接读取现有 `v3_user_ad_value_hourly`、`v3_user_app_first_report` 和 `project_user_app_map`。
+- 回滚说明：移除新增 Request、路由、Controller 方法、ProjectReportService 委托方法、UserAdValueReportService 每日新老用户查询方法，并回退对应测试、文档和本版本记录即可。

@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\ProjectAggregateDailyExportRequest;
 use App\Http\Requests\Admin\NodeServerReportNodeQueryRequest;
 use App\Http\Requests\Admin\NodeServerReportUserQueryRequest;
 use App\Http\Requests\Admin\ProjectAdValueCompositionRequest;
+use App\Http\Requests\Admin\ProjectAdValueDailyCompositionRequest;
 use App\Http\Requests\Admin\ProjectAggregateDailyQueryRequest;
 use App\Http\Requests\Admin\ProjectHourlyAdMatchRateRequest;
 use App\Http\Requests\Admin\ProjectRetentionQueryRequest;
@@ -177,6 +178,16 @@ class ReportController extends Controller
     {
         return $this->ok(
             $this->projectReportService->queryProjectAdValueComposition($request->validated())
+        );
+    }
+
+    /**
+     * Query project daily ad-value composition by new and retained users.
+     */
+    public function queryProjectAdValueDailyComposition(ProjectAdValueDailyCompositionRequest $request): JsonResponse
+    {
+        return $this->ok(
+            $this->projectReportService->queryProjectAdValueDailyComposition($request->validated())
         );
     }
 

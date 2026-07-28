@@ -307,6 +307,7 @@ class AdminRoute
                 $router->post('/project/hourly/query',    [ReportController::class, 'queryProjectReportHourly']);
                 $router->post('/project/hourly/ad-match-rate', [ReportController::class, 'queryProjectHourlyAdMatchRate']);
                 $router->post('/project/ad-value/composition', [ReportController::class, 'queryProjectAdValueComposition']);
+                $router->post('/project/ad-value/daily-composition', [ReportController::class, 'queryProjectAdValueDailyComposition']);
                 $router->post('/project/retention',       [ReportController::class, 'queryProjectRetention']);
             });
 

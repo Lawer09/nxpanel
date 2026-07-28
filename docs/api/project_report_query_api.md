@@ -381,6 +381,73 @@
 - `userCount` 为当前 bucket 内去重用户数；同一用户在同一 bucket 内多个 app 或多个小时产生价值时，价值累加且用户只计一次。
 - 查询结果使用项目报表短缓存，缓存时间 60 秒。
 
+## 项目每日新老用户广告价值接口
+
+- 管理端路径：`POST /api/v3/{secure_path}/report/project/ad-value/daily-composition`
+- 控制器：`ReportController::queryProjectAdValueDailyComposition`
+- Service：`ProjectReportService::queryProjectAdValueDailyComposition`
+
+### 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectCode | string | 是 | 项目代号 |
+| dateFrom | string | 是 | 开始日期，格式 `Y-m-d`，按广告价值 UTC+8 日期查询 |
+| dateTo | string | 是 | 结束日期，格式 `Y-m-d`，必须大于等于 `dateFrom` |
+
+### 返回示例
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": {
+    "projectCode": "A003",
+    "dateFrom": "2026-07-01",
+    "dateTo": "2026-07-03",
+    "data": [
+      {
+        "date": "2026-07-01",
+        "totalValueMicrosUsd": 1000000000,
+        "totalValueUsd": "1000.000000",
+        "newUserValueMicrosUsd": 500000000,
+        "newUserValueUsd": "500.000000",
+        "newUserRatio": 0.5,
+        "retainedUserValueMicrosUsd": 450000000,
+        "retainedUserValueUsd": "450.000000",
+        "retainedUserRatio": 0.45,
+        "unknownValueMicrosUsd": 50000000,
+        "unknownValueUsd": "50.000000",
+        "unknownRatio": 0.05
+      }
+    ],
+    "summary": {
+      "totalValueMicrosUsd": 3000000000,
+      "totalValueUsd": "3000.000000",
+      "newUserValueMicrosUsd": 1200000000,
+      "newUserValueUsd": "1200.000000",
+      "newUserRatio": 0.4,
+      "retainedUserValueMicrosUsd": 1700000000,
+      "retainedUserValueUsd": "1700.000000",
+      "retainedUserRatio": 0.566667,
+      "unknownValueMicrosUsd": 100000000,
+      "unknownValueUsd": "100.000000",
+      "unknownRatio": 0.033333
+    }
+  }
+}
+```
+
+### 指标口径
+
+- 数据来源和项目 app 范围与项目广告价值组成接口一致，仅统计 `project_user_app_map.enabled=1` 的 app。
+- 本日用户价值：`v3_user_app_first_report.first_report_date = value date`，即 `cohortAge=0`。
+- 留存用户价值：`first_report_date < value date`，即 `cohortAge>0`。
+- 未找到首次上报日或 `first_report_date > value date` 的价值进入 `unknownValue`，同时仍计入 `totalValueMicrosUsd`。
+- 返回 `dateFrom ~ dateTo` 范围内每天一行；无广告价值数据的日期补 0。
+- `summary` 为返回日期范围内各日指标累加后重新计算比例，不是各日比例的平均值。
+- 查询结果使用项目报表短缓存，缓存时间 60 秒。
+
 ## CSV 导出接口
 
 ### 请求参数

@@ -259,6 +259,126 @@ class UserAdValueReportService
         ];
     }
 
+    /**
+     * Query daily project ad-value totals split into same-day and retained users.
+     */
+    public function queryProjectDailyNewRetainedValueComposition(string $projectCode, string $dateFrom, string $dateTo): array
+    {
+        $projectCode = trim($projectCode);
+        $dailyRows = $this->emptyDailyValueRows($dateFrom, $dateTo);
+
+        $rows = DB::table('v3_user_ad_value_hourly as av')
+            ->join('project_user_app_map as puam', function ($join) use ($projectCode) {
+                $join->on('puam.app_id', '=', 'av.app_id')
+                    ->where('puam.enabled', '=', 1)
+                    ->where('puam.project_code', '=', $projectCode);
+            })
+            ->leftJoin('v3_user_app_first_report as fr', function ($join) {
+                $join->on('fr.user_id', '=', 'av.user_id')
+                    ->on('fr.app_id', '=', 'av.app_id');
+            })
+            ->whereBetween('av.date', [$dateFrom, $dateTo])
+            ->selectRaw('av.date as value_date')
+            ->selectRaw('fr.first_report_date as first_report_date')
+            ->selectRaw('SUM(av.value_micros_usd) as value_micros_usd')
+            ->groupBy('av.date', 'fr.first_report_date')
+            ->get();
+
+        $summary = $this->emptyDailyValueMetrics();
+
+        foreach ($rows as $row) {
+            $date = (string) ($row->value_date ?? '');
+            if (!isset($dailyRows[$date])) {
+                continue;
+            }
+
+            $valueMicros = (int) ($row->value_micros_usd ?? 0);
+            $age = $this->resolveCohortAge($row->value_date ?? null, $row->first_report_date ?? null);
+            $bucket = $age === 0 ? 'new' : ($age === null ? 'unknown' : 'retained');
+
+            $this->addDailyValue($dailyRows[$date], $bucket, $valueMicros);
+            $this->addDailyValue($summary, $bucket, $valueMicros);
+        }
+
+        return [
+            'projectCode' => $projectCode,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'data' => array_values(array_map(
+                fn (array $row): array => $this->formatDailyValueRow($row),
+                $dailyRows
+            )),
+            'summary' => $this->formatDailyValueRow($summary, false),
+        ];
+    }
+
+    private function emptyDailyValueRows(string $dateFrom, string $dateTo): array
+    {
+        $rows = [];
+        $date = Carbon::parse($dateFrom)->startOfDay();
+        $endDate = Carbon::parse($dateTo)->startOfDay();
+
+        while ($date->lte($endDate)) {
+            $dateKey = $date->toDateString();
+            $rows[$dateKey] = array_merge(['date' => $dateKey], $this->emptyDailyValueMetrics());
+            $date->addDay();
+        }
+
+        return $rows;
+    }
+
+    private function emptyDailyValueMetrics(): array
+    {
+        return [
+            'totalValueMicrosUsd' => 0,
+            'newUserValueMicrosUsd' => 0,
+            'retainedUserValueMicrosUsd' => 0,
+            'unknownValueMicrosUsd' => 0,
+        ];
+    }
+
+    private function addDailyValue(array &$row, string $bucket, int $valueMicros): void
+    {
+        $row['totalValueMicrosUsd'] += $valueMicros;
+
+        if ($bucket === 'new') {
+            $row['newUserValueMicrosUsd'] += $valueMicros;
+        } elseif ($bucket === 'retained') {
+            $row['retainedUserValueMicrosUsd'] += $valueMicros;
+        } else {
+            $row['unknownValueMicrosUsd'] += $valueMicros;
+        }
+    }
+
+    private function formatDailyValueRow(array $row, bool $includeDate = true): array
+    {
+        $totalMicros = (int) $row['totalValueMicrosUsd'];
+        $formatted = [];
+
+        if ($includeDate) {
+            $formatted['date'] = (string) $row['date'];
+        }
+
+        $formatted['totalValueMicrosUsd'] = $totalMicros;
+        $formatted['totalValueUsd'] = $this->formatUsdFromMicros($totalMicros);
+        $formatted['newUserValueMicrosUsd'] = (int) $row['newUserValueMicrosUsd'];
+        $formatted['newUserValueUsd'] = $this->formatUsdFromMicros((int) $row['newUserValueMicrosUsd']);
+        $formatted['newUserRatio'] = $this->dailyValueRatio((int) $row['newUserValueMicrosUsd'], $totalMicros);
+        $formatted['retainedUserValueMicrosUsd'] = (int) $row['retainedUserValueMicrosUsd'];
+        $formatted['retainedUserValueUsd'] = $this->formatUsdFromMicros((int) $row['retainedUserValueMicrosUsd']);
+        $formatted['retainedUserRatio'] = $this->dailyValueRatio((int) $row['retainedUserValueMicrosUsd'], $totalMicros);
+        $formatted['unknownValueMicrosUsd'] = (int) $row['unknownValueMicrosUsd'];
+        $formatted['unknownValueUsd'] = $this->formatUsdFromMicros((int) $row['unknownValueMicrosUsd']);
+        $formatted['unknownRatio'] = $this->dailyValueRatio((int) $row['unknownValueMicrosUsd'], $totalMicros);
+
+        return $formatted;
+    }
+
+    private function dailyValueRatio(int $valueMicros, int $totalMicros): float
+    {
+        return $totalMicros > 0 ? round($valueMicros / $totalMicros, 6) : 0.0;
+    }
+
     private function emptyProjectKeyBuckets(): array
     {
         return [

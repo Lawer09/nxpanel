@@ -115,6 +115,78 @@ class ProjectAdValueCompositionTest extends TestCase
         }
     }
 
+    /**
+     * Verify daily project ad-value splits same-day users, retained users, and unknown cohorts.
+     */
+    public function test_admin_can_query_project_daily_ad_value_composition(): void
+    {
+        $admin = $this->createUser('project-ad-value-daily-admin@example.com', ['is_admin' => 1]);
+
+        $this->insertProjectAppMap('P_DAILY_VALUE', 'com.daily.a', 1);
+        $this->insertProjectAppMap('P_DAILY_VALUE', 'com.daily.b', 1);
+        $this->insertProjectAppMap('P_DAILY_VALUE', 'com.daily.disabled', 0);
+        $this->insertProjectAppMap('P_DAILY_OTHER', 'com.daily.other', 1);
+
+        $this->insertFirstReport(5201, 'com.daily.a', '2026-07-01');
+        $this->insertFirstReport(5202, 'com.daily.a', '2026-06-30');
+        $this->insertFirstReport(5204, 'com.daily.a', '2026-07-03');
+        $this->insertFirstReport(5205, 'com.daily.b', '2026-06-30');
+        $this->insertFirstReport(5206, 'com.daily.b', '2026-06-19');
+        $this->insertFirstReport(5207, 'com.daily.a', '2026-07-04');
+        $this->insertFirstReport(5298, 'com.daily.disabled', '2026-07-01');
+        $this->insertFirstReport(5299, 'com.daily.other', '2026-07-01');
+
+        $this->insertAdValue('2026-07-01', 9, 5201, 'com.daily.a', 100000000);
+        $this->insertAdValue('2026-07-01', 10, 5202, 'com.daily.a', 50000000);
+        $this->insertAdValue('2026-07-01', 11, 5203, 'com.daily.a', 20000000);
+        $this->insertAdValue('2026-07-03', 9, 5204, 'com.daily.a', 300000000);
+        $this->insertAdValue('2026-07-03', 10, 5205, 'com.daily.b', 70000000);
+        $this->insertAdValue('2026-07-03', 11, 5206, 'com.daily.b', 30000000);
+        $this->insertAdValue('2026-07-03', 12, 5207, 'com.daily.a', 10000000);
+        $this->insertAdValue('2026-07-01', 10, 5298, 'com.daily.disabled', 999000000);
+        $this->insertAdValue('2026-07-01', 10, 5299, 'com.daily.other', 999000000);
+
+        $response = $this->postJson($this->adminReportUri('project/ad-value/daily-composition'), [
+            'projectCode' => 'P_DAILY_VALUE',
+            'dateFrom' => '2026-07-01',
+            'dateTo' => '2026-07-03',
+        ], $this->adminHeaders($admin))->assertOk();
+
+        $data = $response->json('data');
+        $rows = collect($data['data'])->keyBy('date');
+
+        $this->assertSame('P_DAILY_VALUE', $data['projectCode']);
+        $this->assertSame('2026-07-01', $data['dateFrom']);
+        $this->assertSame('2026-07-03', $data['dateTo']);
+        $this->assertSame(['2026-07-01', '2026-07-02', '2026-07-03'], array_keys($rows->all()));
+
+        $this->assertSame(170000000, $rows['2026-07-01']['totalValueMicrosUsd']);
+        $this->assertSame(100000000, $rows['2026-07-01']['newUserValueMicrosUsd']);
+        $this->assertSame(50000000, $rows['2026-07-01']['retainedUserValueMicrosUsd']);
+        $this->assertSame(20000000, $rows['2026-07-01']['unknownValueMicrosUsd']);
+        $this->assertSame(0.588235, $rows['2026-07-01']['newUserRatio']);
+        $this->assertSame(0.294118, $rows['2026-07-01']['retainedUserRatio']);
+        $this->assertSame(0.117647, $rows['2026-07-01']['unknownRatio']);
+
+        $this->assertSame(0, $rows['2026-07-02']['totalValueMicrosUsd']);
+        $this->assertSame('0.000000', $rows['2026-07-02']['totalValueUsd']);
+
+        $this->assertSame(410000000, $rows['2026-07-03']['totalValueMicrosUsd']);
+        $this->assertSame(300000000, $rows['2026-07-03']['newUserValueMicrosUsd']);
+        $this->assertSame(100000000, $rows['2026-07-03']['retainedUserValueMicrosUsd']);
+        $this->assertSame(10000000, $rows['2026-07-03']['unknownValueMicrosUsd']);
+
+        $summary = $data['summary'];
+        $this->assertSame(580000000, $summary['totalValueMicrosUsd']);
+        $this->assertSame('580.000000', $summary['totalValueUsd']);
+        $this->assertSame(400000000, $summary['newUserValueMicrosUsd']);
+        $this->assertSame(150000000, $summary['retainedUserValueMicrosUsd']);
+        $this->assertSame(30000000, $summary['unknownValueMicrosUsd']);
+        $this->assertSame(0.689655, $summary['newUserRatio']);
+        $this->assertSame(0.258621, $summary['retainedUserRatio']);
+        $this->assertSame(0.051724, $summary['unknownRatio']);
+    }
+
     private function insertProjectAppMap(string $projectCode, string $appId, int $enabled): void
     {
         DB::table('project_user_app_map')->insert([

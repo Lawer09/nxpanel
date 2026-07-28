@@ -287,6 +287,28 @@ class ProjectReportService
     }
 
     /**
+     * Query daily project ad-value totals split by new and retained users.
+     */
+    public function queryProjectAdValueDailyComposition(array $validated): array
+    {
+        $params = [
+            'projectCode' => trim((string) $validated['projectCode']),
+            'dateFrom' => (string) $validated['dateFrom'],
+            'dateTo' => (string) $validated['dateTo'],
+        ];
+
+        return $this->rememberProjectReportQuery(
+            'ad_value_daily_composition',
+            $params,
+            fn () => $this->userAdValueReportService->queryProjectDailyNewRetainedValueComposition(
+                $params['projectCode'],
+                $params['dateFrom'],
+                $params['dateTo']
+            )
+        );
+    }
+
+    /**
      * Execute project-level user retention query in two aggregate passes.
      */
     private function executeProjectRetentionQuery(array $validated): array
