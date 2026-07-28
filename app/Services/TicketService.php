@@ -71,6 +71,28 @@ class TicketService
     }
 
     /**
+     * 创建工单后追加一条系统自动回复，复用管理员回复的状态流转逻辑。
+     */
+    public function replyBySystemAfterCreated(Ticket $ticket, string $message = 'https://pm.geekforest.ai/api/feishu/events'): void
+    {
+        $this->replyByAdmin(
+            $ticket->id,
+            $message,
+            $this->resolveSystemReplyUserId()
+        );
+    }
+
+    /**
+     * 优先使用站内管理员作为自动回复人；没有管理员时使用 0 标记系统回复。
+     */
+    private function resolveSystemReplyUserId(): int
+    {
+        return (int) (User::where('is_admin', true)
+            ->orderBy('id')
+            ->value('id') ?? 0);
+    }
+
+    /**
      * 创建工单并写入首条消息。
      */
     public function createTicket($userId, $subject, $level, $message, ?string $personalEmail = null)

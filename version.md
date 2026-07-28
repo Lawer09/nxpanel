@@ -1121,3 +1121,10 @@
 - 影响范围：`app/Services/ProjectAdAccountService.php`、`docs/api/project_api.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：移除 `ProjectAdAccountService` 中应用名称匹配和返回字段，并同步回退项目 API 文档与本版本记录即可。
+
+## 2026-07-27 用户工单创建后自动回复
+- 日期：2026-07-27
+- 变更摘要：用户端 `POST /api/v1/user/ticket/save` 与 `POST /api/v3/user/ticket/save` 创建工单成功后，自动复用管理员回复逻辑追加内容为 `haaaaa` 的系统回复，并更新工单回复状态。
+- 影响范围：`app/Services/TicketService.php`、`app/Http/Controllers/V1/User/TicketController.php`、`app/Http/Controllers/V3/User/TicketController.php`、`tests/Feature/TicketCreateTest.php`、`docs/api/ticket_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：移除用户端保存工单后的自动回复调用、`TicketService::replyBySystemAfterCreated()` 及对应测试和文档记录即可。
