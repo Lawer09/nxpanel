@@ -1198,3 +1198,10 @@
 - 影响范围：`database/migrations/2026_07_28_152000_repair_v3_user_report_count_table.php`、`tests/TestCase.php`、`docs/issues/v3_user_report_count_missing_2026_07_28.md`、`version.md`
 - 是否需要迁移：是，需执行新增 migration；线上已先手工补建缺失主表恢复调度写入，后续执行该 migration 会记录修复并保持幂等。
 - 回滚说明：该 repair migration 的 `down()` 为非破坏性 no-op，避免删除历史迁移创建的主表或索引；测试保护如需回退，需删除 `TestCase::guardAgainstUnsafeDatabase()` 调用与方法。
+
+## 2026-07-28 测试文件删除操作移除
+- 日期：2026-07-28
+- 变更摘要：移除 Feature 测试中的显式删表、删数据、全局清缓存和删除接口调用测试；相关场景改为建表存在性检查、token 过期失效、DB 查询次数验证、保存/查询/更新路径验证，避免测试误连持久化环境时再次破坏生产数据。
+- 影响范围：`tests/Feature/PerformanceUserStatsServiceTest.php`、`tests/Feature/FirebaseAnalyticsProbeResultsTest.php`、`tests/Feature/CurrencyRateTest.php`、`tests/Feature/UserAdValueReportTest.php`、`tests/Feature/UserIpBanTest.php`、`tests/Feature/ProjectAppInfoTest.php`、`tests/Feature/SendWebhookJobTest.php`、`tests/Feature/AdSpendAdminUserSyncTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：如需恢复删除接口或删除场景测试，必须先保证测试环境强制使用隔离数据库和隔离 Redis，再单独恢复对应测试用例。

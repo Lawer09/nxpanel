@@ -3,12 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
-use App\Models\Setting;
 use App\Models\User;
+use App\Support\Setting as SettingStore;
 use App\Services\AuthService;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
@@ -25,8 +24,7 @@ class AdSpendAdminUserSyncTest extends TestCase
         parent::setUp();
 
         Queue::fake();
-        Cache::flush();
-        Setting::createOrUpdate('secure_path', 'admin');
+        app(SettingStore::class)->set('secure_path', 'admin');
         config()->set('services.ad_spend_admin_user_sync.enabled', false);
         config()->set('services.ad_spend_admin_user_sync.base_url', '');
         config()->set('services.ad_spend_admin_user_sync.admin_username', '');

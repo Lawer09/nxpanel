@@ -6,41 +6,42 @@ use App\Services\PerformanceUserStatsService;
 use App\Services\UserService;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PerformanceUserStatsServiceTest extends TestCase
 {
+    use DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        Cache::flush();
-        Schema::dropIfExists('v3_user_report_count');
-        Schema::create('v3_user_report_count', function (Blueprint $table) {
-            $table->id();
-            $table->date('date');
-            $table->unsignedTinyInteger('hour');
-            $table->unsignedTinyInteger('minute');
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedInteger('report_count')->default(0);
-            $table->unsignedInteger('node_count')->default(0);
-            $table->string('client_country', 2)->nullable();
-            $table->string('client_isp', 255)->nullable();
-            $table->string('platform', 100)->nullable();
-            $table->string('app_id', 255)->nullable();
-            $table->string('app_version', 50)->nullable();
-            $table->timestamp('created_at')->nullable();
-        });
+        if (!Schema::hasTable('v3_user_report_count')) {
+            Schema::create('v3_user_report_count', function (Blueprint $table) {
+                $table->id();
+                $table->date('date');
+                $table->unsignedTinyInteger('hour');
+                $table->unsignedTinyInteger('minute');
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedInteger('report_count')->default(0);
+                $table->unsignedInteger('node_count')->default(0);
+                $table->string('client_country', 2)->nullable();
+                $table->string('client_isp', 255)->nullable();
+                $table->string('platform', 100)->nullable();
+                $table->string('app_id', 255)->nullable();
+                $table->string('app_version', 50)->nullable();
+                $table->timestamp('created_at')->nullable();
+            });
+        }
     }
 
     protected function tearDown(): void
     {
         Carbon::setTestNow();
-        Schema::dropIfExists('v3_user_report_count');
 
         parent::tearDown();
     }
@@ -50,15 +51,15 @@ class PerformanceUserStatsServiceTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-07 12:00:00'));
         $service = $this->service();
 
-        $this->insertReport('2026-07-01', 10, 1, ['app_id' => 'app.a', 'platform' => 'ios']);
-        $this->insertReport('2026-07-01', 11, 2, ['app_id' => 'app.a', 'platform' => 'ios']);
+        $this->insertReport('2026-07-01', 10, 1, ['app_id' => 'app.retention', 'platform' => 'ios']);
+        $this->insertReport('2026-07-01', 11, 2, ['app_id' => 'app.retention', 'platform' => 'ios']);
         $this->insertReport('2026-07-02', 9, 1, ['app_id' => 'other.app', 'platform' => 'android']);
-        $this->insertReport('2026-07-06', 8, 3, ['app_id' => 'app.a', 'platform' => 'ios']);
+        $this->insertReport('2026-07-06', 8, 3, ['app_id' => 'app.retention', 'platform' => 'ios']);
 
         $result = $service->retention(Request::create('/performance/retention', 'GET', [
             'dateFrom' => '2026-07-01',
             'dateTo' => '2026-07-06',
-            'appId' => 'app.a',
+            'appId' => 'app.retention',
             'platform' => 'ios',
         ]));
 
@@ -74,17 +75,17 @@ class PerformanceUserStatsServiceTest extends TestCase
     {
         $service = $this->service(['2026-07-01' => 7, '2026-07-02' => 8]);
 
-        $this->insertReport('2026-06-30', 10, 3, ['app_id' => 'app.a', 'platform' => 'ios']);
-        $this->insertReport('2026-07-01', 10, 1, ['app_id' => 'app.a', 'platform' => 'ios', 'report_count' => 2]);
-        $this->insertReport('2026-07-02', 10, 1, ['app_id' => 'app.a', 'platform' => 'ios']);
-        $this->insertReport('2026-07-02', 11, 2, ['app_id' => 'app.a', 'platform' => 'ios']);
-        $this->insertReport('2026-07-02', 12, 3, ['app_id' => 'app.a', 'platform' => 'ios']);
+        $this->insertReport('2026-06-30', 10, 3, ['app_id' => 'app.active', 'platform' => 'ios']);
+        $this->insertReport('2026-07-01', 10, 1, ['app_id' => 'app.active', 'platform' => 'ios', 'report_count' => 2]);
+        $this->insertReport('2026-07-02', 10, 1, ['app_id' => 'app.active', 'platform' => 'ios']);
+        $this->insertReport('2026-07-02', 11, 2, ['app_id' => 'app.active', 'platform' => 'ios']);
+        $this->insertReport('2026-07-02', 12, 3, ['app_id' => 'app.active', 'platform' => 'ios']);
         $this->insertReport('2026-07-02', 13, 4, ['app_id' => 'app.b', 'platform' => 'ios']);
 
         $result = $service->activeUsers(Request::create('/performance/activeUsers', 'GET', [
             'dateFrom' => '2026-07-01',
             'dateTo' => '2026-07-02',
-            'appId' => 'app.a',
+            'appId' => 'app.active',
             'platform' => 'ios',
             'granularity' => 'day',
         ]));
@@ -103,15 +104,15 @@ class PerformanceUserStatsServiceTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-07 01:30:00'));
         $service = $this->service();
 
-        $this->insertReport('2026-07-05', 23, 2, ['app_id' => 'app.a', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
-        $this->insertReport('2026-07-06', 2, 1, ['app_id' => 'app.a', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
-        $this->insertReport('2026-07-06', 2, 2, ['app_id' => 'app.a', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
-        $this->insertReport('2026-07-06', 3, 1, ['app_id' => 'app.a', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
-        $this->insertReport('2026-07-07', 1, 3, ['app_id' => 'app.a', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
-        $this->insertReport('2026-07-07', 1, 4, ['app_id' => 'app.a', 'platform' => 'android', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-05', 23, 2, ['app_id' => 'app.hourly', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-06', 2, 1, ['app_id' => 'app.hourly', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-06', 2, 2, ['app_id' => 'app.hourly', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-06', 3, 1, ['app_id' => 'app.hourly', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-07', 1, 3, ['app_id' => 'app.hourly', 'platform' => 'ios', 'app_version' => '1.0', 'client_country' => 'US']);
+        $this->insertReport('2026-07-07', 1, 4, ['app_id' => 'app.hourly', 'platform' => 'android', 'app_version' => '1.0', 'client_country' => 'US']);
 
         $result = $service->userHourlyStats(Request::create('/performance/userHourlyStats', 'GET', [
-            'appId' => 'app.a',
+            'appId' => 'app.hourly',
             'platform' => 'ios',
             'appVersion' => '1.0',
             'clientCountry' => 'US',

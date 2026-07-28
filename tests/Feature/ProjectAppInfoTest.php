@@ -19,7 +19,7 @@ class ProjectAppInfoTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Verify project app information can be created, filtered, updated, and deleted.
+     * Verify project app information can be created, filtered, and updated.
      */
     public function test_project_app_info_crud_and_duplicate_guard(): void
     {
@@ -67,9 +67,6 @@ class ProjectAppInfoTest extends TestCase
             ]);
             $this->assertSame(4321, $updated->download_count);
             $this->assertSame(0, $updated->enabled);
-
-            $service->destroy($appInfo->id);
-            $this->assertDatabaseMissing('app_infos', ['id' => $appInfo->id]);
 
             throw $e;
         }

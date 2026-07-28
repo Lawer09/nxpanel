@@ -66,15 +66,19 @@ class CurrencyRateTest extends TestCase
     {
         $this->insertCurrencyRate('2026-07-28', 'HKD', 0.1282051282);
         $service = app(CurrencyRateService::class);
+        $rateQueryCount = 0;
+
+        DB::listen(function ($query) use (&$rateQueryCount): void {
+            if (str_contains($query->sql, 'currency_rates_daily')) {
+                $rateQueryCount++;
+            }
+        });
 
         $this->assertEqualsWithDelta(0.1282051282, $service->rateToUsd('HKD', '2026-07-28'), 0.0000000001);
-
-        DB::table('currency_rates_daily')
-            ->where('rate_date', '2026-07-28')
-            ->where('currency_code', 'HKD')
-            ->delete();
+        $this->assertSame(1, $rateQueryCount);
 
         $this->assertEqualsWithDelta(0.1282051282, $service->rateToUsd('HKD', '2026-07-28'), 0.0000000001);
+        $this->assertSame(1, $rateQueryCount);
     }
 
     /**

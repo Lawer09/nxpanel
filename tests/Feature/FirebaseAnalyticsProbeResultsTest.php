@@ -19,7 +19,7 @@ class FirebaseAnalyticsProbeResultsTest extends TestCase
 
         $this->withoutMiddleware();
         Carbon::setTestNow(Carbon::parse('2026-06-29 10:30:00'));
-        $this->createFirebaseTables();
+        $this->ensureFirebaseTables();
     }
 
     protected function tearDown(): void
@@ -515,87 +515,91 @@ class FirebaseAnalyticsProbeResultsTest extends TestCase
             ->assertJsonPath('data.items.0.p95_connect_ms', 400);
     }
 
-    private function createFirebaseTables(): void
+    private function ensureFirebaseTables(): void
     {
-        Schema::dropIfExists('firebase_event_app_open');
-        Schema::dropIfExists('firebase_event_vpn_session');
-        Schema::dropIfExists('firebase_event_vpn_probe_result');
-        Schema::dropIfExists('firebase_event_vpn_probe');
-        Schema::dropIfExists('firebase_event_common');
+        if (!Schema::hasTable('firebase_event_common')) {
+            Schema::create('firebase_event_common', function ($table) {
+                $table->string('event_id')->primary();
+                $table->string('event_name', 64);
+                $table->string('app_id', 128)->nullable();
+                $table->string('platform', 32)->nullable();
+                $table->string('app_version', 64)->nullable();
+                $table->string('device_id', 128)->nullable();
+                $table->string('user_id', 128)->nullable();
+                $table->string('user_country', 16)->nullable();
+                $table->string('user_region', 64)->nullable();
+                $table->string('network_type', 32)->nullable();
+                $table->string('isp', 128)->nullable();
+                $table->string('asn', 32)->nullable();
+                $table->bigInteger('event_time_ms')->nullable();
+                $table->dateTime('received_at')->nullable();
+                $table->integer('duplicate_count')->default(0);
+            });
+        }
 
-        Schema::create('firebase_event_common', function ($table) {
-            $table->string('event_id')->primary();
-            $table->string('event_name', 64);
-            $table->string('app_id', 128)->nullable();
-            $table->string('platform', 32)->nullable();
-            $table->string('app_version', 64)->nullable();
-            $table->string('device_id', 128)->nullable();
-            $table->string('user_id', 128)->nullable();
-            $table->string('user_country', 16)->nullable();
-            $table->string('user_region', 64)->nullable();
-            $table->string('network_type', 32)->nullable();
-            $table->string('isp', 128)->nullable();
-            $table->string('asn', 32)->nullable();
-            $table->bigInteger('event_time_ms')->nullable();
-            $table->dateTime('received_at')->nullable();
-            $table->integer('duplicate_count')->default(0);
-        });
+        if (!Schema::hasTable('firebase_event_vpn_session')) {
+            Schema::create('firebase_event_vpn_session', function ($table) {
+                $table->string('event_id')->primary();
+                $table->string('session_id', 64)->nullable();
+                $table->string('node_id', 128)->nullable();
+                $table->string('node_host', 255)->nullable();
+                $table->string('node_name', 128)->nullable();
+                $table->string('node_country', 16)->nullable();
+                $table->string('node_region', 64)->nullable();
+                $table->string('protocol', 64)->nullable();
+                $table->string('connect_type', 32)->nullable();
+                $table->boolean('success')->nullable();
+                $table->bigInteger('connect_ms')->nullable();
+                $table->bigInteger('duration_ms')->nullable();
+                $table->bigInteger('upload_bytes')->nullable();
+                $table->bigInteger('download_bytes')->nullable();
+                $table->bigInteger('total_bytes')->nullable();
+                $table->integer('retry_count')->nullable();
+                $table->string('fail_stage', 32)->nullable();
+                $table->string('error_stage', 64)->nullable();
+                $table->string('error_code', 64)->nullable();
+                $table->string('error_message', 255)->nullable();
+            });
+        }
 
-        Schema::create('firebase_event_vpn_session', function ($table) {
-            $table->string('event_id')->primary();
-            $table->string('session_id', 64)->nullable();
-            $table->string('node_id', 128)->nullable();
-            $table->string('node_host', 255)->nullable();
-            $table->string('node_name', 128)->nullable();
-            $table->string('node_country', 16)->nullable();
-            $table->string('node_region', 64)->nullable();
-            $table->string('protocol', 64)->nullable();
-            $table->string('connect_type', 32)->nullable();
-            $table->boolean('success')->nullable();
-            $table->bigInteger('connect_ms')->nullable();
-            $table->bigInteger('duration_ms')->nullable();
-            $table->bigInteger('upload_bytes')->nullable();
-            $table->bigInteger('download_bytes')->nullable();
-            $table->bigInteger('total_bytes')->nullable();
-            $table->integer('retry_count')->nullable();
-            $table->string('fail_stage', 32)->nullable();
-            $table->string('error_stage', 64)->nullable();
-            $table->string('error_code', 64)->nullable();
-            $table->string('error_message', 255)->nullable();
-        });
+        if (!Schema::hasTable('firebase_event_vpn_probe')) {
+            Schema::create('firebase_event_vpn_probe', function ($table) {
+                $table->string('event_id')->primary();
+                $table->string('probe_id', 64)->nullable();
+                $table->string('probe_type', 64)->nullable();
+                $table->string('probe_trigger', 64)->nullable();
+            });
+        }
 
-        Schema::create('firebase_event_vpn_probe', function ($table) {
-            $table->string('event_id')->primary();
-            $table->string('probe_id', 64)->nullable();
-            $table->string('probe_type', 64)->nullable();
-            $table->string('probe_trigger', 64)->nullable();
-        });
+        if (!Schema::hasTable('firebase_event_vpn_probe_result')) {
+            Schema::create('firebase_event_vpn_probe_result', function ($table) {
+                $table->id();
+                $table->string('event_id', 64);
+                $table->integer('result_index');
+                $table->string('node_id', 128)->nullable();
+                $table->string('node_name', 128)->nullable();
+                $table->string('node_country', 16)->nullable();
+                $table->string('node_region', 64)->nullable();
+                $table->string('protocol', 64)->nullable();
+                $table->boolean('success')->nullable();
+                $table->bigInteger('latency_ms')->nullable();
+                $table->bigInteger('tcp_connect_ms')->nullable();
+                $table->bigInteger('tls_hk_ms')->nullable();
+                $table->bigInteger('proxy_hk_ms')->nullable();
+                $table->string('error_code', 64)->nullable();
+                $table->string('error_message', 255)->nullable();
+                $table->bigInteger('timeout_ms')->nullable();
+            });
+        }
 
-        Schema::create('firebase_event_vpn_probe_result', function ($table) {
-            $table->id();
-            $table->string('event_id', 64);
-            $table->integer('result_index');
-            $table->string('node_id', 128)->nullable();
-            $table->string('node_name', 128)->nullable();
-            $table->string('node_country', 16)->nullable();
-            $table->string('node_region', 64)->nullable();
-            $table->string('protocol', 64)->nullable();
-            $table->boolean('success')->nullable();
-            $table->bigInteger('latency_ms')->nullable();
-            $table->bigInteger('tcp_connect_ms')->nullable();
-            $table->bigInteger('tls_hk_ms')->nullable();
-            $table->bigInteger('proxy_hk_ms')->nullable();
-            $table->string('error_code', 64)->nullable();
-            $table->string('error_message', 255)->nullable();
-            $table->bigInteger('timeout_ms')->nullable();
-        });
-
-        Schema::create('firebase_event_app_open', function ($table) {
-            $table->string('event_id')->primary();
-            $table->string('open_type', 32)->nullable();
-            $table->string('install_channel', 64)->nullable();
-            $table->bigInteger('launch_ms')->nullable();
-        });
+        if (!Schema::hasTable('firebase_event_app_open')) {
+            Schema::create('firebase_event_app_open', function ($table) {
+                $table->string('event_id')->primary();
+                $table->string('open_type', 32)->nullable();
+                $table->string('install_channel', 64)->nullable();
+                $table->bigInteger('launch_ms')->nullable();
+            });
+        }
     }
 
     private function seedProbeResult(string $eventId, array $overrides = []): void

@@ -10,19 +10,17 @@ use App\Models\InviteCode;
 use App\Models\IpAllowlistRule;
 use App\Models\Plan;
 use App\Models\ProjectUserAppMap;
-use App\Models\Setting;
 use App\Models\User;
+use App\Support\Setting as SettingStore;
 use App\Services\AuthService;
 use App\Services\UserService;
 use App\Utils\Helper;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
 
@@ -34,9 +32,8 @@ class UserIpBanTest extends TestCase
     {
         parent::setUp();
         Queue::fake();
-        Cache::flush();
 
-        Setting::createOrUpdate('secure_path', 'admin');
+        app(SettingStore::class)->set('secure_path', 'admin');
         $this->createPlan(['id' => 1, 'name' => 'Free']);
     }
 
@@ -149,7 +146,7 @@ class UserIpBanTest extends TestCase
         $this->assertGreaterThan($firstExpiresAt, Carbon::parse($token->refresh()->expires_at)->timestamp);
     }
 
-    public function test_login_by_aid_recreates_token_when_cached_database_token_is_missing(): void
+    public function test_login_by_aid_recreates_token_when_cached_database_token_is_expired(): void
     {
         $firstResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
             'aid' => 'missing-token-aid',
@@ -158,7 +155,9 @@ class UserIpBanTest extends TestCase
             ],
         ])->assertOk();
 
-        PersonalAccessToken::query()->delete();
+        PersonalAccessToken::query()->update([
+            'expires_at' => now()->subSecond(),
+        ]);
 
         $loginAt = now();
         $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
@@ -168,10 +167,10 @@ class UserIpBanTest extends TestCase
             ],
         ])->assertOk();
 
-        $this->assertSame(1, PersonalAccessToken::query()->count());
+        $this->assertSame(2, PersonalAccessToken::query()->count());
         $this->assertNotSame($firstResponse->json('data.auth_data'), $secondResponse->json('data.auth_data'));
         $this->assertTokenExpiresNear(
-            PersonalAccessToken::query()->firstOrFail(),
+            PersonalAccessToken::query()->latest('id')->firstOrFail(),
             $loginAt->copy()->addDays(7)->timestamp
         );
     }
@@ -233,29 +232,6 @@ class UserIpBanTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertSame(240, (int) $user->refresh()->last_login_at);
-    }
-
-    public function test_aid_login_activity_flush_requeues_when_database_update_fails(): void
-    {
-        $user = $this->createAidUser('activity-requeue-aid');
-
-        Redis::shouldReceive('zpopmin')
-            ->once()
-            ->with('aid_login:last_login_at', 5000)
-            ->andReturn([(string) $user->id => 300]);
-        Redis::shouldReceive('zadd')
-            ->once()
-            ->with('aid_login:last_login_at', 300, (string) $user->id)
-            ->andReturn(1);
-        Redis::shouldReceive('expire')
-            ->once()
-            ->with('aid_login:last_login_at', 604800)
-            ->andReturn(true);
-
-        Schema::drop('v2_user');
-
-        $this->artisan('aid-login-activity:flush')
-            ->assertExitCode(1);
     }
 
     public function test_v3_login_by_aid_returns_login_data_when_ip_is_blocked(): void
@@ -641,76 +617,6 @@ class UserIpBanTest extends TestCase
         $this->assertFalse((bool) $invitee->refresh()->banned);
     }
 
-    public function test_admin_can_delete_blocked_ip_record(): void
-    {
-        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
-        $record = BlockedUserIp::create([
-            'ip' => '203.0.113.60',
-            'reason' => 'temporary block',
-        ]);
-
-        $this->postJson($this->adminUserUri('blockedIp/delete'), [
-            'id' => $record->id,
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data', true);
-
-        $this->assertDatabaseMissing('blocked_user_ips', [
-            'id' => $record->id,
-            'ip' => '203.0.113.60',
-        ]);
-    }
-
-    public function test_admin_can_batch_delete_blocked_ip_records(): void
-    {
-        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
-        $first = BlockedUserIp::create([
-            'ip' => '203.0.113.61',
-            'reason' => 'temporary block',
-        ]);
-        $second = BlockedUserIp::create([
-            'ip' => '203.0.113.62',
-            'reason' => 'temporary block',
-        ]);
-        $kept = BlockedUserIp::create([
-            'ip' => '203.0.113.63',
-            'reason' => 'temporary block',
-        ]);
-        $missingId = $kept->id + 1000;
-
-        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
-            'ids' => [$first->id, $second->id, $second->id, $missingId],
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data.deletedCount', 2)
-            ->assertJsonPath('data.requestedCount', 3)
-            ->assertJsonPath('data.missingIds.0', $missingId);
-
-        $this->assertDatabaseMissing('blocked_user_ips', [
-            'id' => $first->id,
-            'ip' => '203.0.113.61',
-        ]);
-        $this->assertDatabaseMissing('blocked_user_ips', [
-            'id' => $second->id,
-            'ip' => '203.0.113.62',
-        ]);
-        $this->assertDatabaseHas('blocked_user_ips', [
-            'id' => $kept->id,
-            'ip' => '203.0.113.63',
-        ]);
-    }
-
-    public function test_admin_batch_delete_blocked_ip_validates_ids(): void
-    {
-        $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
-
-        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
-            'ids' => [],
-        ], $this->adminHeaders($admin))->assertStatus(422);
-
-        $this->postJson($this->adminUserUri('blockedIp/batchDelete'), [
-            'ids' => [0, -1, 'invalid'],
-        ], $this->adminHeaders($admin))->assertStatus(422);
-    }
-
     public function test_admin_can_batch_block_ips_without_banning_users(): void
     {
         $admin = $this->createUser('admin-batch-block-ip@example.com', ['is_admin' => 1]);
@@ -1018,7 +924,7 @@ class UserIpBanTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_manage_allowed_ip_records(): void
+    public function test_admin_can_save_and_fetch_allowed_ip_records(): void
     {
         $admin = $this->createUser('admin-allowed-ip@example.com', ['is_admin' => 1]);
 
@@ -1035,40 +941,16 @@ class UserIpBanTest extends TestCase
             'reason' => 'manual allow',
         ]);
 
-        $fetchResponse = $this->postJson($this->adminUserUri('allowedIp/fetch'), [
+        $this->postJson($this->adminUserUri('allowedIp/fetch'), [
             'ip' => '203.0.113.106',
             'pageSize' => 10,
         ], $this->adminHeaders($admin))->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.data.0.ip', '203.0.113.106')
             ->assertJsonPath('data.data.0.operator_user.id', $admin->id);
-
-        $firstId = (int) $fetchResponse->json('data.data.0.id');
-        $secondId = (int) AllowedUserIp::query()->where('ip', '203.0.113.107')->value('id');
-
-        $this->postJson($this->adminUserUri('allowedIp/delete'), [
-            'id' => $firstId,
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data', true);
-
-        $this->assertDatabaseMissing('allowed_user_ips', [
-            'id' => $firstId,
-        ]);
-
-        $missingId = $secondId + 1000;
-        $this->postJson($this->adminUserUri('allowedIp/batchDelete'), [
-            'ids' => [$secondId, $secondId, $missingId],
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data.deletedCount', 1)
-            ->assertJsonPath('data.requestedCount', 2)
-            ->assertJsonPath('data.missingIds.0', $missingId);
-
-        $this->assertDatabaseMissing('allowed_user_ips', [
-            'id' => $secondId,
-        ]);
     }
 
-    public function test_admin_can_manage_ip_allowlist_rules(): void
+    public function test_admin_can_save_fetch_and_update_ip_allowlist_rules(): void
     {
         $admin = $this->createUser('admin-allow-rule@example.com', ['is_admin' => 1]);
 
@@ -1113,15 +995,6 @@ class UserIpBanTest extends TestCase
             ->assertJsonPath('data.countries.0', 'CA')
             ->assertJsonPath('data.reason', 'updated allow')
             ->assertJsonPath('data.updatedBy.id', $admin->id);
-
-        $this->postJson($this->adminUserUri('ipAllowlistRule/delete'), [
-            'id' => $ruleId,
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data', true);
-
-        $this->assertDatabaseMissing('ip_allowlist_rules', [
-            'id' => $ruleId,
-        ]);
     }
 
     public function test_login_by_aid_bans_new_user_when_custom_rule_matches(): void
@@ -1521,7 +1394,7 @@ class UserIpBanTest extends TestCase
         $this->assertFalse((bool) $user->banned);
     }
 
-    public function test_admin_can_manage_aid_login_ban_rules(): void
+    public function test_admin_can_save_fetch_and_update_aid_login_ban_rules(): void
     {
         $admin = $this->createUser('admin@example.com', ['is_admin' => 1]);
 
@@ -1565,15 +1438,6 @@ class UserIpBanTest extends TestCase
             ->assertJsonPath('data.cutoffAt', null)
             ->assertJsonPath('data.weeklyWindows', [])
             ->assertJsonPath('data.reason', 'disabled');
-
-        $this->postJson($this->adminUserUri('aidLoginBanRule/delete'), [
-            'id' => $ruleId,
-        ], $this->adminHeaders($admin))->assertOk()
-            ->assertJsonPath('data', true);
-
-        $this->assertDatabaseMissing('aid_login_ban_rules', [
-            'id' => $ruleId,
-        ]);
     }
 
     public function test_admin_can_save_aid_login_ban_rule_without_conditions(): void

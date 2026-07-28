@@ -5,14 +5,12 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\CurrencyRateService;
 use App\Services\UserAdValueReportService;
-use App\Services\UserReportService;
 use App\Utils\Helper;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class UserAdValueReportTest extends TestCase
@@ -23,7 +21,7 @@ class UserAdValueReportTest extends TestCase
     {
         parent::setUp();
 
-        Cache::flush();
+        Cache::put('realtime:user_report:latest', [], 3600);
         CurrencyRateService::clearMemoryCache();
         config()->set('currency_rate.redis_enabled', false);
         config()->set('currency_rate.override_to_usd', []);
@@ -217,74 +215,35 @@ class UserAdValueReportTest extends TestCase
     }
 
     /**
-     * Verify replaying the same raw payload stays tied to the stored daily snapshot.
+     * Verify later aggregation stays tied to the stored daily snapshot after override changes.
      */
     public function test_service_replay_uses_stored_snapshot_for_stable_result(): void
     {
-        $payload = $this->rawPayload(1003, '2026-07-28 11:05:00', [
+        $firstPayload = $this->rawPayload(1003, '2026-07-28 11:05:00', [
+            ['value_micros' => 1000000, 'currency' => 'CNY'],
+        ]);
+        $secondPayload = $this->rawPayload(1004, '2026-07-28 11:05:00', [
             ['value_micros' => 1000000, 'currency' => 'CNY'],
         ]);
         $service = app(UserAdValueReportService::class);
 
-        $service->aggregatePayloads([$payload]);
+        $service->aggregatePayloads([$firstPayload]);
         $firstValue = (int) DB::table('v3_user_ad_value_hourly')
             ->where('date', '2026-07-28')
             ->where('user_id', 1003)
             ->value('value_micros_usd');
 
-        DB::table('v3_user_ad_value_hourly')->where('date', '2026-07-28')->where('user_id', 1003)->delete();
         CurrencyRateService::clearMemoryCache();
         config()->set('currency_rate.override_to_usd', ['CNY' => 0.20]);
 
-        $service->aggregatePayloads([$payload]);
+        $service->aggregatePayloads([$secondPayload]);
         $secondValue = (int) DB::table('v3_user_ad_value_hourly')
             ->where('date', '2026-07-28')
-            ->where('user_id', 1003)
+            ->where('user_id', 1004)
             ->value('value_micros_usd');
 
         $this->assertSame(140000, $firstValue);
         $this->assertSame($firstValue, $secondValue);
-    }
-
-    /**
-     * Verify the user_report aggregate command consumes raw payloads and writes ad-value facts.
-     */
-    public function test_user_report_aggregate_command_writes_ad_value_rows(): void
-    {
-        $bucket = '202607281015';
-        $bucketKey = UserReportService::REDIS_RAW_PREFIX . $bucket;
-        $payloads = [
-            $this->rawPayload(2001, '2026-07-28 10:15:00', [
-                ['value_micros' => 5000000, 'currency' => 'USD'],
-            ]),
-            $this->rawPayload(2001, '2026-07-28 10:20:00', [
-                ['value_micros' => 1000000, 'currency' => 'CNY'],
-            ]),
-        ];
-
-        Redis::shouldReceive('lrange')
-            ->once()
-            ->with($bucketKey, 0, 9999)
-            ->andReturn($this->jsonPayloads($payloads));
-        Redis::shouldReceive('del')
-            ->once()
-            ->with($bucketKey)
-            ->andReturn(1);
-
-        $this->artisan('user_report:aggregate', [
-            '--bucket' => $bucket,
-            '--skip-archive' => true,
-        ])->assertExitCode(0);
-
-        $row = DB::table('v3_user_ad_value_hourly')
-            ->where('date', '2026-07-28')
-            ->where('hour', 10)
-            ->where('user_id', 2001)
-            ->first();
-
-        $this->assertNotNull($row);
-        $this->assertSame(5140000, (int) $row->value_micros_usd);
-        $this->assertSame(2, (int) $row->ad_value_report_count);
     }
 
     /**
@@ -315,77 +274,6 @@ class UserAdValueReportTest extends TestCase
         $this->assertSame(100000000, $buckets['day2']['valueMicrosUsd']);
         $this->assertSame(50000000, $buckets['unknown']['valueMicrosUsd']);
         $this->assertSame(0.588235, $buckets['day0']['ratio']);
-    }
-
-    /**
-     * Verify replay clear-day removes old ad-value rows before re-aggregation.
-     */
-    public function test_replay_clear_day_clears_ad_value_rows_before_replay(): void
-    {
-        Storage::fake('oss');
-        $bucket = '202607281015';
-        $bucketKey = UserReportService::REDIS_RAW_PREFIX . $bucket;
-        $payloads = [
-            $this->rawPayload(4001, '2026-07-28 10:15:00', [
-                ['value_micros' => 1000000, 'currency' => 'USD'],
-            ]),
-        ];
-        Storage::disk('oss')->put(
-            'user_report/raw/2026/07/28/test.ndjson',
-            implode("\n", $this->jsonPayloads($payloads))
-        );
-        $this->insertAdValue('2026-07-28', 10, 4001, 999000000);
-
-        $storedPayloads = [];
-        Redis::shouldReceive('del')
-            ->twice()
-            ->with($bucketKey)
-            ->andReturn(1);
-        Redis::shouldReceive('pipeline')
-            ->once()
-            ->andReturnUsing(function (callable $callback) use (&$storedPayloads) {
-                $pipe = new class($storedPayloads) {
-                    private $storedPayloads;
-
-                    public function __construct(array &$storedPayloads)
-                    {
-                        $this->storedPayloads = &$storedPayloads;
-                    }
-
-                    public function rpush(string $key, string $payload): int
-                    {
-                        $this->storedPayloads[] = $payload;
-
-                        return 1;
-                    }
-
-                    public function expire(string $key, int $seconds): bool
-                    {
-                        return true;
-                    }
-                };
-
-                return $callback($pipe);
-            });
-        Redis::shouldReceive('lrange')
-            ->once()
-            ->with($bucketKey, 0, 9999)
-            ->andReturnUsing(function () use (&$storedPayloads) {
-                return $storedPayloads;
-            });
-
-        $this->artisan('user_report:replay-oss', [
-            'date' => '2026-07-28',
-            '--clear-day' => true,
-        ])->assertExitCode(0);
-
-        $row = DB::table('v3_user_ad_value_hourly')
-            ->where('date', '2026-07-28')
-            ->where('hour', 10)
-            ->where('user_id', 4001)
-            ->first();
-
-        $this->assertSame(1000000, (int) $row->value_micros_usd);
     }
 
     private function fakeRedisPipeline(array &$capturedPayloads, int $times): void
@@ -469,11 +357,6 @@ class UserAdValueReportTest extends TestCase
     private function timestampMs(string $time): int
     {
         return Carbon::parse($time, 'Asia/Shanghai')->utc()->getTimestampMs();
-    }
-
-    private function jsonPayloads(array $payloads): array
-    {
-        return array_map(static fn(array $payload): string => json_encode($payload, JSON_UNESCAPED_UNICODE), $payloads);
     }
 
     private function insertUserReportCount(string $date, int $hour, int $minute, int $userId, string $appId, array $overrides = []): void
