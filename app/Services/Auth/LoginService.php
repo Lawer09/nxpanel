@@ -13,7 +13,9 @@ use App\Services\NodeSyncService;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
 use App\Utils\Helper;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class LoginService
 {
@@ -99,7 +101,6 @@ class LoginService
 
         $user = User::where('email', $email)->first();
         $created = false;
-        $duplicateOnCreate = false;
 
         if (!$user) {
             // 用户不存在，自动创建
@@ -128,14 +129,13 @@ class LoginService
                 $this->ensureAidReusableInviteCode((int) $user->id);
 
                 $created = true;
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 $errorCode = $e->errorInfo[1] ?? null;
                 if ($errorCode === 1062) {
-                    \Illuminate\Support\Facades\Log::warning('loginByAid duplicate user on create', [
+                    Log::info('loginByAid duplicate user on create, continue with existing user', [
                         'aid' => $aid,
                         'email' => $email,
                     ]);
-                    $duplicateOnCreate = true;
                     $user = User::where('email', $email)->first();
                 }
 
@@ -152,9 +152,6 @@ class LoginService
         }
 
         if (!$created) {
-            if ($duplicateOnCreate) {
-                return [false, [409, 'AID already registered. Please log in or use a different AID.']];
-            }
             // 用户已存在，验证密码
             if (!Helper::multiPasswordVerify(
                 $user->password_algo,

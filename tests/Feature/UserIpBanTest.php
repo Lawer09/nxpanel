@@ -13,7 +13,9 @@ use App\Models\ProjectUserAppMap;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\UserService;
 use App\Utils\Helper;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -53,6 +55,49 @@ class UserIpBanTest extends TestCase
 
         $this->assertSame('203.0.113.10', $user->register_metadata['ip'] ?? null);
         $this->assertFalse((bool) $user->banned);
+    }
+
+    public function test_login_by_aid_continues_when_create_hits_duplicate_user_race(): void
+    {
+        $aid = 'duplicate-race-aid';
+
+        app()->instance(UserService::class, new class extends UserService {
+            public function createUser(array $data): User
+            {
+                User::query()->create([
+                    'email' => $data['email'],
+                    'password' => password_hash($data['password'], PASSWORD_DEFAULT),
+                    'password_algo' => null,
+                    'password_salt' => null,
+                    'uuid' => Helper::guid(true),
+                    'token' => Helper::guid(),
+                    'plan_id' => $data['plan_id'] ?? 1,
+                    'expired_at' => time() + 86400,
+                    'balance' => 0,
+                    'commission_balance' => 0,
+                    'transfer_enable' => 1024 * 1024,
+                    'u' => 0,
+                    'd' => 0,
+                    'banned' => 0,
+                    'register_metadata' => $data['register_metadata'] ?? null,
+                ]);
+
+                $previous = new \PDOException('Duplicate entry');
+                $previous->errorInfo = ['23000', 1062, 'Duplicate entry'];
+
+                throw new QueryException('mysql', 'insert into v2_user', [], $previous);
+            }
+        });
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => $aid,
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.is_ban', false);
+
+        $this->assertSame(1, User::query()->where('email', $aid . '@apple.com')->count());
     }
 
     public function test_login_by_aid_new_token_expires_after_seven_days(): void

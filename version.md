@@ -1149,3 +1149,10 @@
 - 影响范围：`app/Http/Requests/Passport/AuthLoginByAid.php`、`app/Http/Requests/Passport/AuthLoginByAidV3.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`tests/Feature/UserIpBanTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复拆分 Request 前需确保父子控制器 `loginByAid` 方法参数和返回类型兼容，否则会重新触发 PHP fatal error。
+
+## 2026-07-28 AID 自动注册并发唯一键冲突兼容
+- 日期：2026-07-28
+- 变更摘要：`loginByAid` 自动创建用户命中 `v2_user.email` 唯一键冲突时，重新读取已创建用户并继续按已有用户登录流程处理，避免并发首次登录被误返回 409。
+- 影响范围：`app/Services/Auth/LoginService.php`、`tests/Feature/UserIpBanTest.php`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `LoginService::loginByAid()` 中 1062 分支的 409 返回逻辑，并移除对应回归测试和版本记录即可。
