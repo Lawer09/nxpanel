@@ -212,6 +212,41 @@ class CurrencyRateTest extends TestCase
     }
 
     /**
+     * Verify the default no-key provider response can be synced.
+     */
+    public function test_sync_command_supports_open_er_api_provider(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-28 08:00:00', 'Asia/Shanghai'));
+        config()->set('currency_rate.provider_base_url', 'https://open.er-api.com/v6');
+
+        Http::fake([
+            'https://open.er-api.com/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'base_code' => 'USD',
+                'rates' => [
+                    'HKD' => 7.8,
+                ],
+            ]),
+        ]);
+
+        $this->artisan('currency-rates:sync', [
+            '--currencies' => 'USD,HKD',
+        ])->assertExitCode(0);
+
+        $this->assertSame(2, DB::table('currency_rates_daily')->where('rate_date', '2026-07-28')->count());
+        $this->assertEqualsWithDelta(
+            1 / 7.8,
+            (float) DB::table('currency_rates_daily')
+                ->where('rate_date', '2026-07-28')
+                ->where('currency_code', 'HKD')
+                ->value('rate_to_usd'),
+            0.0000000001
+        );
+
+        Http::assertSent(fn($request): bool => $request->url() === 'https://open.er-api.com/v6/latest/USD');
+    }
+
+    /**
      * Verify provider failure does not overwrite existing snapshots or Redis data.
      */
     public function test_sync_command_failure_keeps_existing_snapshot(): void

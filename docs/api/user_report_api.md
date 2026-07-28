@@ -19,6 +19,7 @@
 - `user_report:aggregate` 从 `user_report:raw:*` 聚合广告价值，按 `metadata.timestamp` 归入 UTC+8 日期和小时。
 - 聚合前通过 `CurrencyRateService` 按上报日期读取币种到 USD 的汇率：优先进程内缓存，其次 Redis hash `currency_rates:to_usd:{YYYY-MM-DD}`，最后读取 `currency_rates_daily` 日快照；`USD` 固定为 `1`。
 - `currency-rates:sync` 每日同步常见 21 个币种到 USD，默认包含 `HKD`；`CURRENCY_RATE_OVERRIDE_TO_USD` 仅作为紧急覆盖或兜底，不再作为长期人工维护的主汇率表。
+- 默认同步源为 `https://open.er-api.com/v6`，用于每日最新汇率；若要补历史日期汇率，需要通过 `CURRENCY_RATE_PROVIDER_BASE_URL` 配置支持历史日期的 provider。
 - 聚合路径不调用外部汇率接口，也不调用 `Helper::exchange()`；找不到汇率的币种会跳过并记录 warning，不影响整桶聚合成功。
 - 留存价值来源按用户在同一 `app_id` 下的首次上报日计算：`day0` 为首次上报当日，`day1` 为次日，依次类推。
 

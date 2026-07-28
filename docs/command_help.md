@@ -69,6 +69,8 @@ php artisan currency-rates:sync --date=2026-07-28 --force
 
 **写入：** `currency_rates_daily` 日快照表，以及 Redis hash `currency_rates:to_usd:{YYYY-MM-DD}`。
 
+**默认同步源：** `CURRENCY_RATE_PROVIDER_BASE_URL=https://open.er-api.com/v6`，无需 access key，适用于每日最新汇率同步。若需要通过 `--date` 补历史日期，请配置支持历史日期的 provider，例如带 access key 的汇率服务。
+
 **读取口径：** `USD` 固定为 `1`；业务聚合优先进程内缓存，其次 Redis，最后 DB 日快照。指定日期快照缺失时，可回退最近 7 天内同币种快照并记录 warning。
 
 **失败处理：** 外部汇率源失败时命令返回失败并记录错误，不删除旧 Redis 缓存，不覆盖已有 DB 快照。`CURRENCY_RATE_OVERRIDE_TO_USD` 仅用于紧急覆盖或兜底，建议配合 `--force` 写入新的日快照。

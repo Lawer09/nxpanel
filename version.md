@@ -1184,3 +1184,10 @@
 - 影响范围：`app/Http/Controllers/V3/User/UserReportController.php`、`tests/Feature/UserAdValueReportTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 Controller 中直接读取 `$validated['ads_value_reports']` 的写法，并回退对应测试和本版本记录即可。
+
+## 2026-07-28 汇率同步默认源兼容
+- 日期：2026-07-28
+- 变更摘要：`currency-rates:sync` 默认汇率源调整为免 access key 的 `open.er-api.com`，并兼容其 `result/rates` 响应格式；历史日期仍需配置支持历史查询的 provider。
+- 影响范围：`.env.example`、`config/currency_rate.php`、`app/Console/Commands/SyncCurrencyRates.php`、`tests/Feature/CurrencyRateTest.php`、`docs/api/user_report_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复默认 provider 为 `exchangerate.host` 并移除 open-er 响应解析分支，同时回退测试、文档和本版本记录即可。

@@ -35,7 +35,7 @@ if (!is_array($overrideRates)) {
 }
 
 return [
-    'provider_base_url' => env('CURRENCY_RATE_PROVIDER_BASE_URL', 'https://api.exchangerate.host'),
+    'provider_base_url' => env('CURRENCY_RATE_PROVIDER_BASE_URL', 'https://open.er-api.com/v6'),
     'provider_access_key' => env('CURRENCY_RATE_PROVIDER_ACCESS_KEY', ''),
     'provider_timeout_seconds' => (int) env('CURRENCY_RATE_PROVIDER_TIMEOUT_SECONDS', 15),
     'redis_enabled' => (bool) env('CURRENCY_RATE_REDIS_ENABLED', true),

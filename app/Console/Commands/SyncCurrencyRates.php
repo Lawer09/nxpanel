@@ -131,7 +131,11 @@ class SyncCurrencyRates extends Command
      */
     private function fetchProviderRates(string $date, array $currencies): array
     {
-        $baseUrl = rtrim((string) config('currency_rate.provider_base_url', 'https://api.exchangerate.host'), '/');
+        $baseUrl = rtrim((string) config('currency_rate.provider_base_url', 'https://open.er-api.com/v6'), '/');
+        if ($this->isOpenExchangeRateProvider($baseUrl)) {
+            return $this->fetchOpenExchangeRateProviderRates($baseUrl, $date, $currencies);
+        }
+
         $path = $date === Carbon::now('Asia/Shanghai')->toDateString() ? 'latest' : $date;
         $url = $baseUrl . '/' . $path;
         $query = [
@@ -174,6 +178,50 @@ class SyncCurrencyRates extends Command
         return [$providerRates, $payload];
     }
 
+    /**
+     * Fetch latest USD-base rates from open.er-api.com.
+     */
+    private function fetchOpenExchangeRateProviderRates(string $baseUrl, string $date, array $currencies): array
+    {
+        if ($date !== Carbon::now('Asia/Shanghai')->toDateString()) {
+            throw new \RuntimeException('The default currency provider only supports latest rates. Configure a historical provider for --date.');
+        }
+
+        $response = Http::timeout(max(1, (int) config('currency_rate.provider_timeout_seconds', 15)))
+            ->get($baseUrl . '/latest/' . CurrencyRateService::BASE_CURRENCY);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException(sprintf('Currency provider returned HTTP %d', $response->status()));
+        }
+
+        $payload = $response->json();
+        if (!is_array($payload) || (($payload['result'] ?? null) !== 'success') || !is_array($payload['rates'] ?? null)) {
+            throw new \RuntimeException('Currency provider response is invalid.');
+        }
+
+        return [$this->convertUsdBaseRates($payload['rates'], $currencies), $payload];
+    }
+
+    private function convertUsdBaseRates(array $usdBaseRates, array $currencies): array
+    {
+        $providerRates = [];
+        foreach ($currencies as $currency) {
+            if ($currency === CurrencyRateService::BASE_CURRENCY) {
+                $providerRates[$currency] = 1.0;
+                continue;
+            }
+
+            $providerRate = $usdBaseRates[$currency] ?? null;
+            if (!is_numeric($providerRate) || (float) $providerRate <= 0) {
+                continue;
+            }
+
+            $providerRates[$currency] = 1 / (float) $providerRate;
+        }
+
+        return $providerRates;
+    }
+
     private function normalizeCurrencies(array $currencies): array
     {
         $normalized = [];
@@ -202,8 +250,15 @@ class SyncCurrencyRates extends Command
 
     private function providerSource(): string
     {
-        $host = parse_url((string) config('currency_rate.provider_base_url', 'https://api.exchangerate.host'), PHP_URL_HOST);
+        $host = parse_url((string) config('currency_rate.provider_base_url', 'https://open.er-api.com/v6'), PHP_URL_HOST);
 
         return is_string($host) && $host !== '' ? $host : 'provider';
+    }
+
+    private function isOpenExchangeRateProvider(string $baseUrl): bool
+    {
+        $host = parse_url($baseUrl, PHP_URL_HOST);
+
+        return is_string($host) && str_contains($host, 'open.er-api.com');
     }
 }
