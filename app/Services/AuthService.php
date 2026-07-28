@@ -11,7 +11,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 class AuthService
 {
     private const AID_TOKEN_CACHE_PREFIX = 'aid_login_auth_token:';
-    private const TOKEN_TTL_SECONDS = 31536000;
+    private const PASSWORD_TOKEN_TTL_SECONDS = 31536000;
+    private const AID_TOKEN_TTL_SECONDS = 604800;
 
     private User $user;
 
@@ -22,7 +23,7 @@ class AuthService
 
     public function generateAuthData(): array
     {
-        return $this->buildAuthData($this->createBearerToken());
+        return $this->buildAuthData($this->createBearerToken(self::PASSWORD_TOKEN_TTL_SECONDS));
     }
 
     /**
@@ -50,12 +51,12 @@ class AuthService
         return $data;
     }
 
-    private function createBearerToken(): string
+    private function createBearerToken(int $ttlSeconds): string
     {
         $token = $this->user->createToken(
             Str::random(20),
             ['*'],
-            now()->addSeconds(self::TOKEN_TTL_SECONDS)
+            now()->addSeconds($ttlSeconds)
         );
 
         return $this->formatPlainTextToken($token->plainTextToken);
@@ -70,7 +71,9 @@ class AuthService
             if (is_array($cached)) {
                 $plainToken = $cached['plain_token'] ?? null;
                 $expiresAt = (int) ($cached['expires_at'] ?? 0);
-                if (is_string($plainToken) && $this->cachedAidTokenIsValid($plainToken, $expiresAt)) {
+                $accessToken = is_string($plainToken) ? $this->resolveValidCachedAidToken($plainToken, $expiresAt) : null;
+                if ($accessToken) {
+                    $this->refreshCachedAidToken($cacheKey, $plainToken, $accessToken);
                     return 'Bearer ' . $plainToken;
                 }
             }
@@ -81,14 +84,61 @@ class AuthService
             ]);
         }
 
-        $bearerToken = $this->createBearerToken();
+        $bearerToken = $this->createBearerToken(self::AID_TOKEN_TTL_SECONDS);
         $plainToken = str_replace('Bearer ', '', $bearerToken);
-        $expiresAt = now()->addSeconds(self::TOKEN_TTL_SECONDS);
+        $expiresAt = now()->addSeconds(self::AID_TOKEN_TTL_SECONDS);
 
+        $this->putAidTokenCache($cacheKey, $plainToken, $expiresAt);
+
+        return $bearerToken;
+    }
+
+    private function resolveValidCachedAidToken(string $plainToken, int $expiresAt): ?PersonalAccessToken
+    {
+        if ($expiresAt <= time()) {
+            return null;
+        }
+
+        $accessToken = PersonalAccessToken::findToken($plainToken);
+        if (!$accessToken) {
+            return null;
+        }
+
+        if ($accessToken->tokenable_type !== User::class || (int) $accessToken->tokenable_id !== (int) $this->user->id) {
+            return null;
+        }
+
+        return $accessToken->expires_at === null || $accessToken->expires_at->timestamp > time()
+            ? $accessToken
+            : null;
+    }
+
+    /**
+     * Extend a valid cached AID token and its cache entry by the sliding seven-day window.
+     */
+    private function refreshCachedAidToken(string $cacheKey, string $plainToken, PersonalAccessToken $accessToken): void
+    {
+        $expiresAt = now()->addSeconds(self::AID_TOKEN_TTL_SECONDS);
+
+        try {
+            $accessToken->forceFill(['expires_at' => $expiresAt])->save();
+        } catch (\Throwable $e) {
+            Log::warning('AID auth token expiry refresh failed', [
+                'user_id' => $this->user->id,
+                'token_id' => $accessToken->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $this->putAidTokenCache($cacheKey, $plainToken, $expiresAt);
+    }
+
+    private function putAidTokenCache(string $cacheKey, string $plainToken, \DateTimeInterface $expiresAt): void
+    {
         try {
             Cache::put($cacheKey, [
                 'plain_token' => $plainToken,
-                'expires_at' => $expiresAt->timestamp,
+                'expires_at' => $expiresAt->getTimestamp(),
             ], $expiresAt);
         } catch (\Throwable $e) {
             Log::warning('AID auth token cache write failed', [
@@ -96,26 +146,6 @@ class AuthService
                 'error' => $e->getMessage(),
             ]);
         }
-
-        return $bearerToken;
-    }
-
-    private function cachedAidTokenIsValid(string $plainToken, int $expiresAt): bool
-    {
-        if ($expiresAt <= time()) {
-            return false;
-        }
-
-        $accessToken = PersonalAccessToken::findToken($plainToken);
-        if (!$accessToken) {
-            return false;
-        }
-
-        if ($accessToken->tokenable_type !== User::class || (int) $accessToken->tokenable_id !== (int) $this->user->id) {
-            return false;
-        }
-
-        return $accessToken->expires_at === null || $accessToken->expires_at->timestamp > time();
     }
 
     private function formatPlainTextToken(string $plainTextToken): string

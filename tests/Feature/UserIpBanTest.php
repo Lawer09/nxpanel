@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\AuthService;
 use App\Utils\Helper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Queue;
@@ -54,6 +55,23 @@ class UserIpBanTest extends TestCase
         $this->assertFalse((bool) $user->banned);
     }
 
+    public function test_login_by_aid_new_token_expires_after_seven_days(): void
+    {
+        $loginAt = now();
+
+        $this->postJson('/api/v3/passport/auth/loginByAid', [
+            'aid' => 'seven-day-token-aid',
+            'metadata' => [
+                'app_id' => 'com.example.app',
+            ],
+        ])->assertOk();
+
+        $this->assertTokenExpiresNear(
+            PersonalAccessToken::query()->firstOrFail(),
+            $loginAt->copy()->addDays(7)->timestamp
+        );
+    }
+
     public function test_login_by_aid_reuses_cached_token_for_same_aid(): void
     {
         $firstResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
@@ -64,16 +82,26 @@ class UserIpBanTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, PersonalAccessToken::query()->count());
+        $token = PersonalAccessToken::query()->firstOrFail();
+        $firstExpiresAt = Carbon::parse($token->expires_at)->timestamp;
 
-        $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
-            'aid' => 'cached-token-aid',
-            'metadata' => [
-                'app_id' => 'com.example.app',
-            ],
-        ])->assertOk();
+        $secondLoginAt = now()->addDay();
+        Carbon::setTestNow($secondLoginAt);
+        try {
+            $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
+                'aid' => 'cached-token-aid',
+                'metadata' => [
+                    'app_id' => 'com.example.app',
+                ],
+            ])->assertOk();
+        } finally {
+            Carbon::setTestNow();
+        }
 
         $this->assertSame(1, PersonalAccessToken::query()->count());
         $this->assertSame($firstResponse->json('data.auth_data'), $secondResponse->json('data.auth_data'));
+        $this->assertTokenExpiresNear($token, $secondLoginAt->copy()->addDays(7)->timestamp);
+        $this->assertGreaterThan($firstExpiresAt, Carbon::parse($token->refresh()->expires_at)->timestamp);
     }
 
     public function test_login_by_aid_recreates_token_when_cached_database_token_is_missing(): void
@@ -87,6 +115,7 @@ class UserIpBanTest extends TestCase
 
         PersonalAccessToken::query()->delete();
 
+        $loginAt = now();
         $secondResponse = $this->postJson('/api/v3/passport/auth/loginByAid', [
             'aid' => 'missing-token-aid',
             'metadata' => [
@@ -96,6 +125,26 @@ class UserIpBanTest extends TestCase
 
         $this->assertSame(1, PersonalAccessToken::query()->count());
         $this->assertNotSame($firstResponse->json('data.auth_data'), $secondResponse->json('data.auth_data'));
+        $this->assertTokenExpiresNear(
+            PersonalAccessToken::query()->firstOrFail(),
+            $loginAt->copy()->addDays(7)->timestamp
+        );
+    }
+
+    public function test_password_login_still_uses_one_year_token_expiry(): void
+    {
+        $this->createUser('one-year-token@example.com');
+        $loginAt = now();
+
+        $this->postJson('/api/v3/passport/auth/login', [
+            'email' => 'one-year-token@example.com',
+            'password' => 'password',
+        ])->assertOk();
+
+        $this->assertTokenExpiresNear(
+            PersonalAccessToken::query()->firstOrFail(),
+            $loginAt->copy()->addSeconds(31536000)->timestamp
+        );
     }
 
     public function test_existing_aid_user_last_login_at_is_flushed_asynchronously(): void
@@ -1737,6 +1786,18 @@ class UserIpBanTest extends TestCase
         return [
             'Authorization' => (new AuthService($user))->generateAuthData()['auth_data'],
         ];
+    }
+
+    private function assertTokenExpiresNear(PersonalAccessToken $token, int $expectedTimestamp): void
+    {
+        $token->refresh();
+
+        $this->assertNotNull($token->expires_at);
+        $this->assertEqualsWithDelta(
+            $expectedTimestamp,
+            Carbon::parse($token->expires_at)->timestamp,
+            10
+        );
     }
 
     private function createReusableInviteCode(User $user, string $code): InviteCode

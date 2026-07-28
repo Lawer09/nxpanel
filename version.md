@@ -1135,3 +1135,10 @@
 - 影响范围：`app/Http/Requests/Passport/AuthLoginByAid.php`、`app/Http/Requests/Passport/AuthLoginByAidV3.php`、`app/Http/Controllers/V1/Passport/AuthController.php`、`app/Http/Controllers/V3/Passport/AuthController.php`、`app/Services/AuthService.php`、`app/Services/Auth/LoginService.php`、`app/Services/AidLoginActivityService.php`、`app/Console/Commands/FlushAidLoginActivity.php`、`app/Console/Kernel.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更；上线需确保 Redis 服务可用，Redis 异常时登录不阻断但最近登录时间写回会延迟。
 - 回滚说明：将 AID 登录恢复为每次同步生成 token 和保存 `last_login_at`，移除 AID token 缓存逻辑、Redis 聚合服务、flush 命令、Kernel 调度及对应测试和文档即可。
+
+## 2026-07-28 AID Token 7 天滑动有效期
+- 日期：2026-07-28
+- 变更摘要：仅调整 `loginByAid` 使用的 AID token 策略，AID token 与缓存改为 7 天滑动有效期；缓存命中时同步顺延数据库 `personal_access_tokens.expires_at` 与缓存 TTL，普通邮箱密码登录仍保持 1 年 token。
+- 影响范围：`app/Services/AuthService.php`、`tests/Feature/UserIpBanTest.php`、`docs/api/user_api.md`、`version.md`
+- 是否需要迁移：否，无数据库结构变更。
+- 回滚说明：恢复 `AuthService` 中 AID token TTL 与缓存续期逻辑，并回退对应测试、接口文档和本版本记录即可。
