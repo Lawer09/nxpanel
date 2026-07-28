@@ -1156,3 +1156,17 @@
 - 影响范围：`app/Services/Auth/LoginService.php`、`tests/Feature/UserIpBanTest.php`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复 `LoginService::loginByAid()` 中 1062 分支的 409 返回逻辑，并移除对应回归测试和版本记录即可。
+
+## 2026-07-28 V3 用户上报广告价值留存归因
+- 日期：2026-07-28
+- 变更摘要：`POST /api/v3/user/performance/batchReport` 新增可选 `ads_value_reports` 字段，用户请求仅透传到 Redis raw payload 与实时查看缓存；`user_report:aggregate` 新增广告价值聚合，按配置汇率换算为 USD 后写入用户-应用-小时事实表，并维护用户在 app 下的首次上报日用于 day0/day1/day2 留存价值来源计算。
+- 影响范围：`.env.example`、`config/ad_value.php`、`app/Http/Requests/User/PerformanceBatchReport.php`、`app/Http/Controllers/V3/User/UserReportController.php`、`app/Services/NodePerformanceService.php`、`app/Services/UserAdValueReportService.php`、`app/Console/Commands/AggregateUserReport.php`、`app/Console/Commands/ReplayUserReportRawFromOss.php`、`database/migrations/2026_07_28_130000_create_user_ad_value_report_tables.php`、`tests/Feature/UserAdValueReportTest.php`、`docs/api/user_report_api.md`、`docs/api/user_report_realtime_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 创建 `v3_user_ad_value_hourly` 与 `v3_user_app_first_report`；上线如需支持非 USD 币种，需配置 `AD_VALUE_CURRENCY_RATES_TO_USD`。
+- 回滚说明：移除 `ads_value_reports` 校验与 payload 透传、广告价值聚合服务和命令接入，回滚新增 migration 删除两张新表，并同步回退测试、文档和本版本记录即可。
+
+## 2026-07-28 广告价值汇率日快照
+- 日期：2026-07-28
+- 变更摘要：广告价值 USD 换算从 JSON 汇率配置调整为 `CurrencyRateService`，按进程内缓存、Redis hash、`currency_rates_daily` 日快照读取汇率；新增 `currency-rates:sync` 每日同步默认 21 个币种（包含 HKD），`USD` 固定为 `1`，聚合与请求入口均不发起外部汇率请求。
+- 影响范围：`.env.example`、`config/currency_rate.php`、`app/Services/CurrencyRateService.php`、`app/Services/UserAdValueReportService.php`、`app/Console/Commands/SyncCurrencyRates.php`、`app/Console/Kernel.php`、`database/migrations/2026_07_28_131000_create_currency_rates_daily_table.php`、`tests/Feature/CurrencyRateTest.php`、`tests/Feature/UserAdValueReportTest.php`、`docs/api/user_report_api.md`、`docs/command_help.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration 创建 `currency_rates_daily`；上线需配置汇率同步源，必要时可用 `CURRENCY_RATE_OVERRIDE_TO_USD` 做紧急覆盖。
+- 回滚说明：移除 `CurrencyRateService`、`currency-rates:sync` 命令、Kernel 调度和 `currency_rates_daily` migration，并将 `UserAdValueReportService` 的汇率读取恢复到上一版配置逻辑，同时回退测试、文档和本版本记录即可。

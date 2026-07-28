@@ -78,13 +78,22 @@ class NodePerformanceService
     /**
      * 批量上报 → 写入当前 5 分钟桶（pipeline）
      */
-    public static function batchReportPerformance(int $userId, array $nodeReports, array $metadata, array $userDefault, string $clientIp, $request): void
+    public static function batchReportPerformance(
+        int $userId,
+        array $nodeReports,
+        array $metadata,
+        array $userDefault,
+        string $clientIp,
+        $request,
+        array $adsValueReports = []
+    ): void
     {
         $now = now()->toDateTimeString();
         $reportAt = UserReportService::resolveReportAtMs($metadata);
         $data = [
             'metadata' => $metadata,
             'reports' => $nodeReports,
+            'ads_value_reports' => $adsValueReports,
             'user_default' => $userDefault,
             'userId' => $userId,
             'clientIp' => $clientIp,
@@ -112,6 +121,7 @@ class NodePerformanceService
                 'received_at' => now()->getTimestampMs(),
                 'metadata' => $metadata,
                 'reports' => $nodeReports,
+                'ads_value_reports' => $adsValueReports,
                 'user_default' => $userDefault,
                 'client_ip' => $clientIp,
             ], $reportAt);

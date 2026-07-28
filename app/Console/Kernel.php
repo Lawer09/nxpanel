@@ -82,6 +82,9 @@ class Kernel extends ConsoleKernel
         $schedule->command('ad-spend:sync-hourly --lookback-days=2')->everyTenMinutes()->onOneServer()->withoutOverlapping(55);
         $schedule->command('ad-spend:prune-hourly --days=30')->dailyAt('0:05')->onOneServer()->withoutOverlapping(10);
 
+        // 每日汇率快照同步（广告价值聚合只读本地快照）
+        $schedule->command('currency-rates:sync')->dailyAt('0:20')->onOneServer()->withoutOverlapping(10);
+
         // 应用客户端凭证同步到 Redis（每分钟）
         $schedule->command('app-client:sync-redis')->everyMinute()->onOneServer()->withoutOverlapping(2);
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Server;
 use App\Services\OssArchiveService;
+use App\Services\UserAdValueReportService;
 use App\Services\UserReportService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -62,6 +63,7 @@ class AggregateUserReport extends Command
             try {
                 $flatRecords = $this->flattenPayloads($payloads);
                 $this->aggregateSummary($payloads);
+                app(UserAdValueReportService::class)->aggregatePayloads($payloads);
                 $this->aggregateNodeSummary($flatRecords);
                 $this->aggregateTraffic($payloads, $flatRecords);
                 $this->aggregateNodeFail($flatRecords);
@@ -269,7 +271,8 @@ class AggregateUserReport extends Command
 
         foreach ($groups as $key => $count) {
             [$date, $hour, $userId, $appId, $appVersion, $country] = explode('|', $key, 6);
-            DB::table('v3_user_report_summary')->updateOrInsert(
+            $this->insertOrUpdateAggregate(
+                'v3_user_report_summary',
                 [
                     'date' => $date,
                     'hour' => (int) $hour,
@@ -279,8 +282,10 @@ class AggregateUserReport extends Command
                     'country' => $country,
                 ],
                 [
+                    'report_count' => (int) $count,
+                ],
+                [
                     'report_count' => DB::raw('report_count + ' . (int) $count),
-                    'updated_at' => now(),
                 ]
             );
             $this->bumpCacheVersion('v3_user_report_summary', $date, (int) $hour);
@@ -340,7 +345,8 @@ class AggregateUserReport extends Command
                 ? round($group['delay_sum'] / $group['compute_count'], 2)
                 : 0;
 
-            DB::table('v3_user_report_node')->updateOrInsert(
+            $this->insertOrUpdateAggregate(
+                'v3_user_report_node',
                 [
                     'date' => $group['date'],
                     'hour' => $group['hour'],
@@ -350,6 +356,14 @@ class AggregateUserReport extends Command
                     'probe_stage' => $group['probe_stage'],
                     'app_id' => $group['app_id'],
                     'app_version' => $group['app_version'],
+                ],
+                [
+                    'avg_delay' => $avgDelay,
+                    'traffic_usage' => round((float) $group['traffic_usage'], 3),
+                    'traffic_use_time' => (int) $group['traffic_use_time'],
+                    'compute_count' => (int) $group['compute_count'],
+                    'success_count' => (int) $group['success_count'],
+                    'fail_count' => (int) $group['fail_count'],
                 ],
                 [
                     'avg_delay' => DB::raw(sprintf(
@@ -363,7 +377,6 @@ class AggregateUserReport extends Command
                     'compute_count' => DB::raw('compute_count + ' . (int) $group['compute_count']),
                     'success_count' => DB::raw('success_count + ' . (int) $group['success_count']),
                     'fail_count' => DB::raw('fail_count + ' . (int) $group['fail_count']),
-                    'updated_at' => now(),
                 ]
             );
             $this->bumpCacheVersion('v3_user_report_node', $group['date'], (int) $group['hour']);
@@ -439,7 +452,8 @@ class AggregateUserReport extends Command
         }
 
         foreach ($groups as $group) {
-            DB::table('v3_user_report_user')->updateOrInsert(
+            $this->insertOrUpdateAggregate(
+                'v3_user_report_user',
                 [
                     'date' => $group['date'],
                     'hour' => $group['hour'],
@@ -449,10 +463,14 @@ class AggregateUserReport extends Command
                     'country' => $group['country'],
                 ],
                 [
+                    'traffic_usage' => round((float) $group['traffic_usage'], 3),
+                    'traffic_use_time' => (int) $group['traffic_use_time'],
+                    'compute_count' => (int) $group['compute_count'],
+                ],
+                [
                     'traffic_usage' => DB::raw('traffic_usage + ' . round((float) $group['traffic_usage'], 3)),
                     'traffic_use_time' => DB::raw('traffic_use_time + ' . (int) $group['traffic_use_time']),
                     'compute_count' => DB::raw('compute_count + ' . (int) $group['compute_count']),
-                    'updated_at' => now(),
                 ]
             );
             $this->bumpCacheVersion('v3_user_report_user', $group['date'], (int) $group['hour']);
@@ -738,6 +756,28 @@ class AggregateUserReport extends Command
         }
 
         return round($num, 3);
+    }
+
+    /**
+     * Insert a new aggregate row or increment an existing one.
+     */
+    private function insertOrUpdateAggregate(string $table, array $attributes, array $insertValues, array $updateValues): void
+    {
+        $now = now();
+        $inserted = DB::table($table)->insertOrIgnore(array_merge($attributes, $insertValues, [
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]));
+
+        if ((int) $inserted !== 0) {
+            return;
+        }
+
+        DB::table($table)
+            ->where($attributes)
+            ->update(array_merge($updateValues, [
+                'updated_at' => $now,
+            ]));
     }
 
     private function bumpCacheVersion(string $table, string $date, int $hour): void

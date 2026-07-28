@@ -49,6 +49,7 @@
 - `metadata` `object` 上报元信息
 - `user_default` `object|array` 用户默认信息（透传）
 - `reports` `array<object>` 本次批量上报明细
+- `ads_value_reports` `array<object>` 本次广告价值上报明细（透传）
 - `created_at` `string` 写入时间（`Y-m-d H:i:s`）
 
 ## 5. 排序与分页说明
@@ -100,6 +101,12 @@ curl -G 'https://<host>/api/v3/admin/userReport/realtime' \
             "delay": 83,
             "success_rate": 100,
             "status": "success"
+          }
+        ],
+        "ads_value_reports": [
+          {
+            "value_micros": 1000000,
+            "currency": "USD"
           }
         ],
         "created_at": "2026-05-08 10:30:00"

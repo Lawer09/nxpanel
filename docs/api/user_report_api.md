@@ -2,6 +2,26 @@
 
 本文档基于当前代码实现，给出 `user_report` 相关接口的详细参数与返回字段。
 
+## 1. 用户侧批量上报接口
+
+- 方法/路径：`POST /api/v3/user/performance/batchReport`
+- 说明：用户侧批量上报节点性能、用户默认数据和广告价值数据。请求线程只写 Redis raw payload 与实时查看缓存，不同步写入广告价值统计表。
+
+新增请求字段：
+
+- `ads_value_reports` `array<object>|null` 可选，最多 100 条。
+  - `value_micros` `int` 必填，最小值 0，客户端上报的广告价值 micros。
+  - `currency` `string` 必填，最大 8 位，聚合时会 `trim + strtoupper`。
+
+广告价值处理口径：
+
+- `ads_value_reports` 会随原始 payload 写入 `perf:raw:*` 和 `user_report:raw:*`，并在管理端实时查看缓存中透传。
+- `user_report:aggregate` 从 `user_report:raw:*` 聚合广告价值，按 `metadata.timestamp` 归入 UTC+8 日期和小时。
+- 聚合前通过 `CurrencyRateService` 按上报日期读取币种到 USD 的汇率：优先进程内缓存，其次 Redis hash `currency_rates:to_usd:{YYYY-MM-DD}`，最后读取 `currency_rates_daily` 日快照；`USD` 固定为 `1`。
+- `currency-rates:sync` 每日同步常见 21 个币种到 USD，默认包含 `HKD`；`CURRENCY_RATE_OVERRIDE_TO_USD` 仅作为紧急覆盖或兜底，不再作为长期人工维护的主汇率表。
+- 聚合路径不调用外部汇率接口，也不调用 `Helper::exchange()`；找不到汇率的币种会跳过并记录 warning，不影响整桶聚合成功。
+- 留存价值来源按用户在同一 `app_id` 下的首次上报日计算：`day0` 为首次上报当日，`day1` 为次日，依次类推。
+
 ## 2. 管理端查询接口
 
 统一前缀：`POST /api/v3/admin/report/userReport/*/query`
@@ -204,13 +224,19 @@
 - 聚合：`php artisan user_report:aggregate`
   - `--batch=10000`
   - `--bucket=yyyymmddHHmm`
+  - 写入 `v3_user_report_summary`、`v3_user_report_node`、`v3_user_report_user`、`v3_user_report_node_fail`、`v3_user_ad_value_hourly`、`v3_user_app_first_report`
+- 汇率同步：`php artisan currency-rates:sync`
+  - `--date=YYYY-MM-DD`
+  - `--currencies=USD,CNY,HKD`
+  - `--force`
+  - 写入 `currency_rates_daily`，并刷新 Redis hash `currency_rates:to_usd:{YYYY-MM-DD}`
 - OSS 回放：`php artisan user_report:replay-oss {date}`
   - `--hour=HH`
   - `--minute=MM`
   - `--bucket=yyyymmddHHmm`
   - `--batch=10000`
   - `--dry-run`
-  - `--clear-day`
+  - `--clear-day` 会同时清理 `v3_user_ad_value_hourly` 当日数据，避免广告价值 replay 后重复累加
 
 ---
 

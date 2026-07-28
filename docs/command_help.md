@@ -17,7 +17,9 @@ php artisan user_report:aggregate --bucket=202605111005
 php artisan user_report:aggregate --bucket=202605111005 --skip-archive
 ```
 
-**写入表：** `v3_user_report_summary` / `v3_user_report_node` / `v3_user_report_user` / `v3_user_report_node_fail`
+**写入表：** `v3_user_report_summary` / `v3_user_report_node` / `v3_user_report_user` / `v3_user_report_node_fail` / `v3_user_ad_value_hourly` / `v3_user_app_first_report`
+
+**广告价值：** `ads_value_reports` 会按 `metadata.timestamp` 聚合到 UTC+8 小时桶，通过 `CurrencyRateService` 读取上报日期的本地汇率快照并换算为 USD；未知币种跳过并记录 warning，聚合路径不发起外部 HTTP。
 
 ### 1.2 user_report:replay-oss
 
@@ -43,7 +45,33 @@ php artisan user_report:replay-oss 2026-05-01 --dry-run
 **流程：** 读 OSS NDJSON → 按 metadata.timestamp 还原到 Redis bucket → 调 `user_report:aggregate --skip-archive` → 聚合写表
 
 **`--to=YYYY-MM-DD`：** 结束日期，不传则只处理 `{date}` 单天。
-**`--clear-day`：** 清空 `v3_user_report_node`、`v3_user_report_user`、`v3_user_report_summary`、`v3_user_report_node_fail` 当日数据后再回放（避免 replay 累加导致翻倍）。
+**`--clear-day`：** 清空 `v3_user_report_node`、`v3_user_report_user`、`v3_user_report_summary`、`v3_user_report_node_fail`、`v3_user_ad_value_hourly` 当日数据后再回放（避免 replay 累加导致翻倍）。
+
+### 1.3 currency-rates:sync
+
+每日同步常见币种到 USD 的日快照，用于广告价值聚合和 OSS replay 稳定重算。
+
+```bash
+# 默认同步今天的 21 个币种（包含 HKD）
+php artisan currency-rates:sync
+
+# 指定日期
+php artisan currency-rates:sync --date=2026-07-28
+
+# 指定币种
+php artisan currency-rates:sync --date=2026-07-28 --currencies=USD,CNY,HKD
+
+# 已存在完整快照时仍强制重拉
+php artisan currency-rates:sync --date=2026-07-28 --force
+```
+
+**默认币种：** `USD,CNY,HKD,EUR,GBP,JPY,KRW,INR,BRL,CAD,AUD,MXN,IDR,TRY,RUB,THB,VND,PHP,MYR,SGD,TWD`
+
+**写入：** `currency_rates_daily` 日快照表，以及 Redis hash `currency_rates:to_usd:{YYYY-MM-DD}`。
+
+**读取口径：** `USD` 固定为 `1`；业务聚合优先进程内缓存，其次 Redis，最后 DB 日快照。指定日期快照缺失时，可回退最近 7 天内同币种快照并记录 warning。
+
+**失败处理：** 外部汇率源失败时命令返回失败并记录错误，不删除旧 Redis 缓存，不覆盖已有 DB 快照。`CURRENCY_RATE_OVERRIDE_TO_USD` 仅用于紧急覆盖或兜底，建议配合 `--force` 写入新的日快照。
 
 ---
 
@@ -194,6 +222,7 @@ php artisan report_hourly:rebuild 2026-05-09 --keep-existing
 | `report_hourly:aggregate` | 每 5 分钟 | 小时表实时聚合 |
 | `user_report:aggregate` | 每 5 分钟 | 用户上报实时聚合 |
 | `node_server_report:dispatch` | 每 5 分钟 | 节点上报实时派发 |
+| `currency-rates:sync` | 每天 00:20 | 汇率日快照同步 |
 | `firebase_report:aggregate --hours=72` | 每 5 分钟 | Firebase 事件滚动 3 天聚合 |
 
 ---

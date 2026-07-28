@@ -109,6 +109,7 @@ class ReplayUserReportRawFromOss extends Command
                 DB::table('v3_user_report_user')->where('date', $date)->delete();
                 DB::table('v3_user_report_summary')->where('date', $date)->delete();
                 DB::table('v3_user_report_node_fail')->where('date', $date)->delete();
+                DB::table('v3_user_ad_value_hourly')->where('date', $date)->delete();
             }
 
             if (empty($bucketPayloads)) {

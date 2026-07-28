@@ -52,7 +52,8 @@ class UserReportController extends Controller
                 $validated['metadata'] ?? [],
                 $validated['user_default'] ?? [],
                 $request->getClientIp(),
-                $request
+                $request,
+                $validated['ads_value_reports'] ?? []
             );
 
             $cacheKey = 'realtime:user_report:latest';
@@ -63,6 +64,7 @@ class UserReportController extends Controller
                 'metadata'     => $validated['metadata'] ?? [],
                 'user_default' => $validated['user_default'] ?? [],
                 'reports'      => $validated['reports'] ?? [],
+                'ads_value_reports' => $validated['ads_value_reports'] ?? [],
                 'created_at'   => now()->toDateTimeString(),
             ];
 
