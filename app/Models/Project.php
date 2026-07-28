@@ -13,6 +13,7 @@ class Project extends Model
 
     protected $casts = [
         'owner_id'   => 'integer',
+        'owner_ids'  => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

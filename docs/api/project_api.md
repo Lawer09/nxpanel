@@ -64,7 +64,8 @@
 | appPlatform | string | 否 | 应用平台筛选，自定义字符串 |
 | packageName | string | 否 | 项目包名精确筛选 |
 | developerGmail | string | 否 | 开发者 Gmail 精确筛选 |
-| ownerId | int | 否 | 按拥有者 ID 筛选 |
+| ownerId | int | 否 | 按负责人 ID 筛选（兼容旧参数） |
+| ownerIds | int[] | 否 | 按多个负责人 ID 筛选，命中任一负责人即返回 |
 | page | int | 否 | 默认 1 |
 | pageSize | int | 否 | 默认 20，最大 200 |
 
@@ -77,7 +78,9 @@
       "id": 1,
       "projectCode": "P001",
       "projectName": "测试项目",
-      "ownerName": "张三",
+      "ownerId": 1,
+      "ownerIds": [1, 2],
+      "ownerName": "张三、李四",
       "department": "技术部",
       "status": "active",
       "adStatus": "running",
@@ -182,6 +185,8 @@
 | id | int | 项目 ID |
 | projectCode | string | 项目代号 |
 | projectName | string | 项目名称 |
+| ownerId | int/null | 第一个负责人 ID，兼容旧字段 |
+| ownerIds | int[] | 负责人 ID 列表 |
 | ownerName | string/null | 负责人 |
 | department | string/null | 所属部门 |
 | status | string | 状态：`active` / `inactive` / `archived` |
@@ -317,7 +322,9 @@
 | --- | --- | --- | --- |
 | projectCode | string | 是 | 项目代号，唯一 |
 | projectName | string | 是 | 项目名称 |
-| ownerName | string | 否 | 负责人 |
+| ownerId | int | 否 | 负责人 ID，兼容旧字段 |
+| ownerIds | int[] | 否 | 负责人 ID 列表；优先级高于 `ownerId`，传空数组可清空负责人 |
+| ownerName | string | 否 | 负责人显示名；未传时根据 `ownerIds` 自动生成 |
 | department | string | 否 | 所属部门 |
 | status | string | 否 | 默认 `active`，可选：`active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符；未传时默认 `未上线` |
@@ -371,7 +378,9 @@
 | --- | --- | --- | --- |
 | id | int | 是 | 项目 ID |
 | projectName | string | 否 | 项目名称 |
-| ownerName | string | 否 | 负责人 |
+| ownerId | int/null | 否 | 负责人 ID，兼容旧字段；传 `null` 可清空 |
+| ownerIds | int[] | 否 | 负责人 ID 列表；优先级高于 `ownerId`，传空数组可清空负责人 |
+| ownerName | string/null | 否 | 负责人显示名；未传时根据 `ownerIds` 自动生成，传 `null` 可清空 |
 | department | string | 否 | 所属部门 |
 | status | string | 否 | `active` / `inactive` / `archived` |
 | adStatus | string | 否 | 投放状态，自定义字符串，最大 50 字符；传 `null` 可清空 |

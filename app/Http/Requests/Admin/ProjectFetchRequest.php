@@ -21,6 +21,8 @@ class ProjectFetchRequest extends FormRequest
             'packageName' => 'nullable|string|max:191',
             'developerGmail' => 'nullable|string|max:191',
             'ownerId'  => 'nullable|integer|min:1',
+            'ownerIds' => 'nullable|array',
+            'ownerIds.*' => 'integer|min:1|distinct',
             'page'     => 'nullable|integer|min:1',
             'pageSize' => 'nullable|integer|min:1|max:200',
         ];

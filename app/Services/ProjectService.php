@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Exceptions\BusinessException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ProjectService
 {
@@ -84,8 +85,16 @@ class ProjectService
                   });
             });
         }
-        if (!empty($params['ownerId'])) {
-            $query->where('owner_id', $params['ownerId']);
+        $filterOwnerIds = $this->normalizeOwnerIds([
+            'ownerIds' => $params['ownerIds'] ?? (!empty($params['ownerId']) ? [$params['ownerId']] : []),
+        ]);
+        if (!empty($filterOwnerIds)) {
+            $query->where(function ($ownerQuery) use ($filterOwnerIds) {
+                $ownerQuery->whereIn('owner_id', $filterOwnerIds);
+                foreach ($filterOwnerIds as $ownerId) {
+                    $ownerQuery->orWhereJsonContains('owner_ids', $ownerId);
+                }
+            });
         }
         if (!empty($params['status'])) {
             $query->where('status', $params['status']);
@@ -134,11 +143,13 @@ class ProjectService
             throw new BusinessException([422, '项目代号已存在']);
         }
 
+        $ownerIds = $this->normalizeOwnerIds($params);
         $attributes = [
             'project_code' => $params['projectCode'],
             'project_name' => $params['projectName'],
-            'owner_id'     => $params['ownerId'] ?? null,
-            'owner_name'   => $params['ownerName'] ?? $this->resolveOwnerDisplayName($params['ownerId'] ?? null),
+            'owner_id'     => $ownerIds[0] ?? null,
+            'owner_ids'    => $ownerIds ?: null,
+            'owner_name'   => $params['ownerName'] ?? $this->resolveOwnerDisplayNames($ownerIds),
             'department'   => $params['department'] ?? null,
             'status'       => $params['status'] ?? 'active',
             'remark'       => $params['remark'] ?? null,
@@ -173,10 +184,19 @@ class ProjectService
         if (array_key_exists('projectName', $params)) {
             $project->project_name = $params['projectName'];
         }
-        if (array_key_exists('ownerId', $params)) {
-            $project->owner_id = $params['ownerId'];
+        if (array_key_exists('ownerIds', $params)) {
+            $ownerIds = $this->normalizeOwnerIds($params);
+            $project->owner_id = $ownerIds[0] ?? null;
+            $project->owner_ids = $ownerIds ?: null;
             if (!array_key_exists('ownerName', $params)) {
-                $project->owner_name = $this->resolveOwnerDisplayName($params['ownerId']);
+                $project->owner_name = $this->resolveOwnerDisplayNames($ownerIds);
+            }
+        } elseif (array_key_exists('ownerId', $params)) {
+            $ownerIds = $this->normalizeOwnerIds($params);
+            $project->owner_id = $ownerIds[0] ?? null;
+            $project->owner_ids = $ownerIds ?: null;
+            if (!array_key_exists('ownerName', $params)) {
+                $project->owner_name = $this->resolveOwnerDisplayNames($ownerIds);
             }
         }
         if (array_key_exists('ownerName', $params)) {
@@ -540,11 +560,13 @@ class ProjectService
      */
     private function extractProjectCreateAttributes(array $params): array
     {
+        $ownerIds = $this->normalizeOwnerIds($params);
         $attributes = [
             'project_code' => trim((string) $params['projectCode']),
             'project_name' => $params['projectName'],
-            'owner_id' => $params['ownerId'] ?? null,
-            'owner_name' => $params['ownerName'] ?? $this->resolveOwnerDisplayName($params['ownerId'] ?? null),
+            'owner_id' => $ownerIds[0] ?? null,
+            'owner_ids' => $ownerIds ?: null,
+            'owner_name' => $params['ownerName'] ?? $this->resolveOwnerDisplayNames($ownerIds),
             'department' => $params['department'] ?? null,
             'status' => $params['status'] ?? 'active',
             'remark' => $params['remark'] ?? null,
@@ -611,21 +633,59 @@ class ProjectService
         Cache::forget(self::PROJECT_CODE_CACHE_KEY);
     }
 
-    private function resolveOwnerDisplayName(mixed $ownerId): ?string
+    /**
+     * Normalize ownerId / ownerIds input into an ordered, unique ID list.
+     *
+     * @return array<int, int>
+     */
+    private function normalizeOwnerIds(array $params): array
     {
-        $ownerId = (int) ($ownerId ?? 0);
-        if ($ownerId <= 0) {
+        $rawOwnerIds = [];
+        if (array_key_exists('ownerIds', $params)) {
+            $rawOwnerIds = is_array($params['ownerIds']) ? $params['ownerIds'] : [];
+        } elseif (array_key_exists('ownerId', $params)) {
+            $rawOwnerIds = [$params['ownerId']];
+        }
+
+        return collect($rawOwnerIds)
+            ->map(fn ($ownerId) => (int) $ownerId)
+            ->filter(fn ($ownerId) => $ownerId > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function resolveOwnerDisplayNames(array $ownerIds): ?string
+    {
+        if (empty($ownerIds)) {
             return null;
         }
 
-        $user = User::query()->find($ownerId, ['email', 'nickname']);
-        if (!$user) {
+        $usersById = User::query()
+            ->whereIn('id', $ownerIds)
+            ->get(['id', 'email', 'nickname'])
+            ->keyBy('id');
+
+        $names = collect($ownerIds)
+            ->map(function (int $ownerId) use ($usersById) {
+                $user = $usersById->get($ownerId);
+                if (!$user) {
+                    return null;
+                }
+
+                $nickname = is_string($user->nickname) ? trim($user->nickname) : '';
+
+                return $nickname !== '' ? $nickname : (string) $user->email;
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        if (empty($names)) {
             return null;
         }
 
-        $nickname = is_string($user->nickname) ? trim($user->nickname) : '';
-
-        return $nickname !== '' ? $nickname : (string) $user->email;
+        return Str::limit(implode('、', $names), 100, '');
     }
 
     /**
