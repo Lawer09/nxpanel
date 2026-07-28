@@ -1191,3 +1191,10 @@
 - 影响范围：`.env.example`、`config/currency_rate.php`、`app/Console/Commands/SyncCurrencyRates.php`、`tests/Feature/CurrencyRateTest.php`、`docs/api/user_report_api.md`、`docs/command_help.md`、`version.md`
 - 是否需要迁移：否，无数据库结构变更。
 - 回滚说明：恢复默认 provider 为 `exchangerate.host` 并移除 open-er 响应解析分支，同时回退测试、文档和本版本记录即可。
+
+## 2026-07-28 v3_user_report_count 缺表修复
+- 日期：2026-07-28
+- 变更摘要：新增幂等 repair migration，在 `v3_user_report_count` 迁移记录存在但真实表缺失时自动补建主表、补齐 `client_country/client_isp` 字段和性能查询索引；测试基类增加 production/非内存 sqlite 数据库保护，避免 Feature 测试误连生产库执行清表逻辑。
+- 影响范围：`database/migrations/2026_07_28_152000_repair_v3_user_report_count_table.php`、`tests/TestCase.php`、`docs/issues/v3_user_report_count_missing_2026_07_28.md`、`version.md`
+- 是否需要迁移：是，需执行新增 migration；线上已先手工补建缺失主表恢复调度写入，后续执行该 migration 会记录修复并保持幂等。
+- 回滚说明：该 repair migration 的 `down()` 为非破坏性 no-op，避免删除历史迁移创建的主表或索引；测试保护如需回退，需删除 `TestCase::guardAgainstUnsafeDatabase()` 调用与方法。
