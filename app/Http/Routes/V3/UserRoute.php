@@ -6,6 +6,7 @@ use App\Http\Controllers\V3\User\PlanController;
 use App\Http\Controllers\V3\User\IpInfoController;
 use App\Http\Controllers\V3\User\InviteController;
 use App\Http\Controllers\V3\User\UserController;
+use App\Http\Controllers\V3\User\UserPreferenceController;
 use App\Http\Controllers\V3\User\UserReportController;
 use App\Http\Controllers\V3\User\TicketController;
 use Illuminate\Contracts\Routing\Registrar;
@@ -25,6 +26,8 @@ class UserRoute
             $router->get('/getSubscribe', [UserController::class, 'getSubscribe']);
             $router->get('/profile', [UserController::class, 'profile']);
             $router->post('/profile', [UserController::class, 'updateProfile']);
+            $router->get('/preferences', [UserPreferenceController::class, 'index']);
+            $router->post('/preferences/save', [UserPreferenceController::class, 'save']);
 
             $router->get('/ipInfo', [IpInfoController::class, 'getClientIpInfo']);
 
