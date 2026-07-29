@@ -538,7 +538,7 @@ axios.post(url, payload, { responseType: 'blob' })
 
 ## 查询缓存说明
 
-- 项目日报 JSON 查询接口结果会按完整查询参数缓存 60 秒，包含 `data`、`summary`、分页信息、`isLimited`、`adRevenueNow`、`adRevenueDiff` 等返回字段。
+- 项目日报 JSON 查询接口结果会按完整查询参数缓存 60 秒，包含 `data`、`summary`、分页信息、`isLimited`、`adRevenueNow`、`adRevenueDiff`、`ad_revenue_user_compos` 等返回字段。
 - 缓存 key 会纳入 `dateFrom`、`dateTo`、`groupBy`、`filters`、`page`、`pageSize`、`orderBy`、`orderDirection`；筛选数组会去空、去重并排序，国家筛选统一转为大写。
 - 管理端与应用端复用同一查询 Service，相同参数会共享缓存结果。
 - CSV 导出接口不使用查询缓存，仍按当前筛选条件实时流式导出。
@@ -573,6 +573,16 @@ axios.post(url, payload, { responseType: 'blob' })
 - 结果按 `adSpendCost` 从高到低排序；无投放支出或总投放支出小于等于 0 时返回空数组 `[]`。
 - 该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
 
+## 广告收入用户组成说明
+
+- 项目日报 JSON 查询返回行新增 `ad_revenue_user_compos` 字段，表示该行对应维度范围内广告价值收入按新增用户、留存用户和未知用户的组成。
+- 字段结构为对象：`totalValueMicrosUsd/totalValueUsd` 为总广告价值，`newUserValue*` 为新增用户价值，`retainedUserValue*` 为留存用户价值，`unknownValue*` 为未知用户价值，`*Ratio` 为对应价值占总价值比例。
+- 数据来源为 `v3_user_ad_value_hourly.value_micros_usd`，通过 `project_user_app_map.enabled=1` 按 `app_id` 映射到项目代号，并左关联 `v3_user_app_first_report` 获取用户在同一 app 的首次上报日期。
+- 新增用户口径：`first_report_date = av.date`；留存用户口径：`first_report_date < av.date`；缺少首次上报日期或 `first_report_date > av.date` 时进入 unknown。
+- 计算按当前返回行可确定的 `reportDate`、`projectCode`、`country` 维度以及请求 `dateFrom/dateTo`、筛选条件批量聚合；不对每一行单独查询。
+- 当返回行不包含 `reportDate` 时，服务端仍会按 `av.date` 临时分组用于判断新增/留存，再合并到当前行范围。
+- 无广告价值数据时返回全 0 对象；该字段跟随项目日报 JSON 查询结果缓存 60 秒；CSV 导出不新增该列。
+
 ## 国家维度查询性能
 
 - 项目日报按国家维度查询时，分页 `total` 基于过滤后的基础日报维度计数，不再重复执行完整列表指标聚合。
@@ -583,7 +593,7 @@ axios.post(url, payload, { responseType: 'blob' })
 
 - `filters.exclude.projectCodes` 和 `filters.exclude.countries` 用于从当前筛选范围中排除指定项目或国家。
 - 正向筛选与排除筛选同时存在时，服务端按“先包含、再排除”的交集口径处理。
-- 日报 JSON、`summary`、`topRevenueCountries`、`adSpendPlatformComposition` 和 CSV 导出均使用相同排除筛选口径。
+- 日报 JSON、`summary`、`topRevenueCountries`、`adSpendPlatformComposition`、`ad_revenue_user_compos` 和 CSV 导出均使用相同排除筛选口径。
 
 ## 广告收入、投放支出、利润环比字段
 

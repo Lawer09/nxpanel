@@ -1219,3 +1219,10 @@
 - 影响范围：`app/Http/Requests/Admin/ProjectAdValueDailyCompositionRequest.php`、`app/Http/Controllers/V3/Admin/ReportController.php`、`app/Http/Routes/V3/AdminRoute.php`、`app/Services/ProjectReportService.php`、`app/Services/UserAdValueReportService.php`、`tests/Feature/ProjectAdValueCompositionTest.php`、`docs/api/project_report_query_api.md`、`version.md`
 - 是否需要迁移：否，直接读取现有 `v3_user_ad_value_hourly`、`v3_user_app_first_report` 和 `project_user_app_map`。
 - 回滚说明：移除新增 Request、路由、Controller 方法、ProjectReportService 委托方法、UserAdValueReportService 每日新老用户查询方法，并回退对应测试、文档和本版本记录即可。
+
+## 2026-07-29 项目日报广告收入用户组成字段
+- 日期：2026-07-29
+- 变更摘要：项目日报 JSON 查询 `data[]` 行新增 `ad_revenue_user_compos` 字段，按当前行日期、项目、国家维度批量聚合广告价值收入的新用户、留存用户和 unknown 组成，并升级项目日报查询缓存 key 版本。
+- 影响范围：`app/Services/ProjectReportService.php`、`docs/api/project_report_query_api.md`、`version.md`
+- 是否需要迁移：否，直接读取现有 `v3_user_ad_value_hourly`、`v3_user_app_first_report` 和 `project_user_app_map`。
+- 回滚说明：移除 `ProjectReportService` 中行级组成聚合与格式化输出，恢复项目日报查询缓存 key 版本，并回退接口文档和本版本记录即可。

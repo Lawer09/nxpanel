@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectReportService
 {
+    private const MICROS_PER_USD = 1000000;
+
     private const QUERY_CACHE_TTL = 60;
 
     private const QUERY_CACHE_VERSION_KEY = 'project_report:query_cache_version';
@@ -117,6 +119,7 @@ class ProjectReportService
             'filters' => $definition['filters'] ?? [],
         ]);
         $this->applyAdSpendPlatformComposition($rows, $definition);
+        $this->applyAdRevenueUserCompos($rows, $definition);
 
         $data = $rows->map(fn ($row) => $this->formatDailyRow($row));
 
@@ -712,7 +715,7 @@ class ProjectReportService
         $payload = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $version = (int) Cache::get(self::QUERY_CACHE_VERSION_KEY, 1);
 
-        return sprintf('project_report:%s_query:v14:%d:%s', $scope, $version, md5((string) $payload));
+        return sprintf('project_report:%s_query:v15:%d:%s', $scope, $version, md5((string) $payload));
     }
 
     /**
@@ -1843,6 +1846,182 @@ class ProjectReportService
     }
 
     /**
+     * Attach daily ad revenue value composition by new, retained, and unknown users.
+     */
+    private function applyAdRevenueUserCompos($rows, array $definition): void
+    {
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $dateFrom = (string) ($definition['dateFrom'] ?? now()->subDays(1)->toDateString());
+        $dateTo = (string) ($definition['dateTo'] ?? now()->toDateString());
+        $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : [];
+        $hasReportDate = $this->rowsContainProperty($rows, 'report_date');
+        $hasProjectCode = $this->rowsContainProperty($rows, 'project_code');
+        $hasCountry = $this->rowsContainProperty($rows, 'country');
+
+        $reportDates = $hasReportDate ? $this->collectRowValues($rows, 'report_date') : [];
+        $projectCodes = $hasProjectCode ? $this->collectRowValues($rows, 'project_code') : [];
+        $rowCountries = $hasCountry
+            ? $this->collectRowValues($rows, 'country', fn ($country) => $this->normalizeCountry((string) $country))
+            : [];
+
+        $countryExpression = $this->normalizedCountrySql('av.country');
+        $query = DB::table('v3_user_ad_value_hourly as av')
+            ->join('project_user_app_map as puam', function ($join) {
+                $join->on('puam.app_id', '=', 'av.app_id')
+                    ->where('puam.enabled', '=', 1);
+            })
+            ->leftJoin('v3_user_app_first_report as fr', function ($join) {
+                $join->on('fr.user_id', '=', 'av.user_id')
+                    ->on('fr.app_id', '=', 'av.app_id');
+            })
+            ->where('av.date', '>=', $dateFrom)
+            ->where('av.date', '<=', $dateTo);
+
+        if (!empty($reportDates)) {
+            $query->whereIn('av.date', $reportDates);
+        }
+
+        $effectiveFilters = $filters;
+        if (!empty($projectCodes)) {
+            $effectiveFilters['projectCodes'] = $projectCodes;
+        }
+        if (!empty($rowCountries)) {
+            $effectiveFilters['countries'] = $rowCountries;
+        }
+        $this->applyProjectCodeCountryFilters($query, 'puam.project_code', DB::raw($countryExpression), $effectiveFilters);
+        $this->applyProjectAdStatusFilter($query, 'puam.project_code', $filters);
+        $this->applyProjectAppPlatformFilter($query, 'puam.project_code', $filters);
+        $this->applyProjectDepartmentFilter($query, 'puam.project_code', $filters);
+
+        $query->selectRaw('av.date as value_date')
+            ->selectRaw('fr.first_report_date as first_report_date')
+            ->selectRaw('SUM(av.value_micros_usd) as value_micros_usd');
+
+        $query->groupBy('av.date');
+        if ($hasProjectCode) {
+            $query->selectRaw('puam.project_code as project_code')
+                ->groupBy('puam.project_code');
+        }
+        if ($hasCountry) {
+            $query->selectRaw($countryExpression . ' as country')
+                ->groupBy(DB::raw($countryExpression));
+        }
+
+        $aggregateRows = $query
+            ->groupBy('fr.first_report_date')
+            ->get();
+
+        $buckets = [];
+        foreach ($aggregateRows as $aggregateRow) {
+            $key = $this->makeReportScopeKey(
+                $hasReportDate ? ($aggregateRow->value_date ?? null) : null,
+                $hasProjectCode ? ($aggregateRow->project_code ?? null) : null,
+                $hasCountry ? ($aggregateRow->country ?? null) : null
+            );
+            $bucket = $this->resolveAdRevenueUserComposBucket(
+                $aggregateRow->value_date ?? null,
+                $aggregateRow->first_report_date ?? null
+            );
+
+            if (!isset($buckets[$key])) {
+                $buckets[$key] = $this->emptyAdRevenueUserComposMetrics();
+            }
+
+            $valueMicros = (int) ($aggregateRow->value_micros_usd ?? 0);
+            $buckets[$key]['totalValueMicrosUsd'] += $valueMicros;
+            $buckets[$key][$bucket . 'ValueMicrosUsd'] += $valueMicros;
+        }
+
+        $formattedBuckets = [];
+        foreach ($buckets as $key => $bucket) {
+            $formattedBuckets[$key] = $this->formatAdRevenueUserCompos($bucket);
+        }
+
+        $empty = $this->formatAdRevenueUserCompos($this->emptyAdRevenueUserComposMetrics());
+        foreach ($rows as $row) {
+            $key = $this->makeReportScopeKey(
+                $hasReportDate ? ($row->report_date ?? null) : null,
+                $hasProjectCode ? ($row->project_code ?? null) : null,
+                $hasCountry ? ($row->country ?? null) : null
+            );
+            $row->ad_revenue_user_compos = $formattedBuckets[$key] ?? $empty;
+        }
+    }
+
+    /**
+     * Resolve an ad-value row into new, retained, or unknown user composition bucket.
+     */
+    private function resolveAdRevenueUserComposBucket($valueDate, $firstReportDate): string
+    {
+        $valueDate = (string) ($valueDate ?? '');
+        $firstReportDate = (string) ($firstReportDate ?? '');
+
+        if ($valueDate === '' || $firstReportDate === '') {
+            return 'unknown';
+        }
+
+        if ($firstReportDate === $valueDate) {
+            return 'newUser';
+        }
+
+        return $firstReportDate < $valueDate ? 'retainedUser' : 'unknown';
+    }
+
+    /**
+     * Build zero-filled user composition metrics.
+     */
+    private function emptyAdRevenueUserComposMetrics(): array
+    {
+        return [
+            'totalValueMicrosUsd' => 0,
+            'newUserValueMicrosUsd' => 0,
+            'retainedUserValueMicrosUsd' => 0,
+            'unknownValueMicrosUsd' => 0,
+        ];
+    }
+
+    /**
+     * Format ad revenue user composition metrics for project daily report rows.
+     */
+    private function formatAdRevenueUserCompos(array $metrics): array
+    {
+        $totalMicros = (int) ($metrics['totalValueMicrosUsd'] ?? 0);
+        $newUserMicros = (int) ($metrics['newUserValueMicrosUsd'] ?? 0);
+        $retainedUserMicros = (int) ($metrics['retainedUserValueMicrosUsd'] ?? 0);
+        $unknownMicros = (int) ($metrics['unknownValueMicrosUsd'] ?? 0);
+
+        return [
+            'totalValueMicrosUsd' => $totalMicros,
+            'totalValueUsd' => $this->formatUsdFromMicros($totalMicros),
+            'newUserValueMicrosUsd' => $newUserMicros,
+            'newUserValueUsd' => $this->formatUsdFromMicros($newUserMicros),
+            'newUserRatio' => $this->adRevenueUserComposRatio($newUserMicros, $totalMicros),
+            'retainedUserValueMicrosUsd' => $retainedUserMicros,
+            'retainedUserValueUsd' => $this->formatUsdFromMicros($retainedUserMicros),
+            'retainedUserRatio' => $this->adRevenueUserComposRatio($retainedUserMicros, $totalMicros),
+            'unknownValueMicrosUsd' => $unknownMicros,
+            'unknownValueUsd' => $this->formatUsdFromMicros($unknownMicros),
+            'unknownRatio' => $this->adRevenueUserComposRatio($unknownMicros, $totalMicros),
+        ];
+    }
+
+    /**
+     * Format USD micros as a 6-decimal USD string.
+     */
+    private function formatUsdFromMicros(int $valueMicros): string
+    {
+        return number_format($valueMicros / self::MICROS_PER_USD, 6, '.', '');
+    }
+
+    private function adRevenueUserComposRatio(int $valueMicros, int $totalMicros): float
+    {
+        return $totalMicros > 0 ? round($valueMicros / $totalMicros, 6) : 0.0;
+    }
+
+    /**
      * Apply cached previous-hour limit state to grouped project rows.
      */
     private function applyDailyLimitState($rows): void
@@ -2539,6 +2718,10 @@ class ProjectReportService
 
         if (property_exists($row, 'ad_spend_platform_composition')) {
             $data['adSpendPlatformComposition'] = $row->ad_spend_platform_composition;
+        }
+
+        if (property_exists($row, 'ad_revenue_user_compos')) {
+            $data['ad_revenue_user_compos'] = $row->ad_revenue_user_compos;
         }
 
         if (property_exists($row, 'recent_hourly_ad_match_rates')) {
